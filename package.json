@@ -1,0 +1,43 @@
+{
+  "name": "fund-pulse",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "server": "tsx server/index.ts",
+    "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
+    "build": "vue-tsc && vite build",
+    "preview": "vite preview",
+    "test": "jest --passWithNoCoverage"
+  },
+  "dependencies": {
+    "@types/nodemailer": "^7.0.11",
+    "axios": "^1.6.8",
+    "better-sqlite3": "^12.8.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.1",
+    "express": "^4.18.2",
+    "nodemailer": "^8.0.3",
+    "pinia": "^2.1.7",
+    "vue": "^3.4.21",
+    "vue-router": "^4.3.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^30.0.0",
+    "@vitejs/plugin-vue": "^5.0.4",
+    "concurrently": "^8.2.2",
+    "echarts": "^6.0.0",
+    "iconv-lite": "^0.7.2",
+    "jest": "^30.3.0",
+    "mysql2": "^3.20.0",
+    "terser": "5.46.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.2",
+    "vite": "^5.2.0",
+    "vue-tsc": "^2.0.6"
+  }
+}

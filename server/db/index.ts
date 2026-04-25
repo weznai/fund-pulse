@@ -1,0 +1,45 @@
+export { default } from './connection.js'
+export { getLocalDate, initDatabase, closeDatabase, getCurrentUserId as getUserId } from './connection.js'
+export { UserIdType, userContext, generateSessionId, getCurrentUserId, getUserIdFromClientId, setCurrentUserId, setRegisteredUser, setGuestUser } from './connection.js'
+export type { UserId } from './connection.js'
+
+export { getFundCache, saveFundCache, getCacheStats, clearAllCache, saveGlobalEstimateCache, getGlobalEstimateCache, getGlobalEstimateCodes, saveGlobalEstimateCacheBatch, getGlobalCacheStats, getLatestGlobalEstimateCache, hasFinalGrowth, getFinalGrowthData, updateFinalGrowth, updateSettlementStatus, resetFundTodayStatus, saveStockTimeTrend, getStockTimeTrend, getLatestStockTimeTrend, isNavDateAlreadySettled } from './cache.js'
+export type { FundCacheData, TimeTrendData, TimeTrendCacheData, StockTimeTrendData, StockTimeTrendCacheData } from './cache.js'
+
+export { getUserPreferences, saveUserPreferences } from './preferences.js'
+export type { UserPreferences } from './preferences.js'
+
+export { getHoldings, saveHolding, deleteHolding, saveHoldingsBatch, updateHoldingCurrentProfit, settleHoldingProfit, reSettleHoldingForToday, isHoldingSettledToday, getHoldingRawAmount, getHoldingProfitHistory, getHoldingProfitStats, getAllProfitHistory, getHeldFundTotalAmount, checkSettlementRequired, hasFundDataForDate, initDailySettlement, getUnsettledHoldings, executeBatchSettlement, executeBatchSettlementFromDb, getUserFunds, getHeldFunds, getFavoriteFunds, addUserFund, deleteUserFund, setHolding, removeHolding, updateUserFund, addUserFundsBatch, isFundInUserList, isFundHeld, getAllUserFundCodes, checkAndImportDefaultFunds } from './userFund.js'
+export type { Holding, HoldingProfitHistory, UserFund, SaveHoldingResult } from './userFund.js'
+
+export { saveOtp, verifyOtp, cleanExpiredOtps } from './auth.js'
+export type { EmailOtp } from './auth.js'
+
+export { isUsernameExists, isEmailExists, getUserByUsername, getUserByEmail, getUserByUsernameOrEmail, createUser, verifyUserEmail, updateUserLastActive, updateUserPassword, isUserLabelExists, updateUserLabel, setUserDisabled, getUserById, fixUsersDataIntegrity, getAllUsers, switchUser } from './user.js'
+export type { RegisterUser } from './user.js'
+
+export { ensureVisitLogsTable, logVisit, getVisitStats, getDailyVisitStats, migrateStatsToDatabase, cleanExpiredVisitLogs, deleteVisitLogsByIps, deleteVisitLogsByUserIds, getVisitLogs, getIpStats } from './visitLog.js'
+export type { ReqSource as DbReqSource, VisitLog, VisitStats, VisitLogFromDb, VisitLogListResult, IpStat } from './visitLog.js'
+
+export { getSystemParam, setSystemParam, deleteSystemParam, getAllSystemParams, setSystemParams } from './systemParam.js'
+export type { SystemParam } from './systemParam.js'
+
+export { getFundInfo, getFundInfoList, saveFundInfo, updateFundInfoRecommend, getRecommendFundCodes, deleteFundInfo, batchSaveFundInfo, getAllFundInfoCodes } from './fundInfo.js'
+export type { FundInfo, FundInfoListResult } from './fundInfo.js'
+
+export { getDailyProfit, getDailyProfitByDateRange, getLatestDailyProfit, upsertDailyProfitTimeshare, updateDailyProfitFinal } from './userDailyProfit.js'
+export type { TimeProfitPoint, UserDailyProfit } from './userDailyProfit.js'
+
+export { ensureTasksTable, createTask, getTask, getActiveTask, updateTask, incrementTaskExecuteCount, getTaskList, getTaskById } from './task.js'
+export type { Task, TaskType, TaskStatus } from './task.js'
+
+// Repository 模式 - 数据访问层
+export { 
+  BaseRepository,
+  UserRepository, 
+  UserFundRepository, 
+  FundInfoRepository,
+  userRepository, 
+  userFundRepository, 
+  fundInfoRepository 
+} from './repositories.js'

@@ -1,0 +1,52 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Server logs
+server.log
+stats.json
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+!db/*.sql
+
+# Backup files
+*.bak
+*.backup
+
+# Misc
+nul
+npm
+t
+
+# Agent skills
+.agents/skills/
+
+# Dev files
+dev/
+
+# Agent
+skills-lock.json
