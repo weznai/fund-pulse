@@ -128,9 +128,6 @@ fund-pulse/
 - `email_user`: 发件邮箱地址
 - `email_pass`: 邮箱授权码
 
-### 后台管理
-
-访问 `/admin` 进入后台管理，首次使用需在数据库设置管理员 token。
 
 ---
 
