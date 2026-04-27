@@ -66,6 +66,7 @@ CREATE TABLE user_funds (
   share REAL NOT NULL DEFAULT 0,
   cost REAL NOT NULL DEFAULT 0,
   amount REAL NOT NULL DEFAULT 0,
+  total_cost REAL NOT NULL DEFAULT 0,
   holding_date TEXT,
   settled INTEGER NOT NULL DEFAULT 0,
   last_settled_date TEXT,
@@ -80,6 +81,33 @@ CREATE TABLE user_funds (
 );
 CREATE INDEX idx_user_funds_user ON user_funds (user_id);
 CREATE INDEX idx_user_funds_held ON user_funds (user_id, is_held);
+
+-- -----------------------------------------------------------
+-- Table: user_fund_transactions
+-- 用户基金交易流水表（加仓/减仓/迁移）
+-- -----------------------------------------------------------
+CREATE TABLE user_fund_transactions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL,
+  fund_code TEXT NOT NULL,
+  fund_name TEXT,
+  type TEXT NOT NULL CHECK(type IN ('buy', 'sell', 'migrate')),
+  shares REAL NOT NULL,
+  nav REAL NOT NULL,
+  amount REAL NOT NULL,
+  cost_price REAL NOT NULL,
+  shares_before REAL NOT NULL DEFAULT 0,
+  shares_after REAL NOT NULL DEFAULT 0,
+  total_cost_before REAL NOT NULL DEFAULT 0,
+  total_cost_after REAL NOT NULL DEFAULT 0,
+  realized_profit REAL DEFAULT 0,
+  transaction_date TEXT NOT NULL,
+  remark TEXT,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX idx_transactions_user ON user_fund_transactions (user_id);
+CREATE INDEX idx_transactions_fund ON user_fund_transactions (user_id, fund_code);
+CREATE INDEX idx_transactions_date ON user_fund_transactions (transaction_date);
 
 -- -----------------------------------------------------------
 -- Table: user_funds_profit_history

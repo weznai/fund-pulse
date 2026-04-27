@@ -180,6 +180,7 @@ export interface SaveHoldingResponse {
     amount: number
     share?: number
     cost?: number
+    totalCost?: number
     settled: boolean
     lastSettledDate: string
     currentDayProfit: number

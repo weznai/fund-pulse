@@ -138,13 +138,28 @@ export function useHoldings(): UseHoldingsReturn {
 
     let share: number
     let cost: number
+    let totalCost: number | undefined
 
     if (existing && existing.share > 0 && existing.cost > 0) {
       cost = existing.cost
       share = existing.share
+
+      if (!useDatabase.value && existing.amount > 0 && existing.totalCost != null && existing.totalCost > 0) {
+        const oldAmount = existing.amount
+        if (roundedAmount > oldAmount) {
+          totalCost = Math.round(((existing.totalCost) + (roundedAmount - oldAmount)) * 100) / 100
+        } else if (roundedAmount < oldAmount && roundedAmount > 0) {
+          totalCost = Math.round((existing.totalCost * roundedAmount / oldAmount) * 100) / 100
+        } else {
+          totalCost = existing.totalCost
+        }
+      }
     } else {
       cost = Math.round(currentNav * 10000) / 10000
       share = currentNav > 0 ? Math.round((roundedAmount / currentNav) * 10000) / 10000 : 0
+      if (!useDatabase.value) {
+        totalCost = roundedAmount
+      }
     }
 
     const holding: Holding = {
@@ -153,7 +168,8 @@ export function useHoldings(): UseHoldingsReturn {
       share,
       cost,
       amount: roundedAmount,
-      holdingDate: getToday()
+      holdingDate: getToday(),
+      ...(totalCost != null ? { totalCost } : {})
     }
 
     if (useDatabase.value) {
@@ -169,6 +185,7 @@ export function useHoldings(): UseHoldingsReturn {
         holding.lastSettledDate = res.holding.lastSettledDate
         holding.currentDayProfit = res.holding.currentDayProfit
         holding.accumulatedProfit = res.holding.accumulatedProfit
+        holding.totalCost = res.holding.totalCost ?? holding.totalCost
       }
     }
 
@@ -205,6 +222,15 @@ export function useHoldings(): UseHoldingsReturn {
       holdingDate: getToday()
     }
 
+    if (!useDatabase.value && holding.amount > 0 && holding.totalCost != null && holding.totalCost > 0) {
+      const oldAmount = holding.amount
+      if (roundedAmount > oldAmount) {
+        updated.totalCost = Math.round((holding.totalCost + roundedAmount - oldAmount) * 100) / 100
+      } else if (roundedAmount < oldAmount && roundedAmount > 0) {
+        updated.totalCost = Math.round((holding.totalCost * roundedAmount / oldAmount) * 100) / 100
+      }
+    }
+
     if (useDatabase.value) {
       const res = await userApi.saveHolding(updated)
       if (res.success && res.holding) {
@@ -215,6 +241,7 @@ export function useHoldings(): UseHoldingsReturn {
         updated.lastSettledDate = res.holding.lastSettledDate
         updated.currentDayProfit = res.holding.currentDayProfit
         updated.accumulatedProfit = res.holding.accumulatedProfit
+        updated.totalCost = res.holding.totalCost ?? updated.totalCost
       }
     }
 

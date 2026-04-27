@@ -107,6 +107,9 @@ export const useFundStore = defineStore('fund', () => {
       } catch (error) {
         console.error('保存排序设置失败:', error)
       }
+    } else {
+      localStorage.setItem('sortField', sortField.value)
+      localStorage.setItem('sortDirection', sortDirection.value)
     }
   }
 
@@ -119,6 +122,8 @@ export const useFundStore = defineStore('fund', () => {
       } catch (error) {
         console.error('保存排序方向失败:', error)
       }
+    } else {
+      localStorage.setItem('sortDirection', sortDirection.value)
     }
   }
 
@@ -188,6 +193,24 @@ export const useFundStore = defineStore('fund', () => {
       }
     } catch (e) {
       console.error('读取过滤模式失败:', e)
+    }
+
+    try {
+      const storedSortField = localStorage.getItem('sortField')
+      if (storedSortField) {
+        data.sortField = storedSortField
+      }
+    } catch (e) {
+      console.error('读取排序字段失败:', e)
+    }
+
+    try {
+      const storedSortDirection = localStorage.getItem('sortDirection')
+      if (storedSortDirection === 'asc' || storedSortDirection === 'desc') {
+        data.sortDirection = storedSortDirection
+      }
+    } catch (e) {
+      console.error('读取排序方向失败:', e)
     }
 
     return data
@@ -292,7 +315,10 @@ export const useFundStore = defineStore('fund', () => {
       'fund_holdings',
       'fund_estimate_cache',
       'hideAmount',
-      'filterMode'
+      'filterMode',
+      'sortField',
+      'sortDirection',
+      'viewMode'
     ]
     keysToRemove.forEach(key => {
       try {
@@ -359,6 +385,19 @@ export const useFundStore = defineStore('fund', () => {
       }
     } catch (e) {
       console.error('❌ Failed to load filterMode from storage', e)
+    }
+
+    try {
+      const storedSortField = localStorage.getItem('sortField')
+      if (storedSortField) {
+        sortField.value = storedSortField
+      }
+      const storedSortDirection = localStorage.getItem('sortDirection')
+      if (storedSortDirection === 'asc' || storedSortDirection === 'desc') {
+        sortDirection.value = storedSortDirection
+      }
+    } catch (e) {
+      console.error('❌ Failed to load sort preferences from storage', e)
     }
 
     console.log('📊 Current favorite codes:', favoriteCodes.value.length)
@@ -492,6 +531,8 @@ export const useFundStore = defineStore('fund', () => {
     localStorage.setItem('favoriteFundsVersion', STORAGE_VERSION)
     localStorage.setItem('favoriteFunds', JSON.stringify(favoriteCodes.value))
     localStorage.setItem('filterMode', filterMode.value)
+    localStorage.setItem('sortField', sortField.value)
+    localStorage.setItem('sortDirection', sortDirection.value)
   }
 
   function isHeld(code: string): boolean {
@@ -608,12 +649,16 @@ export const useFundStore = defineStore('fund', () => {
 
     const share = holding?.share ?? 0
     const costPerUnit = holding?.cost ?? 0
-    const totalCost = share > 0 && costPerUnit > 0 ? share * costPerUnit : (holdingAmount ?? 0)
+    const shareBasedCost = share > 0 && costPerUnit > 0 ? share * costPerUnit : 0
 
-    const accumulatedProfit = holding?.accumulatedProfit
-    const holdingProfitValue = accumulatedProfit != null && accumulatedProfit !== 0
-      ? accumulatedProfit
-      : (totalCost > 0 && holdingAmount !== null ? holdingAmount - totalCost : null)
+    const dbTotalCost = holding?.totalCost
+    const effectiveTotalCost = dbTotalCost != null && dbTotalCost > 0
+      ? dbTotalCost
+      : (shareBasedCost > 0 ? shareBasedCost : (holdingAmount ?? 0))
+
+    const holdingProfitValue = effectiveTotalCost > 0 && holdingAmount !== null
+      ? Math.round((holdingAmount - effectiveTotalCost) * 100) / 100
+      : null
 
     return {
       rawFund: fund,
@@ -668,11 +713,8 @@ export const useFundStore = defineStore('fund', () => {
         : '',
       holdingProfitPercent: (() => {
         if (holdingProfitValue === null) return ''
-        const costBasis = accumulatedProfit != null && accumulatedProfit !== 0 && holdingAmount !== null
-          ? holdingAmount - accumulatedProfit
-          : totalCost
-        if (!costBasis || costBasis <= 0) return ''
-        return `${holdingProfitValue >= 0 ? '+' : ''}${(holdingProfitValue / costBasis * 100).toFixed(2)}%`
+        if (!effectiveTotalCost || effectiveTotalCost <= 0) return ''
+        return `${holdingProfitValue >= 0 ? '+' : ''}${(holdingProfitValue / effectiveTotalCost * 100).toFixed(2)}%`
       })(),
       holdingProfitValue,
     }

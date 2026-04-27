@@ -141,11 +141,100 @@ export function initDatabase() {
     `ALTER TABLE user_funds ADD COLUMN settled INTEGER DEFAULT 0`,
     `ALTER TABLE user_funds ADD COLUMN last_settled_date TEXT DEFAULT ''`,
     `ALTER TABLE users ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE user_funds ADD COLUMN total_cost REAL NOT NULL DEFAULT 0`,
   ]
   for (const sql of migrations) {
     try { db.exec(sql) } catch (e) { /* field exists */ }
   }
-  try { db.exec(`UPDATE user_funds SET settled = 0 WHERE settled IS NULL`) } catch (e) { /* ignore */ }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      name TEXT PRIMARY KEY,
+      applied_at INTEGER NOT NULL,
+      description TEXT
+    )
+  `)
+
+  const pendingMigrations: Array<{
+    name: string
+    description: string
+    up: () => void
+  }> = [
+    {
+      name: 'holding_cost_20260427',
+      description: '持仓收益率优化：新增交易流水表、total_cost字段、迁移现有持仓数据',
+      up: () => {
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS user_fund_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            fund_code TEXT NOT NULL,
+            fund_name TEXT,
+            type TEXT NOT NULL CHECK(type IN ('buy', 'sell', 'migrate')),
+            shares REAL NOT NULL,
+            nav REAL NOT NULL,
+            amount REAL NOT NULL,
+            cost_price REAL NOT NULL,
+            shares_before REAL NOT NULL DEFAULT 0,
+            shares_after REAL NOT NULL DEFAULT 0,
+            total_cost_before REAL NOT NULL DEFAULT 0,
+            total_cost_after REAL NOT NULL DEFAULT 0,
+            realized_profit REAL DEFAULT 0,
+            transaction_date TEXT NOT NULL,
+            remark TEXT,
+            created_at INTEGER NOT NULL
+          )
+        `)
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_transactions_user ON user_fund_transactions (user_id)`)
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_transactions_fund ON user_fund_transactions (user_id, fund_code)`)
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_transactions_date ON user_fund_transactions (transaction_date)`)
+
+        const needsMigration = db.prepare(`
+          SELECT COUNT(*) as cnt FROM user_funds WHERE is_held = 1 AND share > 0 AND cost > 0 AND total_cost = 0
+        `).get() as { cnt: number }
+        if (needsMigration.cnt > 0) {
+          const now = Date.now()
+          const today = getLocalDate()
+          const rows = db.prepare(`
+            SELECT user_id, fund_code, fund_name, share, cost FROM user_funds
+            WHERE is_held = 1 AND share > 0 AND cost > 0 AND total_cost = 0
+          `).all() as any[]
+          const insertTx = db.prepare(`
+            INSERT INTO user_fund_transactions (
+              user_id, fund_code, fund_name, type, shares, nav, amount, cost_price,
+              shares_before, shares_after, total_cost_before, total_cost_after,
+              realized_profit, transaction_date, remark, created_at
+            ) VALUES (?, ?, ?, 'migrate', ?, ?, ?, ?, 0, ?, 0, ?, 0, ?, '数据迁移', ?)
+          `)
+          const updateCost = db.prepare(`UPDATE user_funds SET total_cost = ? WHERE user_id = ? AND fund_code = ?`)
+          db.transaction(() => {
+            for (const row of rows) {
+              const totalCost = Math.round(row.share * row.cost * 100) / 100
+              insertTx.run(row.user_id, row.fund_code, row.fund_name,
+                row.share, row.cost, totalCost, row.cost,
+                row.share, totalCost, today, now)
+              updateCost.run(totalCost, row.user_id, row.fund_code)
+            }
+          })()
+          logger.log(`🔄 持仓数据迁移完成: ${rows.length} 条记录`)
+        }
+      }
+    }
+  ]
+
+  for (const migration of pendingMigrations) {
+    const applied = db.prepare(`SELECT 1 FROM schema_migrations WHERE name = ?`).get(migration.name)
+    if (!applied) {
+      try {
+        migration.up()
+        db.prepare(`INSERT INTO schema_migrations (name, applied_at, description) VALUES (?, ?, ?)`)
+          .run(migration.name, Date.now(), migration.description)
+        logger.log(`✅ 迁移完成: ${migration.name} - ${migration.description}`)
+      } catch (e) {
+        logger.error(`❌ 迁移失败: ${migration.name}`, e)
+      }
+    }
+  }
 
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_user_funds_pk ON user_funds(user_id, fund_code)`)
 
@@ -236,6 +325,42 @@ export function initDatabase() {
 
   const userId = getCurrentUserId()
   logger.log('👤 当前用户ID:', userId.id, `(${userId.type})${userId.label ? ' - ' + userId.label : ''}`)
+}
+
+export function rollbackMigration(name: string): boolean {
+  const row = db.prepare(`SELECT * FROM schema_migrations WHERE name = ?`).get(name) as any
+  if (!row) {
+    logger.log(`⚠️ 迁移记录不存在: ${name}`)
+    return false
+  }
+
+  const rollbacks: Record<string, () => void> = {
+    holding_cost_20260427: () => {
+      db.exec(`DROP TABLE IF EXISTS user_fund_transactions`)
+      db.exec(`UPDATE user_funds SET total_cost = 0`)
+    }
+  }
+
+  const rollback = rollbacks[name]
+  if (!rollback) {
+    logger.log(`⚠️ 未定义回滚逻辑: ${name}`)
+    return false
+  }
+
+  try {
+    rollback()
+    db.prepare(`DELETE FROM schema_migrations WHERE name = ?`).run(name)
+    logger.log(`🔄 回滚完成: ${name} - ${row.description}`)
+    return true
+  } catch (e) {
+    logger.error(`❌ 回滚失败: ${name}`, e)
+    return false
+  }
+}
+
+export function listMigrations(): Array<{ name: string; appliedAt: number; description: string }> {
+  return (db.prepare(`SELECT name, applied_at, description FROM schema_migrations ORDER BY applied_at`).all() as any[])
+    .map(r => ({ name: r.name, appliedAt: r.applied_at, description: r.description }))
 }
 
 export function closeDatabase(): void {

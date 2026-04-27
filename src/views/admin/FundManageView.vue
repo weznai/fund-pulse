@@ -75,31 +75,25 @@
               <th class="checkbox-cell">
                 <input type="checkbox" :checked="isAllSelected" :indeterminate="isPartialSelected" @change="toggleSelectAll" />
               </th>
+              <th>推荐</th>
               <th>代码</th>
               <th>名称</th>
               <th>类型</th>
-              <th>基金公司</th>
-              <th>规模(亿)</th>
-              <th>推荐</th>
+              <th>更新日期</th>
               <th class="action-header">操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="8" class="loading-cell"><span class="spinner large"></span><span>加载中...</span></td>
+              <td colspan="7" class="loading-cell"><span class="spinner large"></span><span>加载中...</span></td>
             </tr>
             <tr v-else-if="fundList.length === 0">
-              <td colspan="8" class="empty-cell"><span>暂无基金数据</span></td>
+              <td colspan="7" class="empty-cell"><span>暂无基金数据</span></td>
             </tr>
             <tr v-else v-for="fund in fundList" :key="fund.code" @dblclick="viewDetail(fund)" style="cursor: pointer;">
               <td class="checkbox-cell" @click.stop>
                 <input type="checkbox" :checked="selectedCodes.has(fund.code)" @change="toggleSelect(fund.code)" />
               </td>
-              <td class="code-cell">{{ fund.code }}</td>
-              <td class="name-cell">{{ fund.name }}</td>
-              <td><span class="type-tag" v-if="fund.ftype">{{ fund.ftype }}</span></td>
-              <td>{{ fund.fund_company || '-' }}</td>
-              <td>{{ fund.fund_scale || '-' }}</td>
               <td>
                 <button class="recommend-btn" :class="{ active: fund.is_recommend }" @click="toggleRecommend(fund)">
                   <svg viewBox="0 0 24 24" fill="none">
@@ -107,6 +101,10 @@
                   </svg>
                 </button>
               </td>
+              <td class="code-cell">{{ fund.code }}</td>
+              <td class="name-cell">{{ fund.name }}</td>
+              <td><span class="type-tag" v-if="fund.ftype">{{ fund.ftype }}</span></td>
+              <td class="date-cell">{{ formatTime(fund.updated_at) }}</td>
               <td>
                 <div class="action-cell">
                   <button class="btn-text" @click="syncSingleFund(fund)" :disabled="fund.syncing">
@@ -602,7 +600,7 @@ function showErrorMessage(msg: string) {
 .checkbox-cell { width: 40px; text-align: center; }
 .checkbox-cell input { width: 16px; height: 16px; cursor: pointer; }
 
-.fund-table-wrapper { background: #fff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; }
+.fund-table-wrapper { background: #fff; border-radius: 12px; overflow-x: auto; border: 1px solid #e2e8f0; }
 .fund-table { width: 100%; border-collapse: collapse; }
 .fund-table th, .fund-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #f1f5f9; }
 .fund-table th { background: #f8fafc; font-weight: 600; font-size: 13px; color: #475569; }
@@ -610,13 +608,14 @@ function showErrorMessage(msg: string) {
 .code-cell { font-family: 'SF Mono', Consolas, monospace; font-weight: 600; color: #1e3a5f; }
 .name-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .type-tag { display: inline-block; padding: 2px 8px; background: #e0f2fe; color: #0369a1; border-radius: 4px; font-size: 12px; }
+.date-cell { font-size: 13px; color: #64748b; white-space: nowrap; }
 .recommend-btn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: transparent; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; color: #94a3b8; }
 .recommend-btn:hover { border-color: #fbbf24; color: #fbbf24; }
 .recommend-btn.active { background: #fef3c7; border-color: #fbbf24; color: #f59e0b; }
 .recommend-btn svg { width: 16px; height: 16px; }
 .action-cell { display: flex; gap: 8px; align-items: center; justify-content: center; }
 .action-divider { color: #cbd5e1; font-size: 12px; }
-.action-header { width: 250px; }
+.action-header { width: 250px; text-align: center; }
 .btn-icon { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: transparent; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; color: #3b82f6; transition: all 0.2s; }
 .btn-icon.danger { color: #ef4444; }
 .btn-icon:hover { background: #dbeafe; color: #3b82f6; border-color: #93c5fd; }

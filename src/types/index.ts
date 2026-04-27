@@ -72,6 +72,7 @@ export interface Holding {
   lastProfitDate?: string   // 最后收益日期
   profitToday?: number     // 当日收益（兼容字段）
   profitTotal?: number     // 持有收益（兼容字段）
+  totalCost?: number       // 总投入成本（用于计算持仓收益率）
 }
 
 // 持仓收益历史记录

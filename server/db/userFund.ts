@@ -19,6 +19,27 @@ export interface Holding {
   currentDayProfitRate?: number
   profitType?: 'estimate' | 'final'
   lastProfitDate?: string
+  totalCost?: number
+}
+
+export interface Transaction {
+  id?: number
+  userId: string
+  fundCode: string
+  fundName: string
+  type: 'buy' | 'sell' | 'migrate'
+  shares: number
+  nav: number
+  amount: number
+  costPrice: number
+  sharesBefore: number
+  sharesAfter: number
+  totalCostBefore: number
+  totalCostAfter: number
+  realizedProfit: number
+  transactionDate: string
+  remark?: string
+  createdAt: number
 }
 
 export interface HoldingProfitHistory {
@@ -78,7 +99,8 @@ export function getHoldings(): Map<string, Holding> {
       currentDayProfit: row.current_day_profit ?? null,
       currentDayProfitRate: row.current_day_profit_rate ?? null,
       profitType: row.profit_type || 'estimate',
-      lastProfitDate: row.last_profit_date
+      lastProfitDate: row.last_profit_date,
+      totalCost: row.total_cost ?? 0
     })
   }
 
@@ -93,6 +115,7 @@ export interface SaveHoldingResult {
     amount: number
     share?: number
     cost?: number
+    totalCost?: number
     settled: boolean
     lastSettledDate: string
     currentDayProfit: number
@@ -100,86 +123,237 @@ export interface SaveHoldingResult {
   }
 }
 
+function getCurrentNav(fundCode: string): number | null {
+  const today = getLocalDate()
+  const trendRow = db.prepare(`
+    SELECT nav, gsz, is_updated FROM fund_time_trend WHERE code = ? AND date = ?
+  `).get(fundCode, today) as { nav: number; gsz: number; is_updated: number } | undefined
+
+  if (!trendRow) return null
+
+  if (trendRow.is_updated && trendRow.nav > 0) return trendRow.nav
+  if (trendRow.gsz > 0) return trendRow.gsz
+  if (trendRow.nav > 0) return trendRow.nav
+  return null
+}
+
+function recordTransaction(params: {
+  userId: string; fundCode: string; fundName: string;
+  type: 'buy' | 'sell'; shares: number; nav: number; amount: number;
+  costPrice: number; sharesBefore: number; sharesAfter: number;
+  totalCostBefore: number; totalCostAfter: number; realizedProfit: number;
+  date: string
+}) {
+  db.prepare(`
+    INSERT INTO user_fund_transactions (
+      user_id, fund_code, fund_name, type, shares, nav, amount, cost_price,
+      shares_before, shares_after, total_cost_before, total_cost_after,
+      realized_profit, transaction_date, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    params.userId, params.fundCode, params.fundName, params.type,
+    params.shares, params.nav, params.amount, params.costPrice,
+    params.sharesBefore, params.sharesAfter, params.totalCostBefore, params.totalCostAfter,
+    params.realizedProfit, params.date, Date.now()
+  )
+}
+
 export function saveHolding(holding: Holding): SaveHoldingResult {
   const userId = getCurrentUserId().id
   const today = getLocalDate()
 
   const existing = db.prepare(`
-    SELECT settled, last_settled_date, amount, accumulated_profit, current_day_profit
+    SELECT settled, last_settled_date, amount, accumulated_profit, current_day_profit,
+           share, cost, total_cost, is_held, fund_name
     FROM user_funds WHERE user_id = ? AND fund_code = ?
-  `).get(userId, holding.fundCode) as { settled: number; last_settled_date: string; amount: number; accumulated_profit: number; current_day_profit: number } | undefined
+  `).get(userId, holding.fundCode) as {
+    settled: number; last_settled_date: string; amount: number;
+    accumulated_profit: number; current_day_profit: number;
+    share: number; cost: number; total_cost: number;
+    is_held: number; fund_name: string
+  } | undefined
 
   if (!existing) {
     return { success: false, error: `基金 ${holding.fundCode} 不存在，请先添加到自选` }
   }
 
+  const newAmount = Math.round(holding.amount * 100) / 100
+  const isCurrentlyHeld = existing.is_held === 1
   const settledToday = Boolean(existing.settled) && existing.last_settled_date === today
 
-    if (settledToday) {
+  let newShare: number
+  let newCost: number
+  let newTotalCost: number
+  let txType: 'buy' | 'sell' | null = null
+  let txShares = 0
+  let txNav = 0
+  let txAmount = 0
+  let txRealizedProfit = 0
+  let sharesBefore = 0
+  let totalCostBefore = 0
+
+  const currentNav = getCurrentNav(holding.fundCode) || holding.cost || 1
+
+  if (!isCurrentlyHeld || existing.share <= 0 || existing.total_cost <= 0) {
+    newShare = currentNav > 0 ? Math.round((newAmount / currentNav) * 100) / 100 : 0
+    newCost = currentNav
+    newTotalCost = newAmount
+    sharesBefore = 0
+    totalCostBefore = 0
+
+    if (isCurrentlyHeld && existing.share > 0 && existing.cost > 0) {
+      sharesBefore = existing.share
+      totalCostBefore = existing.total_cost || Math.round(existing.share * existing.cost * 100) / 100
+    }
+
+    if (newAmount > 0) {
+      txType = 'buy'
+      txShares = newShare
+      txNav = currentNav
+      txAmount = newAmount
+    }
+  } else {
+    sharesBefore = existing.share
+    totalCostBefore = existing.total_cost
+    const oldAmount = existing.amount
+
+    if (newAmount > oldAmount) {
+      txType = 'buy'
+      const buyAmount = Math.round((newAmount - oldAmount) * 100) / 100
+      const buyShares = currentNav > 0 ? Math.round((buyAmount / currentNav) * 100) / 100 : 0
+      txShares = buyShares
+      txNav = currentNav
+      txAmount = buyAmount
+
+      newShare = Math.round((existing.share + buyShares) * 100) / 100
+      newTotalCost = Math.round((totalCostBefore + buyAmount) * 100) / 100
+      newCost = newShare > 0 ? Math.round((newTotalCost / newShare) * 10000) / 10000 : existing.cost
+    } else if (newAmount < oldAmount) {
+      txType = 'sell'
+      const sellAmount = Math.round((oldAmount - newAmount) * 100) / 100
+      const sellShares = currentNav > 0 ? Math.round((sellAmount / currentNav) * 100) / 100 : 0
+      txShares = sellShares
+      txNav = currentNav
+      txAmount = sellAmount
+
+      if (sellShares >= existing.share) {
+        newShare = 0
+        newCost = 0
+        newTotalCost = 0
+        const costOfSold = totalCostBefore
+        txRealizedProfit = Math.round((sellAmount - costOfSold) * 100) / 100
+      } else {
+        newShare = Math.round((existing.share - sellShares) * 100) / 100
+        const costOfSold = Math.round(sellShares * existing.cost * 100) / 100
+        newTotalCost = Math.round((totalCostBefore - costOfSold) * 100) / 100
+        newCost = existing.cost
+        txRealizedProfit = Math.round((sellAmount - costOfSold) * 100) / 100
+      }
+    } else {
+      return {
+        success: true,
+        holding: {
+          fundCode: holding.fundCode,
+          amount: existing.amount,
+          share: existing.share,
+          cost: existing.cost,
+          totalCost: existing.total_cost,
+          settled: settledToday,
+          lastSettledDate: existing.last_settled_date || '',
+          currentDayProfit: existing.current_day_profit || 0,
+          accumulatedProfit: existing.accumulated_profit || 0
+        }
+      }
+    }
+  }
+
+  const isFullSell = newShare <= 0 && txType === 'sell'
+
+  let finalAmount: number
+  let settledState: boolean
+  let lastSettledDate: string
+  let currentDayProfit: number
+  let accumulatedProfit: number
+
+  if (isFullSell) {
     db.prepare(`
       UPDATE user_funds
-      SET is_held = 1, fund_name = ?, share = ?, cost = ?, amount = ?, holding_date = ?
+      SET is_held = 0, share = 0, cost = 0, amount = 0, total_cost = 0, holding_date = NULL
       WHERE user_id = ? AND fund_code = ?
-    `).run(holding.fundName, holding.share, holding.cost, holding.amount, holding.holdingDate, userId, holding.fundCode)
+    `).run(userId, holding.fundCode)
 
-    const reSettleResult = reSettleHoldingForToday(holding.fundCode, holding.amount)
+    finalAmount = 0
+    settledState = false
+    lastSettledDate = ''
+    currentDayProfit = 0
+    accumulatedProfit = 0
+  } else if (settledToday && isCurrentlyHeld) {
+    db.prepare(`
+      UPDATE user_funds
+      SET is_held = 1, fund_name = ?, share = ?, cost = ?, amount = ?,
+          total_cost = ?, holding_date = ?
+      WHERE user_id = ? AND fund_code = ?
+    `).run(holding.fundName, newShare, newCost, newAmount, newTotalCost, today, userId, holding.fundCode)
 
-    return {
-      success: true,
-      holding: {
-        fundCode: holding.fundCode,
-        amount: reSettleResult.success ? reSettleResult.settledAmount : holding.amount,
-        share: holding.share,
-        cost: holding.cost,
-        settled: true,
-        lastSettledDate: today,
-        currentDayProfit: reSettleResult.profit,
-        accumulatedProfit: reSettleResult.success ? reSettleResult.accumulatedProfit : (existing.accumulated_profit || 0)
-      }
+    const reSettleResult = reSettleHoldingForToday(holding.fundCode, newAmount)
+    finalAmount = reSettleResult.success ? reSettleResult.settledAmount : newAmount
+    settledState = reSettleResult.success
+    lastSettledDate = reSettleResult.success ? today : existing.last_settled_date
+    currentDayProfit = reSettleResult.profit
+    accumulatedProfit = reSettleResult.success ? reSettleResult.accumulatedProfit : (existing.accumulated_profit || 0)
+  } else {
+    db.prepare(`
+      UPDATE user_funds
+      SET is_held = 1, fund_name = ?, share = ?, cost = ?, amount = ?,
+          total_cost = ?, holding_date = ?, settled = 0, last_settled_date = ''
+      WHERE user_id = ? AND fund_code = ?
+    `).run(holding.fundName, newShare, newCost, newAmount, newTotalCost, today, userId, holding.fundCode)
+
+    const trendRow = db.prepare(`
+      SELECT is_updated, day_growth FROM fund_time_trend WHERE code = ? AND date = ?
+    `).get(holding.fundCode, today) as { is_updated: number; day_growth: number } | undefined
+
+    if (trendRow && trendRow.is_updated === 1 && trendRow.day_growth !== null) {
+      const reSettleResult = reSettleHoldingForToday(holding.fundCode, newAmount)
+      finalAmount = reSettleResult.success ? reSettleResult.settledAmount : newAmount
+      settledState = reSettleResult.success
+      lastSettledDate = reSettleResult.success ? today : ''
+      currentDayProfit = reSettleResult.profit
+      accumulatedProfit = reSettleResult.success ? reSettleResult.accumulatedProfit : (existing.accumulated_profit || 0)
+    } else {
+      finalAmount = newAmount
+      settledState = false
+      lastSettledDate = ''
+      currentDayProfit = 0
+      accumulatedProfit = existing.accumulated_profit || 0
     }
   }
 
-  db.prepare(`
-    UPDATE user_funds
-    SET is_held = 1, fund_name = ?, share = ?, cost = ?, amount = ?, holding_date = ?,
-        settled = 0, last_settled_date = ''
-    WHERE user_id = ? AND fund_code = ?
-  `).run(holding.fundName, holding.share, holding.cost, holding.amount, holding.holdingDate, userId, holding.fundCode)
+  if (txType && txShares > 0) {
+    recordTransaction({
+      userId, fundCode: holding.fundCode, fundName: holding.fundName,
+      type: txType, shares: txShares, nav: txNav, amount: txAmount,
+      costPrice: txType === 'buy' ? newCost : (existing.cost || holding.cost),
+      sharesBefore, sharesAfter: newShare,
+      totalCostBefore, totalCostAfter: newTotalCost,
+      realizedProfit: txRealizedProfit, date: today
+    })
 
-  const trendRow = db.prepare(`
-    SELECT is_updated, day_growth FROM fund_time_trend WHERE code = ? AND date = ?
-  `).get(holding.fundCode, today) as { is_updated: number; day_growth: number } | undefined
-
-  if (trendRow && trendRow.is_updated === 1 && trendRow.day_growth !== null) {
-    const reSettleResult = reSettleHoldingForToday(holding.fundCode, holding.amount)
-    logger.log(`💾 持仓已保存: ${holding.fundCode} (净值已更新，立即结算${reSettleResult.success ? '成功' : '失败'})`)
-    return {
-      success: true,
-      holding: {
-        fundCode: holding.fundCode,
-        amount: reSettleResult.success ? reSettleResult.settledAmount : holding.amount,
-        share: holding.share,
-        cost: holding.cost,
-        settled: reSettleResult.success,
-        lastSettledDate: reSettleResult.success ? today : '',
-        currentDayProfit: reSettleResult.profit,
-        accumulatedProfit: reSettleResult.success ? reSettleResult.accumulatedProfit : (existing.accumulated_profit || 0)
-      }
-    }
+    logger.log(`${txType === 'buy' ? '📈 加仓' : '📉 减仓'}: ${holding.fundCode} ${txType === 'buy' ? '+' : '-'}${txShares}份 ¥${txAmount} 净值${txNav.toFixed(4)}${txRealizedProfit !== 0 ? ` 已实现收益${txRealizedProfit.toFixed(2)}` : ''} 成本价${newCost.toFixed(4)} 总成本${newTotalCost}`)
   }
 
-  logger.log(`💾 持仓已保存: ${holding.fundCode} (待结算)`)
   return {
     success: true,
     holding: {
       fundCode: holding.fundCode,
-      amount: holding.amount,
-      share: holding.share,
-      cost: holding.cost,
-      settled: false,
-      lastSettledDate: '',
-      currentDayProfit: 0,
-      accumulatedProfit: existing.accumulated_profit || 0
+      amount: finalAmount,
+      share: newShare,
+      cost: newCost,
+      totalCost: newTotalCost,
+      settled: settledState,
+      lastSettledDate,
+      currentDayProfit,
+      accumulatedProfit
     }
   }
 }
@@ -801,30 +975,44 @@ export function setHolding(
 
   try {
     const existing = db.prepare(`
-      SELECT settled, last_settled_date, accumulated_profit, current_day_profit
+      SELECT settled, last_settled_date, accumulated_profit, current_day_profit,
+             share, cost, total_cost, is_held
       FROM user_funds WHERE user_id = ? AND fund_code = ?
-    `).get(userId, fundCode) as { settled: number; last_settled_date: string; accumulated_profit: number; current_day_profit: number } | undefined
+    `).get(userId, fundCode) as {
+      settled: number; last_settled_date: string; accumulated_profit: number;
+      current_day_profit: number; share: number; cost: number;
+      total_cost: number; is_held: number
+    } | undefined
 
     if (!existing) {
       return { success: false, error: `基金 ${fundCode} 不存在，请先添加到自选` }
     }
+
+    const roundedShare = Math.round(share * 100) / 100
+    const roundedCost = Math.round(cost * 10000) / 10000
+    const roundedAmount = Math.round(amount * 100) / 100
+    const computedTotalCost = Math.round(roundedShare * roundedCost * 100) / 100
 
     const settledToday = Boolean(existing.settled) && existing.last_settled_date === today
 
     if (settledToday) {
       db.prepare(`
         UPDATE user_funds
-        SET fund_name = ?, is_held = 1, share = ?, cost = ?, amount = ?, holding_date = ?
+        SET fund_name = ?, is_held = 1, share = ?, cost = ?, amount = ?,
+            total_cost = ?, holding_date = ?
         WHERE user_id = ? AND fund_code = ?
-      `).run(fundName, share, cost, amount, today, userId, fundCode)
+      `).run(fundName, roundedShare, roundedCost, roundedAmount, computedTotalCost, today, userId, fundCode)
 
-      const reSettleResult = reSettleHoldingForToday(fundCode, amount)
+      const reSettleResult = reSettleHoldingForToday(fundCode, roundedAmount)
 
       return {
         success: true,
         holding: {
           fundCode,
-          amount: reSettleResult.success ? reSettleResult.settledAmount : amount,
+          amount: reSettleResult.success ? reSettleResult.settledAmount : roundedAmount,
+          share: roundedShare,
+          cost: roundedCost,
+          totalCost: computedTotalCost,
           settled: true,
           lastSettledDate: today,
           currentDayProfit: reSettleResult.profit,
@@ -835,23 +1023,26 @@ export function setHolding(
 
     db.prepare(`
       UPDATE user_funds
-      SET fund_name = ?, is_held = 1, share = ?, cost = ?, amount = ?, holding_date = ?,
-          settled = 0, last_settled_date = ?
+      SET fund_name = ?, is_held = 1, share = ?, cost = ?, amount = ?,
+          total_cost = ?, holding_date = ?, settled = 0, last_settled_date = ?
       WHERE user_id = ? AND fund_code = ?
-    `).run(fundName, share, cost, amount, today, today, userId, fundCode)
+    `).run(fundName, roundedShare, roundedCost, roundedAmount, computedTotalCost, today, today, userId, fundCode)
 
     const trendRow = db.prepare(`
       SELECT is_updated, day_growth FROM fund_time_trend WHERE code = ? AND date = ?
     `).get(fundCode, today) as { is_updated: number; day_growth: number } | undefined
 
     if (trendRow && trendRow.is_updated === 1 && trendRow.day_growth !== null) {
-      const reSettleResult = reSettleHoldingForToday(fundCode, amount)
+      const reSettleResult = reSettleHoldingForToday(fundCode, roundedAmount)
       logger.log(`💰 设置持仓: ${fundCode} (净值已更新，立即结算${reSettleResult.success ? '成功' : '失败'})`)
       return {
         success: true,
         holding: {
           fundCode,
-          amount: reSettleResult.success ? reSettleResult.settledAmount : amount,
+          amount: reSettleResult.success ? reSettleResult.settledAmount : roundedAmount,
+          share: roundedShare,
+          cost: roundedCost,
+          totalCost: computedTotalCost,
           settled: reSettleResult.success,
           lastSettledDate: reSettleResult.success ? today : '',
           currentDayProfit: reSettleResult.profit,
@@ -860,12 +1051,15 @@ export function setHolding(
       }
     }
 
-    logger.log(`💰 设置持仓: ${fundCode} 份额:${share} 成本:${cost} 金额:${amount} (待结算)`)
+    logger.log(`💰 设置持仓: ${fundCode} 份额:${roundedShare} 成本:${roundedCost} 金额:${roundedAmount} 总成本:${computedTotalCost} (待结算)`)
     return {
       success: true,
       holding: {
         fundCode,
-        amount,
+        amount: roundedAmount,
+        share: roundedShare,
+        cost: roundedCost,
+        totalCost: computedTotalCost,
         settled: false,
         lastSettledDate: '',
         currentDayProfit: 0,
@@ -884,7 +1078,7 @@ export function removeHolding(fundCode: string): boolean {
   try {
     const stmt = db.prepare(`
       UPDATE user_funds
-      SET is_held = 0, share = 0, cost = 0, amount = 0, holding_date = NULL
+      SET is_held = 0, share = 0, cost = 0, amount = 0, total_cost = 0, holding_date = NULL
       WHERE user_id = ? AND fund_code = ?
     `)
     const result = stmt.run(userId, fundCode)
@@ -894,6 +1088,106 @@ export function removeHolding(fundCode: string): boolean {
     logger.error(`取消持仓失败: ${fundCode}`, error)
     return false
   }
+}
+
+export function getTransactions(fundCode?: string, limit?: number): Transaction[] {
+  const userId = getCurrentUserId().id
+
+  let query = 'SELECT * FROM user_fund_transactions WHERE user_id = ?'
+  const params: any[] = [userId]
+
+  if (fundCode) {
+    query += ' AND fund_code = ?'
+    params.push(fundCode)
+  }
+
+  query += ' ORDER BY created_at DESC'
+
+  if (limit) {
+    query += ' LIMIT ?'
+    params.push(limit)
+  }
+
+  const rows = db.prepare(query).all(...params) as any[]
+
+  return rows.map(row => ({
+    id: row.id,
+    userId: row.user_id,
+    fundCode: row.fund_code,
+    fundName: row.fund_name,
+    type: row.type,
+    shares: row.shares,
+    nav: row.nav,
+    amount: row.amount,
+    costPrice: row.cost_price,
+    sharesBefore: row.shares_before,
+    sharesAfter: row.shares_after,
+    totalCostBefore: row.total_cost_before,
+    totalCostAfter: row.total_cost_after,
+    realizedProfit: row.realized_profit,
+    transactionDate: row.transaction_date,
+    remark: row.remark,
+    createdAt: row.created_at
+  }))
+}
+
+export function getHoldingCostInfo(fundCode: string): { totalCost: number; costPrice: number; share: number } | null {
+  const userId = getCurrentUserId().id
+  const row = db.prepare(`
+    SELECT total_cost, cost, share FROM user_funds WHERE user_id = ? AND fund_code = ? AND is_held = 1
+  `).get(userId, fundCode) as { total_cost: number; cost: number; share: number } | undefined
+
+  if (!row) return null
+
+  return {
+    totalCost: row.total_cost || (row.share * row.cost),
+    costPrice: row.cost,
+    share: row.share
+  }
+}
+
+export function migrateExistingHoldings(): { migrated: number } {
+  const today = getLocalDate()
+  const now = Date.now()
+
+  const rows = db.prepare(`
+    SELECT uf.user_id, uf.fund_code, uf.fund_name, uf.share, uf.cost, uf.amount, uf.total_cost
+    FROM user_funds uf
+    WHERE uf.is_held = 1 AND uf.share > 0 AND uf.cost > 0 AND uf.total_cost = 0
+  `).all() as any[]
+
+  const insertTx = db.prepare(`
+    INSERT INTO user_fund_transactions (
+      user_id, fund_code, fund_name, type, shares, nav, amount, cost_price,
+      shares_before, shares_after, total_cost_before, total_cost_after,
+      realized_profit, transaction_date, remark, created_at
+    ) VALUES (?, ?, ?, 'migrate', ?, ?, ?, ?, 0, ?, 0, ?, 0, ?, '数据迁移', ?)
+  `)
+
+  const updateCost = db.prepare(`
+    UPDATE user_funds SET total_cost = ? WHERE user_id = ? AND fund_code = ?
+  `)
+
+  let migrated = 0
+
+  const migrateTx = db.transaction(() => {
+    for (const row of rows) {
+      const totalCost = Math.round(row.share * row.cost * 100) / 100
+
+      insertTx.run(
+        row.user_id, row.fund_code, row.fund_name,
+        row.share, row.cost, totalCost, row.cost,
+        row.share, totalCost, today, now
+      )
+
+      updateCost.run(totalCost, row.user_id, row.fund_code)
+      migrated++
+    }
+  })
+
+  migrateTx()
+  logger.log(`🔄 持仓数据迁移完成: ${migrated} 条记录`)
+  return { migrated }
 }
 
 export function updateUserFund(fundCode: string, updates: Partial<UserFund>): boolean {

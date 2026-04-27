@@ -91,18 +91,18 @@
 
     <div class="content-body" v-show="activeTab === 'holidays'">
       <div class="params-section compact">
-        <div class="section-header compact">
+        <div class="section-header compact year-row">
           <h3>年份选择</h3>
-        </div>
-        <div class="year-chips">
-          <button
-            v-for="year in yearOptions"
-            :key="year"
-            :class="['chip', { active: selectedYear === year }]"
-            @click="selectedYear = year"
-          >
-            {{ year }}
-          </button>
+          <div class="year-chips">
+            <button
+              v-for="year in yearOptions"
+              :key="year"
+              :class="['chip', { active: selectedYear === year }]"
+              @click="selectedYear = year"
+            >
+              {{ year }}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -550,18 +550,30 @@ onMounted(() => {
 }
 
 .params-section.compact {
-  padding: 16px;
+  padding: 10px 16px;
 }
 
 .section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 
 .section-header.compact {
   margin-bottom: 12px;
+}
+
+.section-header.compact.year-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.section-header.compact.year-row .year-chips {
+  flex: 1;
+  justify-content: center;
 }
 
 .section-header.compact h3 {

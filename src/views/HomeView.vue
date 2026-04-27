@@ -717,8 +717,9 @@ function confirmDelete() {
           currentNav
         )
         
-        // 手动刷新持仓数据
-        await store.holdings.loadFromDatabase()
+        if (store.useDatabase) {
+          await store.holdings.loadFromDatabase()
+        }
       } else {
         await store.holdings.removeHolding(selectedFundCode.value)
       }

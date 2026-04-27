@@ -346,23 +346,24 @@ onMounted(() => {
 
 .search-form {
   display: flex;
-  gap: 12px;
+  gap: 8px;
+  align-items: center;
 }
 
 .search-input {
   flex: 1;
-  padding: 14px 18px;
-  border: 2px solid #e2e8f0;
-  border-radius: 12px;
-  font-size: 15px;
+  padding: 8px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
   background: #fff;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .search-input:focus {
   outline: none;
   border-color: #3b82f6;
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 /* 用户列表 */
@@ -694,60 +695,54 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  padding: 6px 14px;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .btn-sm {
-  padding: 6px 12px;
+  padding: 5px 10px;
   font-size: 12px;
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #1e3a5f 0%, #3b82f6 100%);
+  background: #3b82f6;
   color: #fff;
-  box-shadow: 0 2px 8px rgba(30, 58, 95, 0.3);
 }
 
 .btn-primary:hover{
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(30, 58, 95, 0.4);
+  background: #2563eb;
 }
 
-/* 持仓按钮浅蓝色 */
 .btn-view-holdings{
-  background: linear-gradient(135deg, #60a5fa 0%, #93c5fd 100%);
-  box-shadow: 0 2px 6px rgba(96, 165, 250, 0.3);
+  background: #60a5fa;
   font-weight: normal;
 }
 
 .btn-view-holdings:hover{
-  box-shadow: 0 4px 10px rgba(96, 165, 250, 0.4);
+  background: #3b82f6;
 }
 
 .btn-danger {
-  background: linear-gradient(135deg, #f87171 0%, #fca5a5 100%);
+  background: #ef4444;
   color: #fff;
-  box-shadow: 0 2px 6px rgba(248, 113, 113, 0.3);
 }
 
 .btn-danger:hover:not(:disabled) {
-  box-shadow: 0 4px 10px rgba(248, 113, 113, 0.4);
+  background: #dc2626;
 }
 
 .btn-success {
-  background: linear-gradient(135deg, #34d399 0%, #6ee7b7 100%);
+  background: #10b981;
   color: #fff;
-  box-shadow: 0 2px 6px rgba(52, 211, 153, 0.3);
 }
 
 .btn-success:hover:not(:disabled) {
-  box-shadow: 0 4px 10px rgba(52, 211, 153, 0.4);
+  background: #059669;
 }
 
 .btn-danger:disabled, .btn-success:disabled {
