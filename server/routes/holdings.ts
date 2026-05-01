@@ -6,7 +6,7 @@ import {
   getHoldingProfitHistory, getHoldingProfitStats, getAllProfitHistory,
   getHeldFundTotalAmount, executeBatchSettlement, getUnsettledHoldings,
   getUserIdFromClientId, getHeldFunds, getGlobalEstimateCache, getLatestGlobalEstimateCache,
-  getDailyProfit, getDailyProfitByDateRange, getLatestDailyProfit
+  getDailyProfit, getDailyProfitByDateRange, getLatestDailyProfit, getDailyProfitSummaries
 } from '../db/index.js'
 import { getClientUserId, isRegisteredUser } from '../middleware/userSession.js'
 import { checkTradingDay } from '../services/holidayService.js'
@@ -92,6 +92,7 @@ router.get('/profit-analysis', (req: Request, res: Response) => {
     const history = getAllProfitHistory()
     const totalHoldingAmount = getHeldFundTotalAmount()
     const today = getLocalDate()
+    const todayIsTradingDay = checkTradingDay(today)
 
     const holdings = getHeldFunds()
     let todayProfit = 0
@@ -147,7 +148,7 @@ router.get('/profit-analysis', (req: Request, res: Response) => {
       })
     }
 
-    res.json({ loggedIn: true, history, totalHoldingAmount })
+    res.json({ loggedIn: true, history, totalHoldingAmount, todayIsTradingDay })
   } catch (error) {
     logger.error('获取收益分析失败:', error)
     res.status(500).json({ error: '获取收益分析失败' })
@@ -433,6 +434,54 @@ router.get('/daily-profit/history', (req: Request, res: Response) => {
   } catch (error) {
     logger.error('获取历史分时收益失败:', error)
     res.status(500).json({ error: '获取历史分时收益失败' })
+  }
+})
+
+router.get('/daily-profit/profit-trend', (req: Request, res: Response) => {
+  try {
+    const { userId, isNew } = getClientUserId(req)
+    if (isNew || !isRegisteredUser(userId)) {
+      return res.json({ loggedIn: false })
+    }
+
+    setCurrentUserId(userId)
+    const period = (req.query.period as string) || 'year'
+    const today = getLocalDate()
+
+    let startDate: string
+    let endDate: string = today
+
+    const now = new Date()
+    switch (period) {
+      case 'month': {
+        startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+        break
+      }
+      case 'year': {
+        startDate = `${now.getFullYear()}-01-01`
+        break
+      }
+      case 'all': {
+        startDate = '2000-01-01'
+        break
+      }
+      default: {
+        startDate = `${now.getFullYear()}-01-01`
+        break
+      }
+    }
+
+    const summaries = getDailyProfitSummaries(startDate, endDate)
+
+    res.json({
+      loggedIn: true,
+      hasData: summaries.length > 0,
+      period,
+      data: summaries
+    })
+  } catch (error) {
+    logger.error('获取收益走势数据失败:', error)
+    res.status(500).json({ error: '获取收益走势数据失败' })
   }
 })
 

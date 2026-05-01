@@ -652,13 +652,26 @@ export const useFundStore = defineStore('fund', () => {
     const shareBasedCost = share > 0 && costPerUnit > 0 ? share * costPerUnit : 0
 
     const dbTotalCost = holding?.totalCost
-    const effectiveTotalCost = dbTotalCost != null && dbTotalCost > 0
-      ? dbTotalCost
-      : (shareBasedCost > 0 ? shareBasedCost : (holdingAmount ?? 0))
+    const accumulatedProfit = holding?.accumulatedProfit
 
-    const holdingProfitValue = effectiveTotalCost > 0 && holdingAmount !== null
-      ? Math.round((holdingAmount - effectiveTotalCost) * 100) / 100
-      : null
+    let holdingProfitValue: number | null
+    let costBasis: number
+
+    if (dbTotalCost != null && dbTotalCost > 0) {
+      holdingProfitValue = holdingAmount !== null
+        ? Math.round((holdingAmount - dbTotalCost) * 100) / 100
+        : null
+      costBasis = dbTotalCost
+    } else if (accumulatedProfit != null && accumulatedProfit !== 0 && holdingAmount !== null) {
+      holdingProfitValue = accumulatedProfit
+      costBasis = holdingAmount - accumulatedProfit
+    } else if (shareBasedCost > 0 && holdingAmount !== null) {
+      holdingProfitValue = Math.round((holdingAmount - shareBasedCost) * 100) / 100
+      costBasis = shareBasedCost
+    } else {
+      holdingProfitValue = null
+      costBasis = 0
+    }
 
     return {
       rawFund: fund,
@@ -713,8 +726,8 @@ export const useFundStore = defineStore('fund', () => {
         : '',
       holdingProfitPercent: (() => {
         if (holdingProfitValue === null) return ''
-        if (!effectiveTotalCost || effectiveTotalCost <= 0) return ''
-        return `${holdingProfitValue >= 0 ? '+' : ''}${(holdingProfitValue / effectiveTotalCost * 100).toFixed(2)}%`
+        if (!costBasis || costBasis <= 0) return ''
+        return `${holdingProfitValue >= 0 ? '+' : ''}${(holdingProfitValue / costBasis * 100).toFixed(2)}%`
       })(),
       holdingProfitValue,
     }

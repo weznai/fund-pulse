@@ -240,34 +240,37 @@
             <!-- 历史收益数据 -->
             <div v-else class="profit-data-wrapper">
               <div v-if="profitHistoryLoading" class="profit-loading">加载中...</div>
-              <div v-else-if="profitHistoryData.length > 0" class="profit-table-wrapper">
-                <table class="profit-table">
-                  <thead>
-                    <tr>
-                      <th class="col-date">日期</th>
-                      <th class="col-nav">净值</th>
-                      <th class="col-rate">涨跌幅</th>
-                      <th class="col-profit">收益金额</th>
-                    </tr>
-                  </thead>
-                </table>
-                <div class="profit-tbody-wrapper">
+              <template v-else-if="profitHistoryData.length > 0">
+                <div v-if="profitViewMode === 'table'" class="profit-table-wrapper">
                   <table class="profit-table">
-                    <tbody>
-                      <tr v-for="(item, index) in profitHistoryData" :key="index">
-                        <td class="col-date">{{ item.profitDate }}</td>
-                        <td class="col-nav">{{ item.nav?.toFixed(4) ?? '—' }}</td>
-                        <td class="col-rate" :class="getValueClass(item.dayProfitRate)">
-                          {{ item.dayProfitRate >= 0 ? '+' : '' }}{{ item.dayProfitRate.toFixed(2) }}%
-                        </td>
-                        <td class="col-profit" :class="getValueClass(item.dayProfit)">
-                          ¥{{ item.dayProfit.toFixed(2) }}
-                        </td>
+                    <thead>
+                      <tr>
+                        <th class="col-date">日期</th>
+                        <th class="col-nav">净值</th>
+                        <th class="col-rate">涨跌幅</th>
+                        <th class="col-profit">收益金额</th>
                       </tr>
-                    </tbody>
+                    </thead>
                   </table>
+                  <div class="profit-tbody-wrapper">
+                    <table class="profit-table">
+                      <tbody>
+                        <tr v-for="(item, index) in profitHistoryData" :key="index">
+                          <td class="col-date">{{ item.profitDate }}</td>
+                          <td class="col-nav">{{ item.nav?.toFixed(4) ?? '—' }}</td>
+                          <td class="col-rate" :class="getValueClass(item.dayProfitRate)">
+                            {{ item.dayProfitRate >= 0 ? '+' : '' }}{{ item.dayProfitRate.toFixed(2) }}%
+                          </td>
+                          <td class="col-profit" :class="getValueClass(item.dayProfit)">
+                            ¥{{ item.dayProfit.toFixed(2) }}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
+                <div v-else ref="profitChartRef" class="profit-trend-chart"></div>
+              </template>
               <div v-else class="profit-empty">
                 <div class="empty-icon">
                   <svg viewBox="0 0 24 24" fill="none">
@@ -277,6 +280,10 @@
                 </div>
                 <p>暂无历史收益数据</p>
                 <p v-if="!authStore.isLoggedIn" class="empty-hint">登录后可查看持仓收益记录</p>
+              </div>
+              <div v-if="profitHistoryData.length > 0" class="profit-footer-bar">
+                <button :class="['profit-footer-btn', { active: profitViewMode === 'table' }]" @click="switchProfitView('table')">收益记录</button>
+                <button :class="['profit-footer-btn', { active: profitViewMode === 'trend' }]" @click="switchProfitView('trend')">累计走势</button>
               </div>
             </div>
           </div>
@@ -343,6 +350,18 @@ const profitHistoryData = ref<Array<{
   dayProfit: number
 }>>([])
 const profitHistoryLoading = ref(false)
+const profitViewMode = ref<'table' | 'trend'>('table')
+const profitChartRef = ref<HTMLDivElement | null>(null)
+let profitChartInstance: echarts.ECharts | null = null
+
+const profitCumulativeData = computed(() => {
+  const data = [...profitHistoryData.value].sort((a, b) => a.profitDate.localeCompare(b.profitDate))
+  let cumSum = 0
+  return data.map(item => {
+    cumSum = Math.round((cumSum + item.dayProfit) * 100) / 100
+    return { date: item.profitDate, profit: cumSum }
+  })
+})
 
 const totalChange = computed(() => {
   if (historyData.value.length < 2) return 0
@@ -508,6 +527,180 @@ async function fetchProfitHistoryData() {
   } finally {
     profitHistoryLoading.value = false
   }
+}
+
+function switchProfitView(mode: 'table' | 'trend') {
+  profitViewMode.value = mode
+  if (mode === 'trend' && profitCumulativeData.value.length > 0) {
+    nextTick(() => drawProfitTrendChart())
+  }
+}
+
+function drawProfitTrendChart() {
+  const container = profitChartRef.value
+  if (!container) return
+
+  if (profitChartInstance) {
+    try {
+      if (!container.contains(profitChartInstance.getDom())) {
+        profitChartInstance.dispose()
+        profitChartInstance = null
+      }
+    } catch {
+      profitChartInstance?.dispose()
+      profitChartInstance = null
+    }
+  }
+
+  if (!profitChartInstance) {
+    profitChartInstance = echarts.init(container)
+  }
+
+  const data = profitCumulativeData.value
+  if (data.length === 0) return
+
+  const dates = data.map(d => {
+    const parts = d.date.split('-')
+    return `${parts[1]}-${parts[2]}`
+  })
+  const values = data.map(d => d.profit)
+  const lastVal = values[values.length - 1]
+
+  const dataMin = Math.min(...values)
+  const dataMax = Math.max(...values)
+  let yMin = dataMin
+  let yMax = dataMax
+  if (yMin === yMax) {
+    yMin -= 1
+    yMax += 1
+  }
+
+  const splitCount = 5
+  const rawInterval = (yMax - yMin) / splitCount
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawInterval)))
+  const residual = rawInterval / magnitude
+  let niceInterval: number
+  if (residual <= 1) niceInterval = magnitude
+  else if (residual <= 2) niceInterval = 2 * magnitude
+  else if (residual <= 5) niceInterval = 5 * magnitude
+  else niceInterval = 10 * magnitude
+
+  yMin = Math.floor(yMin / niceInterval) * niceInterval
+  yMax = Math.ceil(yMax / niceInterval) * niceInterval
+
+  const showZeroLine = dataMin < 0 && dataMax > 0
+  const lineColor = lastVal >= 0 ? '#EF4444' : '#10B981'
+
+  const option: echarts.EChartsOption = {
+    animation: false,
+    grid: { left: 55, right: 15, top: 15, bottom: 30 },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: {
+        color: '#9CA3AF',
+        fontSize: 10,
+        interval: data.length <= 10 ? 0 : Math.ceil(data.length / 6) - 1,
+        rotate: data.length > 15 ? 45 : 0
+      },
+      splitLine: { show: false }
+    },
+    yAxis: {
+      type: 'value',
+      min: yMin,
+      max: yMax,
+      splitNumber: splitCount,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      splitLine: { lineStyle: { color: '#E5E7EB' } },
+      axisLabel: {
+        color: '#6B7280',
+        fontSize: 11,
+        formatter: (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(0)}`
+      }
+    },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(17, 24, 39, 0.92)',
+      borderColor: 'transparent',
+      borderWidth: 0,
+      padding: [10, 14],
+      textStyle: { color: '#fff', fontSize: 13 },
+      formatter: (params: any) => {
+        if (!Array.isArray(params)) return ''
+        const idx = params[0]?.dataIndex
+        const dateStr = data[idx]?.date || ''
+        const val = params[0]?.value
+        if (val == null) return ''
+        const sign = val >= 0 ? '+' : ''
+        const color = val >= 0 ? '#EF4444' : '#10B981'
+        return `<div style="font-size:11px;color:#9CA3AF;margin-bottom:6px">${dateStr}</div>
+                <div style="font-size:14px;font-weight:700;color:${color}">累计 ${sign}¥${val.toFixed(2)}</div>`
+      }
+    },
+    series: [
+      {
+        name: '累计收益',
+        type: 'line',
+        data: values,
+        smooth: true,
+        symbol: 'none',
+        lineStyle: { color: lineColor, width: 1.2 },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: lineColor + '30' },
+            { offset: 1, color: lineColor + '05' }
+          ])
+        },
+        connectNulls: true,
+        ...(showZeroLine
+          ? { markLine: { silent: true, symbol: 'none', label: { show: false }, data: [{ yAxis: 0 }], lineStyle: { color: '#9CA3AF', width: 1, type: 'dashed' } } }
+          : {}),
+      },
+      {
+        name: '终点标记',
+        type: 'line',
+        data: values.map((v, i) => i === values.length - 1 ? v : null),
+        smooth: false,
+        symbol: 'circle',
+        symbolSize: 5,
+        showSymbol: true,
+        lineStyle: { width: 0 },
+        itemStyle: { color: lineColor },
+        label: {
+          show: true,
+          position: 'top',
+          align: 'right',
+          offset: [0, -4],
+          formatter: () => {
+            const v = lastVal
+            const sign = v >= 0 ? '+' : ''
+            return `{label|累计收益}  {val|${sign}${v.toFixed(2)}}`
+          },
+          rich: {
+            label: {
+              color: '#6B7280',
+              fontSize: 10,
+              fontWeight: 500,
+              lineHeight: 16
+            },
+            val: {
+              color: lineColor,
+              fontSize: 11,
+              fontWeight: 600,
+              lineHeight: 16,
+              fontFamily: 'SF Mono, Consolas, monospace'
+            }
+          }
+        },
+        tooltip: { show: false }
+      }
+    ]
+  }
+
+  profitChartInstance.setOption(option, true)
 }
 
 function drawChart() {
@@ -768,6 +961,7 @@ function drawEstimateChart() {
 watch(() => props.visible, (val) => {
   if (val && props.fund) {
     profitHistoryData.value = []
+    profitViewMode.value = 'table'
     activeTab.value = 'estimate'
     fetchHistoryData()
     fetchHoldingsData()
@@ -781,6 +975,10 @@ watch(() => props.visible, (val) => {
       estimateChartInstance.dispose()
       estimateChartInstance = null
     }
+    if (profitChartInstance) {
+      profitChartInstance.dispose()
+      profitChartInstance = null
+    }
   }
 })
 
@@ -793,6 +991,12 @@ watch(activeTab, (val) => {
   }
   if (val === 'profit' && authStore.isLoggedIn && props.fund) {
     fetchProfitHistoryData()
+  }
+  if (val === 'profit' && profitViewMode.value === 'trend') {
+    setTimeout(() => {
+      profitChartInstance?.resize()
+      drawProfitTrendChart()
+    }, 50)
   }
 })
 </script>
@@ -1318,6 +1522,47 @@ watch(activeTab, (val) => {
 .profit-content {
   max-height: 280px;
   overflow-y: auto;
+}
+
+.profit-footer-bar {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+  background: #F3F4F6;
+  padding: 3px;
+  border-radius: 8px;
+  width: fit-content;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.profit-footer-btn {
+  padding: 4px 14px;
+  font-size: 11px;
+  font-weight: 500;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #6B7280;
+  transition: all 0.2s;
+}
+
+.profit-footer-btn:hover {
+  color: #374151;
+}
+
+.profit-footer-btn.active {
+  background: white;
+  color: #111827;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.profit-trend-chart {
+  height: 220px;
+  background: #FAFAFA;
+  border-radius: 8px;
 }
 
 .profit-loading,

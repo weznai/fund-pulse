@@ -27,11 +27,14 @@ export type { SystemParam } from './systemParam.js'
 export { getFundInfo, getFundInfoList, saveFundInfo, updateFundInfoRecommend, getRecommendFundCodes, deleteFundInfo, batchSaveFundInfo, getAllFundInfoCodes } from './fundInfo.js'
 export type { FundInfo, FundInfoListResult } from './fundInfo.js'
 
-export { getDailyProfit, getDailyProfitByDateRange, getLatestDailyProfit, upsertDailyProfitTimeshare, updateDailyProfitFinal } from './userDailyProfit.js'
-export type { TimeProfitPoint, UserDailyProfit } from './userDailyProfit.js'
+export { getDailyProfit, getDailyProfitByDateRange, getLatestDailyProfit, upsertDailyProfitTimeshare, updateDailyProfitFinal, getDailyProfitSummaries } from './userDailyProfit.js'
+export type { TimeProfitPoint, UserDailyProfit, DailyProfitSummary } from './userDailyProfit.js'
 
 export { ensureTasksTable, createTask, getTask, getActiveTask, updateTask, incrementTaskExecuteCount, getTaskList, getTaskById } from './task.js'
 export type { Task, TaskType, TaskStatus } from './task.js'
+
+export { ensureSuggestionsTable, createSuggestion, updateSuggestionSummary, updateSuggestionStatus, getSuggestionById, getSuggestionList, getAdminSuggestionList } from './suggestion.js'
+export type { Suggestion, SuggestionListResult } from './suggestion.js'
 
 // Repository 模式 - 数据访问层
 export { 

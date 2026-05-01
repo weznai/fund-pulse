@@ -141,6 +141,46 @@ export function updateDailyProfitFinal(
   }
 }
 
+export interface DailyProfitSummary {
+  date: string
+  totalProfit: number
+}
+
+export function getDailyProfitSummaries(startDate: string, endDate: string): DailyProfitSummary[] {
+  const userId = getCurrentUserId().id
+
+  const rows = db.prepare(`
+    SELECT profit_date, SUM(day_profit) as total_profit
+    FROM user_funds_profit_history
+    WHERE user_id = ? AND profit_date >= ? AND profit_date <= ?
+    GROUP BY profit_date
+    ORDER BY profit_date ASC
+  `).all(userId, startDate, endDate) as any[]
+
+  if (rows.length === 0) return []
+
+  const allHistoryRows = db.prepare(`
+    SELECT profit_date, SUM(day_profit) as total_profit
+    FROM user_funds_profit_history
+    WHERE user_id = ? AND profit_date < ?
+    GROUP BY profit_date
+    ORDER BY profit_date ASC
+  `).all(userId, rows[0].profit_date) as any[]
+
+  let cumSum = 0
+  for (const row of allHistoryRows) {
+    cumSum += row.total_profit
+  }
+
+  return rows.map(row => {
+    cumSum += row.total_profit
+    return {
+      date: row.profit_date,
+      totalProfit: Math.round(cumSum * 100) / 100
+    }
+  })
+}
+
 function mapRowToDailyProfit(row: any): UserDailyProfit {
   let timeProfitData: TimeProfitPoint[] = []
   if (row.time_profit_data) {

@@ -20,6 +20,7 @@ import holdingsRoutes from './routes/holdings.js'
 import adminRoutes from './routes/admin.js'
 import visitRoutes from './routes/visit.js'
 import cacheRoutes from './routes/cache.js'
+import suggestionRoutes from './routes/suggestion.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -65,6 +66,7 @@ app.use('/api/holdings', holdingsRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api', visitRoutes)
 app.use('/api/cache', cacheRoutes)
+app.use('/api', suggestionRoutes)
 
 app.use('/api/users', (req, res) => {
   try {

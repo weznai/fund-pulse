@@ -1161,18 +1161,19 @@ export function migrateExistingHoldings(): { migrated: number } {
       user_id, fund_code, fund_name, type, shares, nav, amount, cost_price,
       shares_before, shares_after, total_cost_before, total_cost_after,
       realized_profit, transaction_date, remark, created_at
-    ) VALUES (?, ?, ?, 'migrate', ?, ?, ?, ?, 0, ?, 0, ?, 0, ?, '数据迁移', ?)
+    ) VALUES (?, ?, ?, 'migrate', ?, ?, ?, ?, 0, ?, 0, ?, 0, ?, '数据迁移-历史重建', ?)
   `)
 
   const updateCost = db.prepare(`
-    UPDATE user_funds SET total_cost = ? WHERE user_id = ? AND fund_code = ?
+    UPDATE user_funds SET total_cost = ?, accumulated_profit = ? WHERE user_id = ? AND fund_code = ?
   `)
 
   let migrated = 0
 
   const migrateTx = db.transaction(() => {
     for (const row of rows) {
-      const totalCost = Math.round(row.share * row.cost * 100) / 100
+      const totalCost = reconstructTotalCostFromHistory(row.user_id, row.fund_code)
+      const correctProfit = Math.round((row.amount - totalCost) * 100) / 100
 
       insertTx.run(
         row.user_id, row.fund_code, row.fund_name,
@@ -1180,14 +1181,52 @@ export function migrateExistingHoldings(): { migrated: number } {
         row.share, totalCost, today, now
       )
 
-      updateCost.run(totalCost, row.user_id, row.fund_code)
+      updateCost.run(totalCost, correctProfit, row.user_id, row.fund_code)
       migrated++
     }
   })
 
   migrateTx()
-  logger.log(`🔄 持仓数据迁移完成: ${migrated} 条记录`)
+  logger.log(`🔄 持仓数据迁移完成(历史重建): ${migrated} 条记录`)
   return { migrated }
+}
+
+function reconstructTotalCostFromHistory(userId: string, fundCode: string): number {
+  const history = db.prepare(`
+    SELECT opening_amount, closing_amount
+    FROM user_funds_profit_history
+    WHERE user_id = ? AND fund_code = ?
+    ORDER BY profit_date
+  `).all(userId, fundCode) as { opening_amount: number; closing_amount: number }[]
+
+  if (history.length === 0) {
+    const fallback = db.prepare(`
+      SELECT share, cost, amount, accumulated_profit FROM user_funds
+      WHERE user_id = ? AND fund_code = ?
+    `).get(userId, fundCode) as any
+    if (!fallback) return 0
+    const ap = fallback.accumulated_profit || 0
+    if (ap !== 0 && fallback.amount > 0) {
+      return Math.max(Math.round((fallback.amount - ap) * 100) / 100, 0)
+    }
+    return Math.max(Math.round(fallback.share * fallback.cost * 100) / 100, 0)
+  }
+
+  let totalCost = history[0].opening_amount
+  for (let i = 1; i < history.length; i++) {
+    const prevClose = history[i - 1].closing_amount
+    const curOpen = history[i].opening_amount
+    const delta = curOpen - prevClose
+    if (Math.abs(delta) > 0.5) {
+      if (delta > 0) {
+        totalCost += delta
+      } else {
+        const ratio = curOpen / prevClose
+        totalCost = totalCost * ratio
+      }
+    }
+  }
+  return Math.max(Math.round(totalCost * 100) / 100, 0)
 }
 
 export function updateUserFund(fundCode: string, updates: Partial<UserFund>): boolean {

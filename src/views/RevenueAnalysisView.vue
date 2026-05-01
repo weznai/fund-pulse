@@ -85,7 +85,7 @@
         <div class="timeshare-header">
           <h3 class="timeshare-title">收益走势</h3>
           <div class="timeshare-legend-row">
-            <div class="timeshare-legend">
+            <div v-if="selectedTrendPeriod === 'today'" class="timeshare-legend">
               <span class="legend-item">
                 <span class="legend-line legend-holding"></span>
                 持仓收益率
@@ -101,20 +101,27 @@
                 </span>
               </span>
             </div>
+            <div v-else class="timeshare-legend">
+              <span class="legend-item">
+                <span class="legend-line" style="background: #6366F1;"></span>
+                累计收益
+              </span>
+            </div>
             <div class="timeshare-meta-row">
-              <span v-if="timeshareDateInfo" class="timeshare-date-info">
+              <span v-if="selectedTrendPeriod === 'today' && timeshareDateInfo" class="timeshare-date-info">
                 {{ timeshareDateInfo }}
               </span>
-              <span v-if="holdingIsHistory || indexIsHistory" class="timeshare-history-badge">分时数据</span>
+              <span v-if="selectedTrendPeriod === 'today' && (holdingIsHistory || indexIsHistory)" class="timeshare-history-badge">分时数据</span>
+              <span v-if="selectedTrendPeriod !== 'today'" class="timeshare-date-info">{{ trendPeriodLabel }}累计收益走势</span>
             </div>
           </div>
         </div>
         <div class="timeshare-chart" ref="timeshareChartRef"></div>
-        <div v-if="timeshareHasData" class="timeshare-footer" :class="currentFooterClass">
+        <div v-if="selectedTrendPeriod === 'today' && timeshareHasData" class="timeshare-footer" :class="currentFooterClass">
           <div class="footer-item">
             <span class="footer-label">持仓收益率</span>
-            <span class="footer-value" :class="currentHoldingPercent >= 0 ? 'up' : 'down'">
-              {{ currentHoldingPercent >= 0 ? '+' : '' }}{{ currentHoldingPercent.toFixed(2) }}%
+            <span class="footer-value" :class="latestHoldingPercent >= 0 ? 'up' : 'down'">
+              {{ latestHoldingPercent >= 0 ? '+' : '' }}{{ latestHoldingPercent.toFixed(2) }}%
             </span>
           </div>
           <div class="footer-item">
@@ -124,12 +131,37 @@
             </span>
           </div>
         </div>
-        <div v-if="timeshareLoading" class="timeshare-loading">
-          <div class="spinner"></div>
-          <p>加载分时数据...</p>
+        <div v-else-if="selectedTrendPeriod !== 'today' && profitTrendData.length > 0" class="timeshare-footer" :class="trendTotalProfit >= 0 ? 'footer-up' : 'footer-down'">
+          <div class="footer-item">
+            <span class="footer-label">{{ trendPeriodLabel }}累计收益</span>
+            <span class="footer-value" :class="trendTotalProfit >= 0 ? 'up' : 'down'">
+              {{ trendTotalProfit >= 0 ? '+' : '' }}¥{{ trendTotalProfit.toFixed(2) }}
+            </span>
+          </div>
+          <div class="footer-item">
+            <span class="footer-label">交易天数</span>
+            <span class="footer-value" style="color: #374151;">
+              {{ profitTrendData.length }}
+            </span>
+          </div>
         </div>
-        <div v-else-if="!timeshareHasData" class="timeshare-empty">
+        <div v-if="timeshareLoading || profitTrendLoading" class="timeshare-loading">
+          <div class="spinner"></div>
+          <p>{{ profitTrendLoading ? '加载收益数据...' : '加载分时数据...' }}</p>
+        </div>
+        <div v-else-if="selectedTrendPeriod === 'today' && !timeshareHasData" class="timeshare-empty">
           <p>{{ timeshareMessage || '暂无分时数据' }}</p>
+        </div>
+        <div v-else-if="selectedTrendPeriod !== 'today' && profitTrendData.length === 0" class="timeshare-empty">
+          <p>暂无收益数据</p>
+        </div>
+        <div class="timeshare-period-bar">
+          <button
+            v-for="p in trendPeriodOptions"
+            :key="p.value"
+            :class="['trend-period-btn', { active: selectedTrendPeriod === p.value }]"
+            @click="switchTrendPeriod(p.value)"
+          >{{ p.label }}</button>
         </div>
       </div>
 
@@ -200,7 +232,8 @@
               >
                 <template v-if="!cell.isEmpty">
                   <span class="cell-day">{{ cell.day }}</span>
-                  <span v-if="cell.profit !== null && cell.profit !== 0" class="cell-profit" :class="getValueClass(cell.profit)">
+                  <span v-if="cell.isHoliday" class="cell-holiday">休</span>
+                  <span v-else-if="cell.profit !== null && cell.profit !== 0" class="cell-profit" :class="getValueClass(cell.profit)">
                     {{ cell.profit > 0 ? '+' : '' }}{{ cell.profit.toFixed(2) }}
                   </span>
                   <span v-else-if="cell.profit === 0" class="cell-profit zero">0</span>
@@ -419,6 +452,7 @@ interface CalendarCell {
   isToday: boolean
   profit: number | null
   rate: number | null
+  isHoliday?: boolean
 }
 
 interface TimesharePoint {
@@ -442,6 +476,35 @@ const holdingDate = ref('')
 const indexDate = ref('')
 const holdingIsHistory = ref(false)
 const indexIsHistory = ref(false)
+
+const selectedTrendPeriod = ref('today')
+const trendPeriodOptions = [
+  { label: '当日', value: 'today' },
+  { label: '当月', value: 'month' },
+  { label: '今年', value: 'year' },
+  { label: '全部', value: 'all' }
+]
+
+interface ProfitTrendItem {
+  date: string
+  totalProfit: number
+}
+const profitTrendData = ref<ProfitTrendItem[]>([])
+const profitTrendLoading = ref(false)
+
+const trendTotalProfit = computed(() => {
+  return Math.round(profitTrendData.value.reduce((sum, d) => sum + d.totalProfit, 0) * 100) / 100
+})
+
+const trendPeriodLabel = computed(() => {
+  switch (selectedTrendPeriod.value) {
+    case 'today': return '当日'
+    case 'month': return '当月'
+    case 'year': return '今年'
+    case 'all': return '全部'
+    default: return '当日'
+  }
+})
 
 const tradingTimePoints = [
   '09:30', '09:35', '09:40', '09:45', '09:50', '09:55',
@@ -506,27 +569,13 @@ const latestIndexPercent = computed(() => {
   return visible[visible.length - 1].percent
 })
 
-const currentIndexPercent = computed(() => {
-  if (hoveredTimePoint.value && hoveredTimePoint.value.indexPercent !== null) {
-    return hoveredTimePoint.value.indexPercent
-  }
-  return latestIndexPercent.value
-})
-
-const currentHoldingPercent = computed(() => {
-  if (hoveredTimePoint.value && hoveredTimePoint.value.holdingPercent !== null) {
-    return hoveredTimePoint.value.holdingPercent
-  }
-  return latestHoldingPercent.value
-})
-
 const currentExcessReturn = computed(() => {
-  return currentHoldingPercent.value - currentIndexPercent.value
+  return latestHoldingPercent.value - latestIndexPercent.value
 })
 
 const currentFooterClass = computed(() => {
-  if (currentHoldingPercent.value > 0) return 'footer-up'
-  if (currentHoldingPercent.value < 0) return 'footer-down'
+  if (latestHoldingPercent.value > 0) return 'footer-up'
+  if (latestHoldingPercent.value < 0) return 'footer-down'
   return ''
 })
 
@@ -539,6 +588,7 @@ const timeshareDateInfo = computed(() => {
 })
 
 const profitHistory = ref<ProfitRecord[]>([])
+const todayIsTradingDay = ref(true)
 
 const dailyProfitMap = computed(() => {
   const map = new Map<string, { profit: number; rate: number }>()
@@ -712,12 +762,14 @@ const calendarCells = computed<CalendarCell[]>(() => {
     const dow = new Date(y, m, d).getDay()
     if (dow === 0 || dow === 6) continue
     const profitData = dailyProfitMap.value.get(date)
+    const cellIsHoliday = date === todayStr && !todayIsTradingDay.value
     cells.push({
       day: d,
       date,
       isToday: date === todayStr,
-      profit: profitData ? Math.round(profitData.profit * 100) / 100 : null,
-      rate: profitData ? Math.round(profitData.rate * 100) / 100 : null
+      profit: cellIsHoliday ? null : (profitData ? Math.round(profitData.profit * 100) / 100 : null),
+      rate: profitData ? Math.round(profitData.rate * 100) / 100 : null,
+      isHoliday: cellIsHoliday
     })
   }
 
@@ -975,8 +1027,8 @@ async function fetchData() {
     const { data } = await axios.get('/api/holdings/profit-analysis')
     if (rid !== dataRequestId) return
     if (data.loggedIn) {
-      // 登录用户：从后端获取收益历史
       profitHistory.value = data.history || []
+      todayIsTradingDay.value = data.todayIsTradingDay !== false
       accumulatedProfit.value = profitHistory.value.reduce((sum, r) => sum + r.dayProfit, 0)
     } else {
       // 临时用户：前端计算累计收益（简化版，只显示累计收益，不显示历史）
@@ -995,15 +1047,15 @@ async function fetchData() {
 async function fetchTimeshareData() {
   const rid = ++timeshareRequestId
   timeshareLoading.value = true
-  
+
   try {
     const [holdingRes, indexRes] = await Promise.all([
       axios.get('/api/holdings/timeshare'),
       axios.get('/api/index/timeshare/000001')
     ])
-    
+
     if (rid !== timeshareRequestId) return
-    
+
     if (holdingRes.data.loggedIn && holdingRes.data.hasData) {
       holdingTimeshare.value = holdingRes.data.timeshare || []
       if (holdingRes.data.date) {
@@ -1015,7 +1067,7 @@ async function fetchTimeshareData() {
       holdingDate.value = ''
       holdingIsHistory.value = false
     }
-    
+
     if (indexRes.data.success && indexRes.data.data) {
       indexTimeshare.value = indexRes.data.data || []
       if (indexRes.data.date) {
@@ -1027,18 +1079,15 @@ async function fetchTimeshareData() {
       indexDate.value = ''
       indexIsHistory.value = false
     }
-    
+
     if (holdingTimeshare.value.length > 0 || indexTimeshare.value.length > 0) {
       timeshareHasData.value = true
       timeshareMessage.value = ''
-      
-      await nextTick()
-      drawChart()
     } else {
       timeshareHasData.value = false
       timeshareMessage.value = holdingRes.data.message || '暂无分时数据'
     }
-  } catch (error) {
+  } catch {
     if (rid !== timeshareRequestId) return
     if (!timeshareHasData.value) {
       timeshareMessage.value = '获取分时数据失败'
@@ -1050,7 +1099,48 @@ async function fetchTimeshareData() {
   }
 }
 
-function drawChart() {
+async function fetchProfitTrend(period: string) {
+  const rid = ++timeshareRequestId
+  profitTrendLoading.value = true
+
+  try {
+    const { data } = await axios.get('/api/holdings/daily-profit/profit-trend', {
+      params: { period }
+    })
+    if (rid !== timeshareRequestId) return
+
+    if (data.loggedIn && data.hasData) {
+      profitTrendData.value = data.data || []
+    } else {
+      profitTrendData.value = []
+    }
+  } catch {
+    if (rid !== timeshareRequestId) return
+    profitTrendData.value = []
+  } finally {
+    if (rid === timeshareRequestId) {
+      profitTrendLoading.value = false
+    }
+  }
+}
+
+async function switchTrendPeriod(period: string) {
+  if (selectedTrendPeriod.value === period) return
+  selectedTrendPeriod.value = period
+
+  if (period === 'today') {
+    profitTrendData.value = []
+    await fetchTimeshareData()
+    await nextTick()
+    drawIntradayChart()
+  } else {
+    await fetchProfitTrend(period)
+    await nextTick()
+    drawProfitTrendChart()
+  }
+}
+
+function drawIntradayChart() {
   const container = timeshareChartRef.value
   if (!container) return
 
@@ -1204,7 +1294,7 @@ function drawChart() {
         data: allTimes.map(t => holdingMap.get(t) ?? null),
         smooth: false,
         symbol: 'none',
-        lineStyle: { color: '#EF4444', width: 1 },
+        lineStyle: { color: '#EF4444', width: 1.5 },
         connectNulls: true,
         ...(showZeroLine
           ? { markLine: { silent: true, symbol: 'none', label: { show: false }, data: [{ yAxis: 0 }], lineStyle: { color: '#9CA3AF', width: 1, type: 'dashed' } } }
@@ -1216,7 +1306,7 @@ function drawChart() {
         data: allTimes.map(t => indexMap.get(t) ?? null),
         smooth: false,
         symbol: 'none',
-        lineStyle: { color: '#3B82F6', width: 1 },
+        lineStyle: { color: '#3B82F6', width: 1.5 },
         connectNulls: true
       },
       {
@@ -1249,6 +1339,161 @@ function drawChart() {
   chartInstance.setOption(option, true)
 }
 
+function drawProfitTrendChart() {
+  const container = timeshareChartRef.value
+  if (!container) return
+
+  if (chartInstance) {
+    try {
+      if (!container.contains(chartInstance.getDom())) {
+        chartInstance.dispose()
+        chartInstance = null
+      }
+    } catch {
+      chartInstance?.dispose()
+      chartInstance = null
+    }
+  }
+
+  if (!chartInstance) {
+    chartInstance = echarts.init(container)
+  }
+
+  const data = profitTrendData.value
+  if (data.length === 0) {
+    chartInstance.setOption({
+      title: {
+        text: '暂无收益数据',
+        left: 'center',
+        top: 'center',
+        textStyle: { color: '#9CA3AF', fontSize: 14, fontWeight: 400 }
+      },
+      xAxis: { show: false },
+      yAxis: { show: false },
+      series: []
+    }, true)
+    return
+  }
+
+  const dates = data.map(d => {
+    const parts = d.date.split('-')
+    if (selectedTrendPeriod.value === 'all' || selectedTrendPeriod.value === 'year') return `${parts[1]}-${parts[2]}`
+    return `${parts[1]}-${parts[2]}`
+  })
+  const values = data.map(d => d.totalProfit)
+  const lastVal = values[values.length - 1]
+
+  const dataMin = Math.min(...values)
+  const dataMax = Math.max(...values)
+  let yMin = dataMin
+  let yMax = dataMax
+  if (yMin === yMax) {
+    yMin -= 1
+    yMax += 1
+  }
+  const yRange = yMax - yMin
+  const yPadding = yRange * 0.1
+  yMin -= yPadding
+  yMax += yPadding
+
+  const splitCount = 5
+  const rawInterval = (yMax - yMin) / splitCount
+  const interval = Math.ceil(rawInterval * 100) / 100
+  yMin = Math.floor(yMin / interval) * interval
+  yMax = yMin + splitCount * interval
+
+  if (yMax <= dataMax) yMax += interval
+  if (yMin >= dataMin) yMin -= interval
+
+  const showZeroLine = dataMin < 0 && dataMax > 0
+  const lineColor = lastVal >= 0 ? '#EF4444' : '#10B981'
+
+  const option: echarts.EChartsOption = {
+    animation: false,
+    grid: { left: 60, right: 15, top: 20, bottom: 30 },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: {
+        color: '#9CA3AF',
+        fontSize: 10,
+        interval: data.length <= 6 ? 0 : Math.ceil(data.length / 6) - 1,
+        rotate: data.length > 15 ? 45 : 0
+      },
+      splitLine: { show: false }
+    },
+    yAxis: {
+      type: 'value',
+      min: yMin,
+      max: yMax,
+      splitNumber: splitCount,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      splitLine: { lineStyle: { color: '#E5E7EB' } },
+      axisLabel: {
+        color: '#6B7280',
+        fontSize: 11,
+        formatter: (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(0)}`
+      }
+    },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(17, 24, 39, 0.92)',
+      borderColor: 'transparent',
+      borderWidth: 0,
+      padding: [10, 14],
+      textStyle: { color: '#fff', fontSize: 13 },
+      formatter: (params: any) => {
+        if (!Array.isArray(params)) return ''
+        const idx = params[0]?.dataIndex
+        const dateStr = data[idx]?.date || ''
+        const val = params[0]?.value
+        if (val == null) return ''
+        const sign = val >= 0 ? '+' : ''
+        const color = val >= 0 ? '#EF4444' : '#10B981'
+        return `<div style="font-size:11px;color:#9CA3AF;margin-bottom:6px">${dateStr}</div>
+                <div style="font-size:14px;font-weight:700;color:${color}">累计 ${sign}¥${val.toFixed(2)}</div>`
+      }
+    },
+    series: [
+      {
+        name: '累计收益',
+        type: 'line',
+        data: values,
+        smooth: true,
+        symbol: 'none',
+        lineStyle: { color: lineColor, width: 1.5 },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: lineColor + '30' },
+            { offset: 1, color: lineColor + '05' }
+          ])
+        },
+        connectNulls: true,
+        ...(showZeroLine
+          ? { markLine: { silent: true, symbol: 'none', label: { show: false }, data: [{ yAxis: 0 }], lineStyle: { color: '#9CA3AF', width: 1, type: 'dashed' } } }
+          : {}),
+      },
+      {
+        name: '终点标记',
+        type: 'line',
+        data: values.map((v, i) => i === values.length - 1 ? v : null),
+        smooth: false,
+        symbol: 'circle',
+        symbolSize: 5,
+        showSymbol: true,
+        lineStyle: { width: 0 },
+        itemStyle: { color: lineColor },
+        tooltip: { show: false }
+      }
+    ]
+  }
+
+  chartInstance.setOption(option, true)
+}
+
 function handleResize() {
   chartInstance?.resize()
   pieChartInstance?.resize()
@@ -1262,7 +1507,11 @@ function startRefresh() {
   refreshTimer = setInterval(() => {
     if (authStore.isLoggedIn) {
       fetchData()
-      fetchTimeshareData()
+      if (selectedTrendPeriod.value === 'today') {
+        fetchTimeshareData().then(() => drawIntradayChart())
+      } else {
+        fetchProfitTrend(selectedTrendPeriod.value).then(() => drawProfitTrendChart())
+      }
     }
   }, 2 * 60 * 1000)
 }
@@ -1285,7 +1534,7 @@ async function loadRevenueData() {
   await Promise.all([fetchData(), fetchTimeshareData()])
   initialLoading.value = false
   await nextTick()
-  drawChart()
+  drawIntradayChart()
   startRefresh()
 }
 
@@ -1596,6 +1845,32 @@ onBeforeUnmount(() => {
 .timeshare-loading p,
 .timeshare-empty p { font-size: 13px; margin: 0; }
 
+.timeshare-period-bar {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 16px;
+  background: #F3F4F6;
+  padding: 3px;
+  border-radius: 8px;
+  width: fit-content;
+  margin-left: auto;
+  margin-right: auto;
+}
+.trend-period-btn {
+  padding: 5px 18px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  color: #6B7280;
+  background: transparent;
+  transition: all 0.2s;
+}
+.trend-period-btn:hover { background: white; color: #374151; }
+.trend-period-btn.active { background: white; color: #111827; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+
 .main-section {
   background: white;
   border-radius: 12px;
@@ -1689,6 +1964,13 @@ onBeforeUnmount(() => {
 .cell-profit.up { color: #EF4444; }
 .cell-profit.down { color: #10B981; }
 .cell-profit.zero { color: #9CA3AF; }
+.cell-holiday {
+  font-size: 11px;
+  font-weight: 600;
+  color: #9CA3AF;
+  margin-top: 3px;
+  line-height: 1.2;
+}
 
 .cell-tooltip-wrapper {
   height: 44px;

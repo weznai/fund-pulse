@@ -219,11 +219,14 @@
 
     <footer class="footer">
       <div class="footer-content">
-        <div class="footer-stats">
+        <!-- <div class="footer-stats">
           <span class="stats-label">访问统计</span>
           <span class="stats-divider">|</span>
           <span class="stats-item">PV <strong>{{ stats.totalPv }}</strong></span>
           <span class="stats-item">UV <strong>{{ stats.totalUv }}</strong></span>
+        </div> -->
+        <div class="footer-links">
+          <router-link to="/suggestions" class="footer-link">建议与问题</router-link>
         </div>
         <div class="footer-copyright">© 2026  Powered by wezin</div>
       </div>
@@ -382,6 +385,9 @@
                 step="0.01"
                 placeholder="请输入持仓金额"
               />
+              <span v-if="holdingDiff !== null" class="holding-diff" :class="{ 'increase': holdingDiff > 0, 'decrease': holdingDiff < 0 }">
+                {{ holdingDiff > 0 ? '加仓' : '减仓' }} {{ Math.abs(holdingDiff).toFixed(2) }} 元
+              </span>
             </div>
           </div>
         </div>
@@ -511,12 +517,19 @@ const detailFund = ref<FundTableRow | null>(null)
 const selectedFundCode = ref('')
 const selectedFundName = ref('')
 const holdingForm = ref({ amount: 0 })
+const originalAmount = ref(0)
 const stats = ref<StatsData>({
   totalPv: 0,
   totalUv: 0,
   todayPv: 0,
   todayUv: 0,
   last7Days: []
+})
+
+const holdingDiff = computed(() => {
+  const diff = holdingForm.value.amount - originalAmount.value
+  if (diff === 0 || isNaN(diff)) return null
+  return diff
 })
 
 const filteredFavorites = computed(() => {
@@ -651,8 +664,10 @@ function handleHoldingClick(row: FundTableRow) {
   const holding = store.holdings.getHolding(row.code)
   if (holding) {
     holdingForm.value.amount = holding.amount
+    originalAmount.value = holding.amount
   } else {
     holdingForm.value.amount = 0
+    originalAmount.value = 0
   }
 }
 
@@ -675,8 +690,10 @@ function handleGridHolding(fund: Fund) {
   const holding = store.holdings.getHolding(fund.code)
   if (holding) {
     holdingForm.value.amount = holding.amount
+    originalAmount.value = holding.amount
   } else {
     holdingForm.value.amount = 0
+    originalAmount.value = 0
   }
 }
 
@@ -1828,6 +1845,23 @@ function handleClearCache() {
   text-align: center;
 }
 
+.footer-links {
+  margin-bottom: 6px;
+}
+
+.footer-link {
+  font-size: 11px;
+  color: #1D4ED8;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.footer-link:hover {
+  color: #1E40AF;
+  text-decoration: underline;
+}
+
 .footer-stats {
   display: flex;
   justify-content: center;
@@ -1902,6 +1936,19 @@ function handleClearCache() {
   outline: none;
   border-color: #3B82F6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.holding-diff {
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.holding-diff.increase {
+  color: #EF4444;
+}
+
+.holding-diff.decrease {
+  color: #22C55E;
 }
 
 .detail-modal {

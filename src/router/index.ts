@@ -9,7 +9,12 @@ const router = createRouter({
       name: 'home',
       component: HomeView
     },
-{
+    {
+      path: '/suggestions',
+      name: 'suggestions',
+      component: () => import('@/views/SuggestionView.vue')
+    },
+    {
       path: '/revenue-analysis',
       name: 'revenue-analysis',
       component: () => import('@/views/RevenueAnalysisView.vue')
@@ -63,6 +68,11 @@ const router = createRouter({
           path: 'holiday-manage',
           name: 'admin-holiday-manage',
           component: () => import('@/views/admin/HolidayManageView.vue')
+        },
+        {
+          path: 'suggestion-manage',
+          name: 'admin-suggestion-manage',
+          component: () => import('@/views/admin/SuggestionManageView.vue')
         }
       ]
     }
