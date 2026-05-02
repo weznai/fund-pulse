@@ -479,8 +479,8 @@ const indexIsHistory = ref(false)
 
 const selectedTrendPeriod = ref('today')
 const trendPeriodOptions = [
-  { label: '当日', value: 'today' },
-  { label: '当月', value: 'month' },
+  { label: '当天', value: 'today' },
+  { label: '本月', value: 'month' },
   { label: '今年', value: 'year' },
   { label: '全部', value: 'all' }
 ]
@@ -498,8 +498,8 @@ const trendTotalProfit = computed(() => {
 
 const trendPeriodLabel = computed(() => {
   switch (selectedTrendPeriod.value) {
-    case 'today': return '当日'
-    case 'month': return '当月'
+    case 'today': return '当天'
+    case 'month': return '本月'
     case 'year': return '今年'
     case 'all': return '全部'
     default: return '当日'
@@ -533,7 +533,10 @@ function getCurrentTimeIndex(): number {
   return idx
 }
 
+const isHistoryTimeshare = computed(() => holdingIsHistory.value || indexIsHistory.value)
+
 function filterToCurrentTime(data: TimesharePoint[]): TimesharePoint[] {
+  if (isHistoryTimeshare.value) return data
   const idx = getCurrentTimeIndex()
   if (idx < 0) return []
   const cutoffTime = tradingTimePoints[idx]
@@ -1193,7 +1196,17 @@ function drawIntradayChart() {
   }
 
   const allVisible = [...holdingTimeshareVisible.value, ...indexTimeshareVisible.value]
-  if (allVisible.length === 0) return
+  if (allVisible.length === 0) {
+    if (chartInstance) {
+      chartInstance.setOption({
+        title: { text: '暂无分时数据', left: 'center', top: 'center', textStyle: { color: '#9CA3AF', fontSize: 14, fontWeight: 400 } },
+        xAxis: { show: false },
+        yAxis: { show: false },
+        series: []
+      }, true)
+    }
+    return
+  }
 
   const dataMin = Math.min(...allVisible.map(d => d.percent))
   const dataMax = Math.max(...allVisible.map(d => d.percent))
@@ -1404,6 +1417,7 @@ function drawProfitTrendChart() {
 
   if (yMax <= dataMax) yMax += interval
   if (yMin >= dataMin) yMin -= interval
+  const actualSplitCount = Math.round((yMax - yMin) / interval)
 
   const showZeroLine = dataMin < 0 && dataMax > 0
   const lineColor = lastVal >= 0 ? '#EF4444' : '#10B981'
@@ -1428,7 +1442,7 @@ function drawProfitTrendChart() {
       type: 'value',
       min: yMin,
       max: yMax,
-      splitNumber: splitCount,
+      splitNumber: actualSplitCount,
       axisLine: { show: false },
       axisTick: { show: false },
       splitLine: { lineStyle: { color: '#E5E7EB' } },
@@ -1440,11 +1454,11 @@ function drawProfitTrendChart() {
     },
     tooltip: {
       trigger: 'axis',
-      backgroundColor: 'rgba(17, 24, 39, 0.92)',
+      backgroundColor: 'transparent',
       borderColor: 'transparent',
       borderWidth: 0,
-      padding: [10, 14],
-      textStyle: { color: '#fff', fontSize: 13 },
+      padding: [8, 12],
+      textStyle: { color: '#fff', fontSize: 12 },
       formatter: (params: any) => {
         if (!Array.isArray(params)) return ''
         const idx = params[0]?.dataIndex
@@ -1453,8 +1467,8 @@ function drawProfitTrendChart() {
         if (val == null) return ''
         const sign = val >= 0 ? '+' : ''
         const color = val >= 0 ? '#EF4444' : '#10B981'
-        return `<div style="font-size:11px;color:#9CA3AF;margin-bottom:6px">${dateStr}</div>
-                <div style="font-size:14px;font-weight:700;color:${color}">累计 ${sign}¥${val.toFixed(2)}</div>`
+        return `<div style="font-size:10px;color:#9CA3AF;margin-bottom:4px">${dateStr}</div>
+                <div style="font-size:11px;font-weight:600;color:${color}">累计 ${sign}¥${val.toFixed(2)}</div>`
       }
     },
     series: [

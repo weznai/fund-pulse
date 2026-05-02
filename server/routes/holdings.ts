@@ -201,11 +201,6 @@ router.get('/timeshare', (req: Request, res: Response) => {
 
     setCurrentUserId(userId)
     const today = getLocalDate()
-    const currentHour = new Date().getHours()
-    const currentMinute = new Date().getMinutes()
-    const todayIsTradingDay = checkTradingDay(today)
-    const isBeforeTrading = currentHour < 9 || (currentHour === 9 && currentMinute < 30)
-    const useHistoryData = !todayIsTradingDay || isBeforeTrading
 
     const holdings = getHeldFunds()
     
@@ -235,9 +230,10 @@ router.get('/timeshare', (req: Request, res: Response) => {
       
       let cached = getGlobalEstimateCache(code, today)
       
-      if (useHistoryData && (!cached || !cached.data)) {
+      if (!cached || !cached.data) {
         cached = getLatestGlobalEstimateCache(code, today)
-      } else if (!cached || !cached.data) {
+      }
+      if (!cached || !cached.data) {
         cached = getLatestGlobalEstimateCache(code)
       }
       

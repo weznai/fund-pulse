@@ -575,8 +575,8 @@ function drawProfitTrendChart() {
     yMax += 1
   }
 
-  const splitCount = 5
-  const rawInterval = (yMax - yMin) / splitCount
+  const targetSplitCount = 5
+  const rawInterval = (yMax - yMin) / targetSplitCount
   const magnitude = Math.pow(10, Math.floor(Math.log10(rawInterval)))
   const residual = rawInterval / magnitude
   let niceInterval: number
@@ -587,13 +587,35 @@ function drawProfitTrendChart() {
 
   yMin = Math.floor(yMin / niceInterval) * niceInterval
   yMax = Math.ceil(yMax / niceInterval) * niceInterval
+  const splitCount = Math.round((yMax - yMin) / niceInterval)
 
   const showZeroLine = dataMin < 0 && dataMax > 0
   const lineColor = lastVal >= 0 ? '#EF4444' : '#10B981'
 
   const option: echarts.EChartsOption = {
+    title: {
+      show: true,
+      text: `{label|累计收益}  {value|${lastVal >= 0 ? '+' : ''}${lastVal.toFixed(2)}}`,
+      right: 15,
+      top: 0,
+      textStyle: {
+        rich: {
+          label: {
+            fontSize: 10,
+            color: '#6B7280',
+            fontFamily: 'SF Mono, Consolas, monospace'
+          },
+          value: {
+            fontSize: 12,
+            fontWeight: 'bold',
+            color: lineColor,
+            fontFamily: 'SF Mono, Consolas, monospace'
+          }
+        }
+      }
+    },
     animation: false,
-    grid: { left: 55, right: 15, top: 15, bottom: 30 },
+    grid: { left: 55, right: 15, top: 28, bottom: 30 },
     xAxis: {
       type: 'category',
       data: dates,
@@ -623,7 +645,7 @@ function drawProfitTrendChart() {
     },
     tooltip: {
       trigger: 'axis',
-      backgroundColor: 'rgba(17, 24, 39, 0.92)',
+      backgroundColor: 'transparent',
       borderColor: 'transparent',
       borderWidth: 0,
       padding: [10, 14],
@@ -636,8 +658,8 @@ function drawProfitTrendChart() {
         if (val == null) return ''
         const sign = val >= 0 ? '+' : ''
         const color = val >= 0 ? '#EF4444' : '#10B981'
-        return `<div style="font-size:11px;color:#9CA3AF;margin-bottom:6px">${dateStr}</div>
-                <div style="font-size:14px;font-weight:700;color:${color}">累计 ${sign}¥${val.toFixed(2)}</div>`
+        return `<div style="font-size:10px;color:#9CA3AF;margin-bottom:4px">${dateStr}</div>
+                <div style="font-size:12px;color:${color}">累计 ${sign}¥${val.toFixed(2)}</div>`
       }
     },
     series: [
@@ -669,32 +691,6 @@ function drawProfitTrendChart() {
         showSymbol: true,
         lineStyle: { width: 0 },
         itemStyle: { color: lineColor },
-        label: {
-          show: true,
-          position: 'top',
-          align: 'right',
-          offset: [0, -4],
-          formatter: () => {
-            const v = lastVal
-            const sign = v >= 0 ? '+' : ''
-            return `{label|累计收益}  {val|${sign}${v.toFixed(2)}}`
-          },
-          rich: {
-            label: {
-              color: '#6B7280',
-              fontSize: 10,
-              fontWeight: 500,
-              lineHeight: 16
-            },
-            val: {
-              color: lineColor,
-              fontSize: 11,
-              fontWeight: 600,
-              lineHeight: 16,
-              fontFamily: 'SF Mono, Consolas, monospace'
-            }
-          }
-        },
         tooltip: { show: false }
       }
     ]
@@ -812,7 +808,7 @@ function drawEstimateChart() {
     const seriesData = xLabels.map(() => val)
     
     estimateChartInstance.setOption({
-      animation: false,
+    animation: false,
       grid: { left: 45, right: 15, top: 15, bottom: 25 },
       xAxis: {
         type: 'category',

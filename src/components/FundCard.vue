@@ -47,7 +47,7 @@
       </div>
       <div class="grid-values">
         <span class="grid-growth" :class="displayGrowthClass">
-          {{ displayGrowthText }}<sup class="est-badge">估</sup>
+          {{ displayGrowthText }}<sup v-if="gridDisplayData.isEstimate" class="est-badge">估</sup>
         </span>
         <span class="grid-nav" :class="displayGrowthClass">{{ displayNavText }}</span>
         <span v-if="displayDate" class="grid-date">{{ displayDate }}</span>
@@ -121,7 +121,8 @@ const gridDisplayData = computed(() => {
       growthText: `${prefix}${dayGrowth.toFixed(2)}%`,
       nav: nav,
       navText: nav.toFixed(4),
-      date: jzrq !== today.value ? formatDate(jzrq) : ''
+      date: jzrq !== today.value ? formatDate(jzrq) : '',
+      isEstimate: false,
     }
   }
   
@@ -132,7 +133,8 @@ const gridDisplayData = computed(() => {
       growthText: `${prefix}${gszzl.toFixed(2)}%`,
       nav: gsz,
       navText: gsz.toFixed(4),
-      date: gztime !== today.value ? formatDate(gztime) : ''
+      date: gztime !== today.value ? formatDate(gztime) : '',
+      isEstimate: true,
     }
   }
   
@@ -142,7 +144,8 @@ const gridDisplayData = computed(() => {
     growthText: `${prefix}${dayGrowth.toFixed(2)}%`,
     nav: nav,
     navText: nav.toFixed(4),
-    date: jzrq !== today.value ? formatDate(jzrq) : ''
+    date: jzrq !== today.value ? formatDate(jzrq) : '',
+    isEstimate: false,
   }
 })
 

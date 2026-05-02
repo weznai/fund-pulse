@@ -447,18 +447,16 @@ router.get('/index/timeshare/:code', async (req: Request, res: Response) => {
     const stockCode = getSystemParam('STOCK_INDEX_CODE') || code
     logger.log(`📊 [指数分时] 请求 code=${code}, stockCode=${stockCode}, today=${today}`)
     
-    const todayIsTradingDay = checkTradingDay(today)
-    const currentHour = new Date().getHours()
-    const currentMinute = new Date().getMinutes()
-    const isBeforeTrading = currentHour < 9 || (currentHour === 9 && currentMinute < 30)
-    const useHistoryData = !todayIsTradingDay || isBeforeTrading
-    
     let cached = getStockTimeTrend(stockCode, today)
     logger.log(`📊 [指数分时] 今日缓存: ${cached ? `有(${cached.date})` : '无'}`)
     
     if (!cached || !cached.data) {
-      cached = getLatestStockTimeTrend(stockCode, useHistoryData ? today : undefined)
-      logger.log(`📊 [指数分时] 历史缓存: ${cached ? `有(${cached.date})` : '无'}`)
+      cached = getLatestStockTimeTrend(stockCode, today)
+      logger.log(`📊 [指数分时] 历史缓存(before today): ${cached ? `有(${cached.date})` : '无'}`)
+    }
+    if (!cached || !cached.data) {
+      cached = getLatestStockTimeTrend(stockCode)
+      logger.log(`📊 [指数分时] 历史缓存(latest): ${cached ? `有(${cached.date})` : '无'}`)
     }
     
     if (cached && cached.data) {
