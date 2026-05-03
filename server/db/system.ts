@@ -10,7 +10,7 @@ export interface SystemInfo {
 }
 
 export function getSystemInfo(name: string = 'fund'): SystemInfo | null {
-  const stmt = db.prepare('SELECT * FROM system WHERE name = ?')
+  const stmt = db.prepare('SELECT * FROM biz_system WHERE name = ?')
   const row = stmt.get(name) as any
   if (!row) return null
   return {
@@ -33,7 +33,7 @@ export function updateSystemTradingDays(name: string = 'fund'): SystemInfo {
   const now = Date.now()
 
   db.prepare(`
-    INSERT INTO system (name, last_trading_day, trading_day, updated_at)
+    INSERT INTO biz_system (name, last_trading_day, trading_day, updated_at)
     VALUES (?, ?, ?, ?)
     ON CONFLICT(name) DO UPDATE SET
       last_trading_day = excluded.last_trading_day,
@@ -54,14 +54,25 @@ function getLatestSettleDate(): string {
 
 export function getTradingDay(): string {
   const info = getSystemInfo()
-  if (info?.tradingDay) return info.tradingDay
-
   const latest = getLatestSettleDate()
-  if (latest) {
-    logger.log(`📅 system.trading_day 为空，从结算记录推导: ${latest}`)
-    db.prepare(`
-      UPDATE system SET trading_day = ? WHERE name = 'fund'
-    `).run(latest)
+
+  if (info?.tradingDay && info.tradingDay >= latest) {
+    return info.tradingDay
   }
+
+  if (latest) {
+    const lastTradingDay = (info?.tradingDay && info.tradingDay < latest) ? info.tradingDay : (info?.lastTradingDay || '')
+    const now = Date.now()
+    db.prepare(`
+      INSERT INTO biz_system (name, last_trading_day, trading_day, updated_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(name) DO UPDATE SET
+        last_trading_day = excluded.last_trading_day,
+        trading_day = excluded.trading_day,
+        updated_at = excluded.updated_at
+    `).run('fund', lastTradingDay, latest, now)
+    logger.log(`📅 biz_system.trading_day 已同步: ${latest}`)
+  }
+
   return latest
 }

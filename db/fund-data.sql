@@ -261,17 +261,17 @@ CREATE INDEX idx_holidays_year ON holidays (year);
 CREATE INDEX idx_holidays_date ON holidays (date);
 
 -- -----------------------------------------------------------
--- Table: system
+-- Table: biz_system
 -- 系统信息表
 -- -----------------------------------------------------------
-CREATE TABLE system (
+CREATE TABLE biz_system (
   name TEXT PRIMARY KEY,
   last_trading_day TEXT,
   trading_day TEXT,
   updated_at INTEGER NOT NULL
 );
 
-INSERT OR IGNORE INTO system (name, last_trading_day, trading_day, updated_at) VALUES ('fund', '', '', 0);
+INSERT OR IGNORE INTO biz_system (name, last_trading_day, trading_day, updated_at) VALUES ('fund', '', '', 0);
 
 -- -----------------------------------------------------------
 -- Table: system_params

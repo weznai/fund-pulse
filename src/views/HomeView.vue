@@ -550,7 +550,28 @@ const totalHoldingAmount = computed(() => {
   }, 0)
 })
 
+const historyProfitCache = ref<number | null>(null)
+
+async function loadHistoryProfit() {
+  const tradingDay = store.tradingDay
+  const today = new Date().toLocaleDateString('sv-SE')
+  if (!tradingDay || tradingDay === today) return
+
+  try {
+    const { data } = await axios.get('/api/holdings/profit-analysis')
+    if (data.loggedIn && data.history) {
+      historyProfitCache.value = data.history
+        .filter((r: any) => r.profitDate === tradingDay)
+        .reduce((sum: number, r: any) => sum + r.dayProfit, 0)
+    }
+  } catch {
+    // ignore
+  }
+}
+
 const totalTodayProfit = computed(() => {
+  if (historyProfitCache.value != null) return historyProfitCache.value
+
   const tradingDay = store.tradingDay || new Date().toLocaleDateString('sv-SE')
   return filteredFavorites.value.reduce((total, fund) => {
     const holding = store.holdings.getHolding(fund.code)
@@ -605,6 +626,8 @@ onMounted(async () => {
   } catch (e) {
     console.error('Failed to fetch stats:', e)
   }
+
+  loadHistoryProfit()
 })
 
 onUnmounted(() => {

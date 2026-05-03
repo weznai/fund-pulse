@@ -358,7 +358,7 @@ export function initDatabase() {
   `)
 
   db.exec(`
-    CREATE TABLE IF NOT EXISTS system (
+    CREATE TABLE IF NOT EXISTS biz_system (
       name TEXT PRIMARY KEY,
       last_trading_day TEXT,
       trading_day TEXT,
@@ -366,7 +366,14 @@ export function initDatabase() {
     )
   `)
 
-  db.exec(`INSERT OR IGNORE INTO system (name, last_trading_day, trading_day, updated_at) VALUES ('fund', '', '', 0)`)
+  try {
+    const exists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='system'").get()
+    if (exists) {
+      db.exec(`ALTER TABLE system RENAME TO biz_system`)
+    }
+  } catch (e) { /* ignore */ }
+
+  db.exec(`INSERT OR IGNORE INTO biz_system (name, last_trading_day, trading_day, updated_at) VALUES ('fund', '', '', 0)`)
 
   logger.log('✅ 数据库初始化完成:', dbPath)
 

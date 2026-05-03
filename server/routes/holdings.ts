@@ -222,11 +222,20 @@ router.get('/timeshare', (req: Request, res: Response) => {
     ]
     
     let totalAmount = 0
-    const timeMap = new Map<string, { weightedPercent: number; totalAmount: number }>()
+    let totalProfit = 0
+    const timeMap = new Map<string, { weightedPercent: number; totalWeight: number }>()
     let effectiveDate = today
 
     for (const [code, fund] of holdings) {
       if (!fund.amount || fund.amount <= 0) continue
+
+      if (fund.settled && fund.currentDayProfit != null) {
+        totalProfit += fund.currentDayProfit
+      }
+
+      const weight = (fund.currentDayProfit != null && fund.settled)
+        ? fund.amount - fund.currentDayProfit
+        : fund.amount
       
       let cached = getGlobalEstimateCache(code, today)
       
@@ -325,9 +334,9 @@ router.get('/timeshare', (req: Request, res: Response) => {
       totalAmount += fund.amount
       
       for (const point of filledTimeshare) {
-        const existing = timeMap.get(point.time) || { weightedPercent: 0, totalAmount: 0 }
-        existing.weightedPercent += point.percent * fund.amount
-        existing.totalAmount += fund.amount
+        const existing = timeMap.get(point.time) || { weightedPercent: 0, totalWeight: 0 }
+        existing.weightedPercent += point.percent * weight
+        existing.totalWeight += weight
         timeMap.set(point.time, existing)
       }
     }
@@ -343,9 +352,20 @@ router.get('/timeshare', (req: Request, res: Response) => {
     const weightedTimeshare = Array.from(timeMap.entries())
       .map(([time, data]) => ({
         time,
-        percent: Math.round((data.weightedPercent / data.totalAmount) * 100) / 100
+        percent: Math.round((data.weightedPercent / data.totalWeight) * 100) / 100
       }))
       .sort((a, b) => a.time.localeCompare(b.time))
+
+    const actualRate = totalProfit !== 0
+      ? Math.round(totalProfit / (totalAmount - totalProfit) * 10000) / 100
+      : 0
+
+    if (weightedTimeshare.length > 0 && actualRate !== 0) {
+      weightedTimeshare[weightedTimeshare.length - 1] = {
+        ...weightedTimeshare[weightedTimeshare.length - 1],
+        percent: actualRate
+      }
+    }
 
     res.json({
       loggedIn: true,
@@ -354,7 +374,9 @@ router.get('/timeshare', (req: Request, res: Response) => {
       date: effectiveDate,
       isHistory: effectiveDate !== today,
       fundCount: holdings.size,
-      totalAmount: Math.round(totalAmount * 100) / 100
+      totalAmount: Math.round(totalAmount * 100) / 100,
+      totalProfit: Math.round(totalProfit * 100) / 100,
+      actualRate
     })
   } catch (error) {
     logger.error('获取持仓分时数据失败:', error)

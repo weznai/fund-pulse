@@ -607,9 +607,20 @@ const dailyProfitMap = computed(() => {
     }
   }
 
-  const realtime = todayProfit.value
-  if (realtime !== 0) {
-    map.set(todayStr, { profit: realtime, rate: 0 })
+  const sameMonth = tradingDayStr.value.substring(0, 7) === todayStr.substring(0, 7)
+  if (tradingDayStr.value !== todayStr && sameMonth && profitHistory.value.length > 0) {
+    const historyForToday = profitHistory.value
+      .filter(r => r.profitDate === tradingDayStr.value)
+    if (historyForToday.length > 0) {
+      const profit = historyForToday.reduce((s, r) => s + r.dayProfit, 0)
+      const rate = historyForToday.reduce((s, r) => s + r.dayProfitRate, 0) / historyForToday.length
+      map.set(todayStr, { profit, rate })
+    }
+  } else if (tradingDayStr.value === todayStr) {
+    const realtime = todayProfit.value
+    if (realtime !== 0) {
+      map.set(todayStr, { profit: realtime, rate: 0 })
+    }
   }
 
   return map
@@ -632,6 +643,14 @@ function calculateTempTotalProfit(): number {
 
 const todayProfit = computed(() => {
   const settledDate = tradingDayStr.value
+
+  if (settledDate !== todayStr && profitHistory.value.length > 0) {
+    const historyProfit = profitHistory.value
+      .filter(r => r.profitDate === settledDate)
+      .reduce((sum, r) => sum + r.dayProfit, 0)
+    if (historyProfit !== 0) return historyProfit
+  }
+
   return fundStore.sortedFavorites.reduce((total, fund) => {
     const holding = fundStore.holdings.getHolding(fund.code)
     if (!holding || holding.amount <= 0) return total
