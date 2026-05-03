@@ -23,7 +23,8 @@ import {
   isFundHeld,
   isNavDateAlreadySettled,
   getLatestGlobalEstimateCache,
-  getGlobalEstimateCache
+  getGlobalEstimateCache,
+  updateSystemTradingDays
 } from '../db.js'
 import { checkTradingDay } from '../services/holidayService.js'
 
@@ -173,9 +174,10 @@ export function startScheduledSettlement(): () => void {
     if (now.getHours() < 8) return
 
     const initKey = `${today}_init`
-    if (!executedFlags.has(initKey)) {
-      executedFlags.add(initKey)
-      logger.log(`📅 检查并初始化 ${today} 结算状态...`)
+      if (!executedFlags.has(initKey)) {
+        executedFlags.add(initKey)
+        updateSystemTradingDays()
+        logger.log(`📅 检查并初始化 ${today} 结算状态...`)
       const users = getAllUsers()
       for (const user of users) {
         const targetUserId: UserId = {
@@ -297,6 +299,10 @@ export async function manualSettlement(settleDate?: string): Promise<{
     } catch (error) {
       logger.error(`Manual settlement failed for user ${user.id}:`, error)
     }
+  }
+
+  if (totalSettled > 0) {
+    updateSystemTradingDays()
   }
 
   logger.log(`Manual settlement completed: processed ${totalProcessed}, settled ${totalSettled}`)

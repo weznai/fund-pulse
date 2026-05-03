@@ -1,6 +1,7 @@
 import db from './connection.js'
 import { getCurrentUserId } from './connection.js'
 import { getUserFunds, addUserFund } from './userFund.js'
+import { getTradingDay } from './system.js'
 import { logger } from '../logger.js'
 
 export interface UserPreferences {
@@ -14,6 +15,7 @@ export interface UserPreferences {
   filterMode: 'all' | 'held'
   migratedFromLocal: boolean
   lastUpdated: number
+  tradingDay: string
 }
 
 export function getUserPreferences(): UserPreferences {
@@ -43,7 +45,8 @@ export function getUserPreferences(): UserPreferences {
       sortDirection: result.sort_direction || 'desc',
       filterMode: result.filter_mode || 'all',
       migratedFromLocal: Boolean(result.migrated_from_local),
-      lastUpdated: result.last_updated
+      lastUpdated: result.last_updated,
+      tradingDay: getTradingDay()
     }
   }
 
@@ -57,7 +60,8 @@ export function getUserPreferences(): UserPreferences {
     sortDirection: 'desc',
     filterMode: 'all',
     migratedFromLocal: false,
-    lastUpdated: Date.now()
+    lastUpdated: Date.now(),
+    tradingDay: getTradingDay()
   }
 }
 

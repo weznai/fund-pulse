@@ -551,24 +551,30 @@ const totalHoldingAmount = computed(() => {
 })
 
 const totalTodayProfit = computed(() => {
-  const today = new Date().toLocaleDateString('sv-SE')
+  const tradingDay = store.tradingDay || new Date().toLocaleDateString('sv-SE')
   return filteredFavorites.value.reduce((total, fund) => {
     const holding = store.holdings.getHolding(fund.code)
     if (!holding || holding.amount <= 0) return total
-    
+
+    if (holding.settled && holding.currentDayProfit != null && holding.lastSettledDate === tradingDay) {
+      return total + holding.currentDayProfit
+    }
+
+    if (holding.currentDayProfit != null && holding.lastSettledDate === tradingDay) {
+      return total + holding.currentDayProfit
+    }
+
     const jzrq = fund.jzrq || ''
     const gztime = fund.gztime ? fund.gztime.slice(0, 10) : ''
-    
+
     let growth: number | null = null
-    
-    // 优先用当天的数据
-    if (jzrq === today && fund.dayGrowth != null) {
+
+    if (jzrq === tradingDay && fund.dayGrowth != null) {
       growth = fund.dayGrowth
-    } else if (gztime === today && fund.gszzl != null) {
+    } else if (gztime === tradingDay && fund.gszzl != null) {
       growth = fund.gszzl
     }
 
-    // 如果今天没有数据,用最近的数据(不严格检查日期)
     if (growth === null) {
       if (fund.gszzl != null) {
         growth = fund.gszzl
@@ -581,8 +587,7 @@ const totalTodayProfit = computed(() => {
       return total + (holding.amount * growth / 100)
     }
 
-    // 兜底：用结算收益
-    if (holding.lastSettledDate && holding.currentDayProfit != null && holding.lastSettledDate === today) {
+    if (holding.lastSettledDate && holding.currentDayProfit != null) {
       return total + holding.currentDayProfit
     }
 

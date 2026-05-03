@@ -51,10 +51,10 @@ app.use((req, res, next) => {
   })
 })
 
-const stopSettlementTask = startScheduledSettlement()
-logger.log('⏰ 已启动定时任务（9:30初始化结算状态，18:00后获取净值时自动结算）')
-
 initHolidaysTable()
+
+const stopSettlementTask = startScheduledSettlement()
+logger.log('⏰ 已启动定时任务（8:00初始化结算状态，18:00后获取净值时自动结算）')
 
 app.use('/api/admin/holidays', setupHolidayRoutes(validateAdminToken))
 app.use('/api/holidays', setupPublicHolidayRoutes())

@@ -226,11 +226,11 @@
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary btn-sm" @click="showCleanDialog = false">取消</button>
-          <button class="btn btn-danger btn-sm" @click="cleanVisitUsers" :disabled="cleaning" style="margin-right: 8px;">
-            {{ cleaning ? '清理中...' : '按用户清理' }}
-          </button>
-          <button class="btn btn-danger btn-sm" @click="cleanVisitIps" :disabled="cleaning">
+          <button class="btn btn-danger btn-sm" @click="cleanVisitIps" :disabled="cleaning" style="margin-right: 8px;">
             {{ cleaning ? '清理中...' : '按IP清理' }}
+          </button>
+          <button class="btn btn-danger btn-sm" @click="cleanVisitUsers" :disabled="cleaning">
+            {{ cleaning ? '清理中...' : '按用户清理' }}
           </button>
         </div>
       </div>

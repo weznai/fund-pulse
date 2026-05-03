@@ -113,7 +113,8 @@ export interface UserPreferences {
   filterMode: 'all' | 'held'
   migratedFromLocal: boolean
   lastUpdated: number
-  isTempUser?: boolean  // 是否是临时用户
+  isTempUser?: boolean
+  tradingDay?: string
 }
 
 // 持仓接口

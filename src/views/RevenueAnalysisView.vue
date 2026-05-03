@@ -544,6 +544,7 @@ function filterToCurrentTime(data: TimesharePoint[]): TimesharePoint[] {
 }
 
 const todayStr = new Date().toLocaleDateString('sv-SE')
+const tradingDayStr = computed(() => fundStore.tradingDay || todayStr)
 
 const holdingTimeshareVisible = computed(() => {
   if (holdingTimeshare.value.length === 0) return []
@@ -630,11 +631,16 @@ function calculateTempTotalProfit(): number {
 }
 
 const todayProfit = computed(() => {
+  const settledDate = tradingDayStr.value
   return fundStore.sortedFavorites.reduce((total, fund) => {
     const holding = fundStore.holdings.getHolding(fund.code)
     if (!holding || holding.amount <= 0) return total
 
-    if (holding.settled && holding.currentDayProfit != null && holding.lastSettledDate === todayStr) {
+    if (holding.settled && holding.currentDayProfit != null && holding.lastSettledDate === settledDate) {
+      return total + holding.currentDayProfit
+    }
+
+    if (holding.currentDayProfit != null && holding.lastSettledDate === settledDate) {
       return total + holding.currentDayProfit
     }
 
@@ -643,9 +649,9 @@ const todayProfit = computed(() => {
 
     let growth: number | null = null
 
-    if (jzrq === todayStr && fund.dayGrowth != null) {
+    if (jzrq === settledDate && fund.dayGrowth != null) {
       growth = fund.dayGrowth
-    } else if (gztime === todayStr && fund.gszzl != null) {
+    } else if (gztime === settledDate && fund.gszzl != null) {
       growth = fund.gszzl
     }
 
@@ -661,7 +667,7 @@ const todayProfit = computed(() => {
       return total + (holding.amount * growth / 100)
     }
 
-    if (holding.lastSettledDate && holding.currentDayProfit != null && holding.lastSettledDate === todayStr) {
+    if (holding.lastSettledDate && holding.currentDayProfit != null) {
       return total + holding.currentDayProfit
     }
 

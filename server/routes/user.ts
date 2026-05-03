@@ -10,7 +10,8 @@ import {
   addUserFundsBatch, isFundInUserList, isFundHeld,
   getUserPreferences, saveUserPreferences,
   getHoldings, saveHolding, deleteHolding, saveHoldingsBatch,
-  getFundInfo, saveFundInfo, batchSaveFundInfo
+  getFundInfo, saveFundInfo, batchSaveFundInfo,
+  getTradingDay
 } from '../db/index.js'
 import { fetchFundDetailFromApi } from '../services/fundService.js'
 import { getClientUserId, setSessionCookie, ensureUserSession, isRegisteredUser } from '../middleware/userSession.js'
@@ -298,7 +299,8 @@ router.get('/preferences', (req: Request, res: Response) => {
         filterMode: 'all',
         migratedFromLocal: false,
         lastUpdated: Date.now(),
-        isTempUser: true
+        isTempUser: true,
+        tradingDay: getTradingDay()
       })
     }
 

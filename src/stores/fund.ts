@@ -22,6 +22,7 @@ export const useFundStore = defineStore('fund', () => {
   const isMigrating = ref<boolean>(false)
   const migrationCompleted = ref<boolean>(false)
   const isInitialized = ref<boolean>(false)
+  const tradingDay = ref<string>('')
 
   const holdings = useHoldings()
 
@@ -280,6 +281,7 @@ export const useFundStore = defineStore('fund', () => {
       hideAmount.value = prefs.hideAmount || false
       useDatabase.value = true
       migrationCompleted.value = prefs.migratedFromLocal || false
+      tradingDay.value = prefs.tradingDay || ''
 
       await holdings.setUseDatabase(true)
 
@@ -784,6 +786,7 @@ export const useFundStore = defineStore('fund', () => {
     isMigrating,
     migrationCompleted,
     isInitialized,
+    tradingDay,
     favorites,
     sortedFavorites,
     tableRows,

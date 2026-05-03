@@ -357,6 +357,17 @@ export function initDatabase() {
     )
   `)
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS system (
+      name TEXT PRIMARY KEY,
+      last_trading_day TEXT,
+      trading_day TEXT,
+      updated_at INTEGER NOT NULL
+    )
+  `)
+
+  db.exec(`INSERT OR IGNORE INTO system (name, last_trading_day, trading_day, updated_at) VALUES ('fund', '', '', 0)`)
+
   logger.log('✅ 数据库初始化完成:', dbPath)
 
   const userId = getCurrentUserId()

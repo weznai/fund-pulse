@@ -36,6 +36,9 @@ export type { Task, TaskType, TaskStatus } from './task.js'
 export { ensureSuggestionsTable, createSuggestion, updateSuggestionSummary, updateSuggestionStatus, getSuggestionById, getSuggestionList, getAdminSuggestionList } from './suggestion.js'
 export type { Suggestion, SuggestionListResult } from './suggestion.js'
 
+export { getSystemInfo, updateSystemTradingDays, getTradingDay } from './system.js'
+export type { SystemInfo } from './system.js'
+
 // Repository 模式 - 数据访问层
 export { 
   BaseRepository,

@@ -104,6 +104,20 @@
                 </td>
               </tr>
             </tbody>
+            <tfoot>
+              <tr class="summary-row">
+                <td colspan="3" class="summary-label">汇总</td>
+                <td class="summary-value">{{ totalAmount.toFixed(2) }}</td>
+                <td colspan="3"></td>
+                <td class="summary-value" :class="totalDailyProfit >= 0 ? 'positive' : 'negative'">
+                  {{ totalDailyProfit >= 0 ? '+' : '' }}{{ totalDailyProfit.toFixed(2) }}
+                </td>
+                <td class="summary-value" :class="totalAccumulatedProfit >= 0 ? 'positive' : 'negative'">
+                  {{ totalAccumulatedProfit >= 0 ? '+' : '' }}{{ totalAccumulatedProfit.toFixed(2) }}
+                </td>
+                <td></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
 
@@ -139,7 +153,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 
@@ -153,6 +167,18 @@ const favoriteFunds = ref<any[]>([])
 const loading = ref(true)
 const settling = ref<string | null>(null)
 const refreshing = ref<string | null>(null)
+
+const totalDailyProfit = computed(() => {
+  return holdings.value.reduce((sum, h) => sum + (h.currentDayProfit || 0), 0)
+})
+
+const totalAccumulatedProfit = computed(() => {
+  return holdings.value.reduce((sum, h) => sum + (h.accumulatedProfit || 0), 0)
+})
+
+const totalAmount = computed(() => {
+  return holdings.value.reduce((sum, h) => sum + (h.amount || 0), 0)
+})
 
 // 获取用户ID从路由参数
 onMounted(() => {
@@ -419,6 +445,27 @@ async function refreshFund(holding: any) {
 
 .data-table tbody tr:hover {
   background: #F9FAFB;
+}
+
+.summary-row {
+  background: #F0F4FF;
+  font-weight: 600;
+}
+
+.summary-row td {
+  border-bottom: none;
+  padding: 10px 12px;
+  color: #1e3a5f;
+}
+
+.summary-label {
+  text-align: right;
+  font-size: 13px;
+}
+
+.summary-value {
+  font-family: 'SF Mono', Consolas, monospace;
+  font-size: 13px;
 }
 
 .user-id {
