@@ -151,32 +151,28 @@ export function getDailyProfitSummaries(startDate: string, endDate: string): Dai
 
   const rows = db.prepare(`
     SELECT profit_date, SUM(day_profit) as total_profit
-    FROM user_funds_profit_history
-    WHERE user_id = ? AND profit_date >= ? AND profit_date <= ?
+    FROM (
+      SELECT profit_date, fund_code, day_profit,
+        ROW_NUMBER() OVER (
+          PARTITION BY profit_date, fund_code
+          ORDER BY CASE WHEN profit_type = 'final' THEN 0 ELSE 1 END, created_at DESC
+        ) as rn
+      FROM user_funds_profit_history
+      WHERE user_id = ? AND profit_date >= ? AND profit_date <= ?
+    )
+    WHERE rn = 1
     GROUP BY profit_date
     ORDER BY profit_date ASC
   `).all(userId, startDate, endDate) as any[]
 
   if (rows.length === 0) return []
 
-  const allHistoryRows = db.prepare(`
-    SELECT profit_date, SUM(day_profit) as total_profit
-    FROM user_funds_profit_history
-    WHERE user_id = ? AND profit_date < ?
-    GROUP BY profit_date
-    ORDER BY profit_date ASC
-  `).all(userId, rows[0].profit_date) as any[]
-
   let cumSum = 0
-  for (const row of allHistoryRows) {
-    cumSum += row.total_profit
-  }
-
   return rows.map(row => {
     cumSum += row.total_profit
     return {
       date: row.profit_date,
-      totalProfit: Math.round(cumSum * 100) / 100
+      totalProfit: cumSum
     }
   })
 }

@@ -581,10 +581,6 @@ const totalTodayProfit = computed(() => {
       return total + holding.currentDayProfit
     }
 
-    if (holding.currentDayProfit != null && holding.lastSettledDate === tradingDay) {
-      return total + holding.currentDayProfit
-    }
-
     const jzrq = fund.jzrq || ''
     const gztime = fund.gztime ? fund.gztime.slice(0, 10) : ''
 
@@ -608,7 +604,7 @@ const totalTodayProfit = computed(() => {
       return total + (holding.amount * growth / 100)
     }
 
-    if (holding.lastSettledDate && holding.currentDayProfit != null) {
+    if (holding.settled && holding.lastSettledDate && holding.currentDayProfit != null) {
       return total + holding.currentDayProfit
     }
 

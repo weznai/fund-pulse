@@ -186,6 +186,47 @@
           <p>暂无数据</p>
         </div>
       </div>
+
+      <div class="params-section">
+        <div class="section-header">
+          <h3>月历视图</h3>
+          <div class="calendar-nav">
+            <button class="cal-nav-btn" @click="calPrevMonth">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <span class="cal-month-label">{{ calYear }} 年 {{ calMonth + 1 }} 月</span>
+            <button class="cal-nav-btn" @click="calNextMonth">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+            <button class="cal-today-btn" @click="calGoToday">今天</button>
+          </div>
+        </div>
+
+        <div class="calendar-grid">
+          <div class="cal-weekday" v-for="d in calWeekdays" :key="d">{{ d }}</div>
+          <div
+            v-for="(cell, idx) in calCells"
+            :key="idx"
+            :class="[
+              'cal-cell',
+              { 'other-month': !cell.inMonth },
+              { 'today': cell.isToday },
+              { 'is-holiday': cell.holidayInfo?.type === 'holiday' },
+              { 'is-workday': cell.holidayInfo?.type === 'workday' },
+              { 'is-inlieu': cell.holidayInfo?.type === 'inLieuDay' },
+            ]"
+          >
+            <span class="cal-day">{{ cell.day }}</span>
+            <span v-if="cell.holidayInfo" class="cal-holiday-name">{{ cell.holidayInfo.name }}</span>
+          </div>
+        </div>
+
+        <div class="calendar-legend">
+          <span class="legend-item"><i class="legend-dot holiday"></i>节假日</span>
+          <span class="legend-item"><i class="legend-dot workday"></i>调休上班</span>
+          <span class="legend-item"><i class="legend-dot inlieu"></i>补休</span>
+        </div>
+      </div>
     </div>
 
     <div class="modal-overlay" v-if="showAddModal || showEditModal">
@@ -240,6 +281,14 @@ interface HolidayStat {
   holiday: number
   workday: number
   inLieuDay: number
+}
+
+interface CalCell {
+  date: string
+  day: number
+  inMonth: boolean
+  isToday: boolean
+  holidayInfo?: { name: string; type: string }
 }
 
 const activeTab = ref('params')
@@ -386,6 +435,83 @@ const holidayStats = ref<HolidayStat[]>([])
 const loadingHolidays = ref(false)
 const syncing = ref(false)
 const holidayMessage = ref<{ type: string; text: string } | null>(null)
+
+const nowDate = new Date()
+const calYear = ref(nowDate.getFullYear())
+const calMonth = ref(nowDate.getMonth())
+const calWeekdays = ['一', '二', '三', '四', '五', '六', '日']
+
+const holidayMap = computed(() => {
+  const m = new Map<string, { name: string; type: string }>()
+  for (const h of holidays.value) {
+    m.set(h.date, { name: h.name, type: h.type })
+  }
+  return m
+})
+
+const calCells = computed<CalCell[]>(() => {
+  const year = calYear.value
+  const month = calMonth.value
+  const firstDay = new Date(year, month, 1)
+  const lastDay = new Date(year, month + 1, 0)
+  const daysInMonth = lastDay.getDate()
+
+  let startDow = firstDay.getDay() - 1
+  if (startDow < 0) startDow = 6
+
+  const prevLast = new Date(year, month, 0).getDate()
+  const today = new Date()
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+
+  const cells: CalCell[] = []
+
+  for (let i = startDow - 1; i >= 0; i--) {
+    const d = prevLast - i
+    const pm = month === 0 ? 11 : month - 1
+    const py = month === 0 ? year - 1 : year
+    const dateStr = `${py}-${String(pm + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    cells.push({ date: dateStr, day: d, inMonth: false, isToday: dateStr === todayStr, holidayInfo: holidayMap.value.get(dateStr) })
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    cells.push({ date: dateStr, day: d, inMonth: true, isToday: dateStr === todayStr, holidayInfo: holidayMap.value.get(dateStr) })
+  }
+
+  const remaining = 42 - cells.length
+  const nm = month === 11 ? 0 : month + 1
+  const ny = month === 11 ? year + 1 : year
+  for (let d = 1; d <= remaining; d++) {
+    const dateStr = `${ny}-${String(nm + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    cells.push({ date: dateStr, day: d, inMonth: false, isToday: dateStr === todayStr, holidayInfo: holidayMap.value.get(dateStr) })
+  }
+
+  return cells
+})
+
+function calPrevMonth() {
+  if (calMonth.value === 0) {
+    calMonth.value = 11
+    calYear.value--
+  } else {
+    calMonth.value--
+  }
+}
+
+function calNextMonth() {
+  if (calMonth.value === 11) {
+    calMonth.value = 0
+    calYear.value++
+  } else {
+    calMonth.value++
+  }
+}
+
+function calGoToday() {
+  const today = new Date()
+  calYear.value = today.getFullYear()
+  calMonth.value = today.getMonth()
+}
 
 const yearStat = computed(() => holidayStats.value.find(s => s.year === selectedYear.value))
 
@@ -1048,5 +1174,179 @@ onMounted(() => {
   border-top: 1px solid #e5e7eb;
   background: #f8fafc;
   border-radius: 0 0 16px 16px;
+}
+
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cal-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  color: #475569;
+  transition: all 0.2s;
+}
+
+.cal-nav-btn:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.cal-month-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+  min-width: 110px;
+  text-align: center;
+}
+
+.cal-today-btn {
+  padding: 4px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  color: #475569;
+  transition: all 0.2s;
+}
+
+.cal-today-btn:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.cal-weekday {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #94a3b8;
+  padding: 8px 0;
+}
+
+.cal-cell {
+  position: relative;
+  min-height: 64px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid #f1f5f9;
+  background: #fff;
+  transition: all 0.15s;
+  display: flex;
+  flex-direction: column;
+}
+
+.cal-cell:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.cal-cell.other-month {
+  opacity: 0.35;
+}
+
+.cal-cell.today {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px #3b82f6;
+}
+
+.cal-cell.is-holiday {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border-color: #fecaca;
+}
+
+.cal-cell.is-workday {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border-color: #bbf7d0;
+}
+
+.cal-cell.is-inlieu {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  border-color: #fde68a;
+}
+
+.cal-day {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.cal-cell.today .cal-day {
+  color: #3b82f6;
+}
+
+.cal-holiday-name {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 2px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-cell.is-holiday .cal-holiday-name {
+  color: #dc2626;
+}
+
+.cal-cell.is-workday .cal-holiday-name {
+  color: #16a34a;
+}
+
+.cal-cell.is-inlieu .cal-holiday-name {
+  color: #d97706;
+}
+
+.calendar-legend {
+  display: flex;
+  gap: 20px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+}
+
+.legend-dot.holiday {
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+}
+
+.legend-dot.workday {
+  background: #dcfce7;
+  border: 1px solid #bbf7d0;
+}
+
+.legend-dot.inlieu {
+  background: #fef3c7;
+  border: 1px solid #fde68a;
 }
 </style>

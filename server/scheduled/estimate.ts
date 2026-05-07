@@ -674,7 +674,8 @@ export function stopEstimateFetch() {
 const userProfitTradingTimePoints = [
   '09:30', '09:35', '09:40', '09:45', '09:50', '09:55',
   '10:00', '10:05', '10:10', '10:15', '10:20', '10:25', '10:30', '10:35', '10:40', '10:45', '10:50', '10:55',
-  '11:00', '11:05', '11:10', '11:15', '11:20', '11:25', '11:30',
+  '11:00', '11:05', '11:10', '11:15', '11:20', '11:25', '11:30', '11:35', '11:40', '11:45', '11:50', '11:55',
+  '12:00',
   '13:00', '13:05', '13:10', '13:15', '13:20', '13:25', '13:30', '13:35', '13:40', '13:45', '13:50', '13:55',
   '14:00', '14:05', '14:10', '14:15', '14:20', '14:25', '14:30', '14:35', '14:40', '14:45', '14:50', '14:55', '15:00',
   '15:05', '15:10', '15:15', '15:20', '15:25', '15:30', '15:35', '15:40', '15:45', '15:50', '15:55', '16:00'
@@ -688,11 +689,20 @@ function getCurrentTradingTimePoint(): string | null {
   if (totalMinutes < 9 * 60 + 30) return null
 
   const morningEnd = 11 * 60 + 30
+  const lunchEnd = 12 * 60
   const afternoonStart = 13 * 60
-  if (totalMinutes > morningEnd && totalMinutes < afternoonStart) return null
+  if (totalMinutes > lunchEnd && totalMinutes < afternoonStart) return null
 
   const rounded = Math.floor(totalMinutes / 5) * 5
   const point = `${String(Math.floor(rounded / 60)).padStart(2, '0')}:${String(rounded % 60).padStart(2, '0')}`
+
+  if (totalMinutes > morningEnd && totalMinutes <= lunchEnd) {
+    if (userProfitTradingTimePoints.includes(point)) return point
+    for (let i = userProfitTradingTimePoints.length - 1; i >= 0; i--) {
+      if (userProfitTradingTimePoints[i] <= point) return userProfitTradingTimePoints[i]
+    }
+    return null
+  }
 
   if (userProfitTradingTimePoints.includes(point)) return point
 
@@ -882,7 +892,8 @@ function getStockCode(): string {
 const tradingTimePoints = [
   '09:30', '09:35', '09:40', '09:45', '09:50', '09:55',
   '10:00', '10:05', '10:10', '10:15', '10:20', '10:25', '10:30', '10:35', '10:40', '10:45', '10:50', '10:55',
-  '11:00', '11:05', '11:10', '11:15', '11:20', '11:25', '11:30',
+  '11:00', '11:05', '11:10', '11:15', '11:20', '11:25', '11:30', '11:35', '11:40', '11:45', '11:50', '11:55',
+  '12:00',
   '13:00', '13:05', '13:10', '13:15', '13:20', '13:25', '13:30', '13:35', '13:40', '13:45', '13:50', '13:55',
   '14:00', '14:05', '14:10', '14:15', '14:20', '14:25', '14:30', '14:35', '14:40', '14:45', '14:50', '14:55', '15:00',
   '15:05', '15:10', '15:15', '15:20', '15:25', '15:30', '15:35', '15:40', '15:45', '15:50', '15:55', '16:00'
@@ -914,7 +925,7 @@ export async function saveIndexTimeshare(): Promise<void> {
   
   const rawPoint = timeSeries[timeSeries.length - 1]
   const rawMinutes = parseInt(rawPoint.time.substring(0, 2)) * 60 + parseInt(rawPoint.time.substring(3, 5))
-  if (rawMinutes > 11 * 60 + 30 && rawMinutes < 13 * 60) {
+  if (rawMinutes > 12 * 60 && rawMinutes < 13 * 60) {
     logger.log(`📈 [指数采集] 午休时间(${rawPoint.time})，跳过`)
     return
   }

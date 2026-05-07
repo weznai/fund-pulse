@@ -13,6 +13,14 @@ import { checkTradingDay } from '../services/holidayService.js'
 
 const router = Router()
 
+function isMarketOpenedToday(): boolean {
+  const now = new Date()
+  const today = getLocalDate()
+  if (!checkTradingDay(today)) return false
+  const currentTime = now.getHours() * 60 + now.getMinutes()
+  return currentTime >= 9 * 60 + 30
+}
+
 router.post('/:code/profit', (req: Request, res: Response) => {
   try {
     const { code } = req.params
@@ -93,12 +101,14 @@ router.get('/profit-analysis', (req: Request, res: Response) => {
     const totalHoldingAmount = getHeldFundTotalAmount()
     const today = getLocalDate()
     const todayIsTradingDay = checkTradingDay(today)
+    const marketOpened = todayIsTradingDay && isMarketOpenedToday()
 
     const holdings = getHeldFunds()
     let todayProfit = 0
     let todayProfitRate = 0
     let todayProfitCount = 0
 
+    if (marketOpened) {
     for (const [code, fund] of holdings) {
       if (!fund.amount || fund.amount <= 0) continue
 
@@ -147,8 +157,9 @@ router.get('/profit-analysis', (req: Request, res: Response) => {
         closingAmount: Math.round((fund.amount + profit) * 100) / 100
       })
     }
+    }
 
-    res.json({ loggedIn: true, history, totalHoldingAmount, todayIsTradingDay })
+    res.json({ loggedIn: true, history, totalHoldingAmount, todayIsTradingDay, marketOpened })
   } catch (error) {
     logger.error('获取收益分析失败:', error)
     res.status(500).json({ error: '获取收益分析失败' })
@@ -202,6 +213,59 @@ router.get('/timeshare', (req: Request, res: Response) => {
     setCurrentUserId(userId)
     const today = getLocalDate()
 
+    const allTimePoints = [
+      '09:30', '09:35', '09:40', '09:45', '09:50', '09:55',
+      '10:00', '10:05', '10:10', '10:15', '10:20', '10:25', '10:30', '10:35', '10:40', '10:45', '10:50', '10:55',
+      '11:00', '11:05', '11:10', '11:15', '11:20', '11:25', '11:30', '11:35', '11:40', '11:45', '11:50', '11:55',
+      '12:00',
+      '13:00', '13:05', '13:10', '13:15', '13:20', '13:25', '13:30', '13:35', '13:40', '13:45', '13:50', '13:55',
+      '14:00', '14:05', '14:10', '14:15', '14:20', '14:25', '14:30', '14:35', '14:40', '14:45', '14:50', '14:55', '15:00',
+      '15:05', '15:10', '15:15', '15:20', '15:25', '15:30', '15:35', '15:40', '15:45', '15:50', '15:55', '16:00'
+    ]
+
+    const dbRecord = getDailyProfit(today)
+    if (dbRecord && dbRecord.timeProfitData.length > 0) {
+      const dataMap = new Map<string, number>()
+      for (const p of dbRecord.timeProfitData) {
+        dataMap.set(p.time, Math.round(p.rate * 100) / 100)
+      }
+
+      let lastValid: number | null = null
+      const timeshare: Array<{ time: string; percent: number }> = []
+      for (const tp of allTimePoints) {
+        if (dataMap.has(tp)) {
+          lastValid = dataMap.get(tp)!
+          timeshare.push({ time: tp, percent: lastValid })
+        } else if (lastValid !== null) {
+          timeshare.push({ time: tp, percent: lastValid })
+        }
+      }
+
+      const lastTime = timeshare.length > 0 ? timeshare[timeshare.length - 1].time : ''
+      if (lastTime !== '16:00' && dbRecord.finalRate != null) {
+        const closePercent = Math.round(dbRecord.finalRate * 100) / 100
+        timeshare.push({ time: '16:00', percent: closePercent })
+      }
+
+      let openingAmount = dbRecord.openingAmount
+      let totalProfit = dbRecord.finalProfit ?? 0
+      let actualRate = dbRecord.finalRate ?? 0
+
+      res.json({
+        loggedIn: true,
+        hasData: true,
+        timeshare,
+        date: today,
+        isHistory: false,
+        fundCount: 0,
+        totalAmount: Math.round((openingAmount + totalProfit) * 100) / 100,
+        openingAmount: Math.round(openingAmount * 100) / 100,
+        totalProfit: Math.round(totalProfit * 100) / 100,
+        actualRate
+      })
+      return
+    }
+
     const holdings = getHeldFunds()
     
     if (holdings.size === 0) {
@@ -211,15 +275,6 @@ router.get('/timeshare', (req: Request, res: Response) => {
         message: '暂无持仓基金'
       })
     }
-
-    const timePoints = [
-      '09:30', '09:35', '09:40', '09:45', '09:50', '09:55',
-      '10:00', '10:05', '10:10', '10:15', '10:20', '10:25', '10:30', '10:35', '10:40', '10:45', '10:50', '10:55',
-      '11:00', '11:05', '11:10', '11:15', '11:20', '11:25', '11:30',
-      '13:00', '13:05', '13:10', '13:15', '13:20', '13:25', '13:30', '13:35', '13:40', '13:45', '13:50', '13:55',
-      '14:00', '14:05', '14:10', '14:15', '14:20', '14:25', '14:30', '14:35', '14:40', '14:45', '14:50', '14:55', '15:00',
-      '15:05', '15:10', '15:15', '15:20', '15:25', '15:30', '15:35', '15:40', '15:45', '15:50', '15:55', '16:00'
-    ]
     
     let totalAmount = 0
     let totalProfit = 0
@@ -229,14 +284,6 @@ router.get('/timeshare', (req: Request, res: Response) => {
     for (const [code, fund] of holdings) {
       if (!fund.amount || fund.amount <= 0) continue
 
-      if (fund.settled && fund.currentDayProfit != null) {
-        totalProfit += fund.currentDayProfit
-      }
-
-      const weight = (fund.currentDayProfit != null && fund.settled)
-        ? fund.amount - fund.currentDayProfit
-        : fund.amount
-      
       let cached = getGlobalEstimateCache(code, today)
       
       if (!cached || !cached.data) {
@@ -271,6 +318,16 @@ router.get('/timeshare', (req: Request, res: Response) => {
         } catch {
         }
       }
+
+      if (fund.settled && fund.currentDayProfit != null) {
+        totalProfit += fund.currentDayProfit
+      } else {
+        totalProfit += fund.amount * finalPercent / (100 + finalPercent)
+      }
+
+      const weight = (fund.currentDayProfit != null && fund.settled)
+        ? fund.amount - fund.currentDayProfit
+        : fund.amount
       
       const filledTimeshare: Array<{ time: string; percent: number }> = []
       const dataMap = new Map<string, number>()
@@ -279,54 +336,48 @@ router.get('/timeshare', (req: Request, res: Response) => {
         dataMap.set(point.time, point.percent)
       }
       
-      let lastValidPercent: number | null = null
       let firstValidIndex = -1
+      let lastValidIndex = -1
       
-      for (let i = 0; i < timePoints.length; i++) {
-        const time = timePoints[i]
-        if (dataMap.has(time)) {
-          firstValidIndex = i
-          lastValidPercent = dataMap.get(time)!
-          break
+      for (let i = 0; i < allTimePoints.length; i++) {
+        if (dataMap.has(allTimePoints[i])) {
+          if (firstValidIndex === -1) firstValidIndex = i
+          lastValidIndex = i
         }
       }
       
       if (firstValidIndex === -1) {
-        for (const time of timePoints) {
-          filledTimeshare.push({ time, percent: finalPercent })
-        }
-      } else {
-        for (let i = 0; i < firstValidIndex; i++) {
-          filledTimeshare.push({ time: timePoints[i], percent: lastValidPercent! })
-        }
+        // no actual data points, skip this fund entirely
+        continue
+      }
+      
+      let lastPercent: number | null = null
+      for (let i = firstValidIndex; i <= lastValidIndex; i++) {
+        const time = allTimePoints[i]
         
-        for (let i = firstValidIndex; i < timePoints.length; i++) {
-          const time = timePoints[i]
+        if (dataMap.has(time)) {
+          lastPercent = dataMap.get(time)!
+          filledTimeshare.push({ time, percent: lastPercent })
+        } else {
+          let nextPercent: number | null = null
+          let nextIdx = -1
           
-          if (dataMap.has(time)) {
-            lastValidPercent = dataMap.get(time)!
-            filledTimeshare.push({ time, percent: lastValidPercent })
+          for (let j = i + 1; j <= lastValidIndex; j++) {
+            if (dataMap.has(allTimePoints[j])) {
+              nextPercent = dataMap.get(allTimePoints[j])!
+              nextIdx = j
+              break
+            }
+          }
+          
+          if (nextPercent !== null && lastPercent !== null) {
+            const prevIdx = filledTimeshare.length - 1
+            const totalSteps = nextIdx - prevIdx
+            const currentStep = i - prevIdx
+            const interpolated = lastPercent + (nextPercent - lastPercent) * (currentStep / totalSteps)
+            filledTimeshare.push({ time, percent: Math.round(interpolated * 100) / 100 })
           } else {
-            let nextValidPercent: number | null = null
-            let nextValidIndex = -1
-            
-            for (let j = i + 1; j < timePoints.length; j++) {
-              if (dataMap.has(timePoints[j])) {
-                nextValidPercent = dataMap.get(timePoints[j])!
-                nextValidIndex = j
-                break
-              }
-            }
-            
-            if (nextValidPercent !== null && lastValidPercent !== null) {
-              const prevIndex = filledTimeshare.length - 1
-              const totalSteps = nextValidIndex - prevIndex
-              const currentStep = i - prevIndex
-              const interpolated = lastValidPercent + (nextValidPercent - lastValidPercent) * (currentStep / totalSteps)
-              filledTimeshare.push({ time, percent: Math.round(interpolated * 100) / 100 })
-            } else {
-              filledTimeshare.push({ time, percent: lastValidPercent ?? finalPercent })
-            }
+            filledTimeshare.push({ time, percent: lastPercent! })
           }
         }
       }
@@ -349,22 +400,49 @@ router.get('/timeshare', (req: Request, res: Response) => {
       })
     }
 
-    const weightedTimeshare = Array.from(timeMap.entries())
+    let weightedTimeshare = Array.from(timeMap.entries())
       .map(([time, data]) => ({
         time,
         percent: Math.round((data.weightedPercent / data.totalWeight) * 100) / 100
       }))
       .sort((a, b) => a.time.localeCompare(b.time))
 
+    if (effectiveDate === today) {
+      const now = new Date()
+      const currentMinutes = now.getHours() * 60 + now.getMinutes()
+      if (currentMinutes < 16 * 60) {
+        weightedTimeshare = weightedTimeshare.filter(p => {
+          const pMinutes = parseInt(p.time.substring(0, 2)) * 60 + parseInt(p.time.substring(3, 5))
+          return pMinutes <= currentMinutes
+        })
+      }
+    }
+
     const actualRate = totalProfit !== 0
       ? Math.round(totalProfit / (totalAmount - totalProfit) * 10000) / 100
       : 0
 
-    if (weightedTimeshare.length > 0 && actualRate !== 0) {
-      weightedTimeshare[weightedTimeshare.length - 1] = {
-        ...weightedTimeshare[weightedTimeshare.length - 1],
-        percent: actualRate
+    if (weightedTimeshare.length > 0) {
+      const lastPercent = actualRate !== 0 ? actualRate : weightedTimeshare[weightedTimeshare.length - 1].percent
+      const lastTime = weightedTimeshare[weightedTimeshare.length - 1].time
+      const now = new Date()
+      const pastClose = effectiveDate !== today || now.getHours() * 60 + now.getMinutes() >= 16 * 60
+      if (pastClose && lastTime !== '16:00') {
+        weightedTimeshare.push({ time: '16:00', percent: lastPercent })
+      } else if (lastPercent !== 0) {
+        weightedTimeshare[weightedTimeshare.length - 1] = {
+          ...weightedTimeshare[weightedTimeshare.length - 1],
+          percent: lastPercent
+        }
       }
+    }
+
+    let openingAmount = 0
+    for (const [, fund] of holdings) {
+      if (!fund.amount || fund.amount <= 0) continue
+      openingAmount += (fund.currentDayProfit != null && fund.settled)
+        ? fund.amount - fund.currentDayProfit
+        : fund.amount
     }
 
     res.json({
@@ -375,6 +453,7 @@ router.get('/timeshare', (req: Request, res: Response) => {
       isHistory: effectiveDate !== today,
       fundCount: holdings.size,
       totalAmount: Math.round(totalAmount * 100) / 100,
+      openingAmount: Math.round(openingAmount * 100) / 100,
       totalProfit: Math.round(totalProfit * 100) / 100,
       actualRate
     })

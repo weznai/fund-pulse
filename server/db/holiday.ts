@@ -128,10 +128,11 @@ export function isHoliday(date: string): Holiday | null {
 export function isTradingDay(date: string): boolean {
   const d = new Date(date)
   const dayOfWeek = d.getDay()
-  if (dayOfWeek === 0 || dayOfWeek === 6) {
-    const holiday = isHoliday(date)
-    return holiday?.type === 'workday'
-  }
   const holiday = isHoliday(date)
-  return holiday?.type !== 'holiday'
+
+  if (holiday) {
+    return holiday.type === 'workday'
+  }
+
+  return dayOfWeek !== 0 && dayOfWeek !== 6
 }

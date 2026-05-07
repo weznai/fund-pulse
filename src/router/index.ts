@@ -64,11 +64,7 @@ const router = createRouter({
           name: 'admin-task-manage',
           component: () => import('@/views/admin/TaskManageView.vue')
         },
-        {
-          path: 'holiday-manage',
-          name: 'admin-holiday-manage',
-          component: () => import('@/views/admin/HolidayManageView.vue')
-        },
+
         {
           path: 'suggestion-manage',
           name: 'admin-suggestion-manage',

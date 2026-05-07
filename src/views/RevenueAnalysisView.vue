@@ -250,6 +250,7 @@
                 <span v-if="hoveredCell.rate !== null" class="tooltip-rate" :class="getValueClass(hoveredCell.rate)">
                   {{ hoveredCell.rate >= 0 ? '+' : '' }}{{ hoveredCell.rate.toFixed(2) }}%
                 </span>
+
               </div>
             </div>
           </div>
@@ -467,7 +468,7 @@ let dataRequestId = 0
 const timeshareLoading = ref(false)
 const timeshareHasData = ref(false)
 const timeshareMessage = ref('')
-const hoveredTimePoint = ref<{ time: string; holdingPercent: number | null; indexPercent: number | null } | null>(null)
+const hoveredTimePoint = ref<{ time: string; holdingPercent: number | null; indexPercent: number | null; holdingProfit: number | null } | null>(null)
 
 const holdingTimeshare = ref<TimesharePoint[]>([])
 const indexTimeshare = ref<TimesharePoint[]>([])
@@ -493,7 +494,9 @@ const profitTrendData = ref<ProfitTrendItem[]>([])
 const profitTrendLoading = ref(false)
 
 const trendTotalProfit = computed(() => {
-  return Math.round(profitTrendData.value.reduce((sum, d) => sum + d.totalProfit, 0) * 100) / 100
+  const data = profitTrendData.value
+  if (data.length === 0) return 0
+  return Math.round(data[data.length - 1].totalProfit * 100) / 100
 })
 
 const trendPeriodLabel = computed(() => {
@@ -507,41 +510,21 @@ const trendPeriodLabel = computed(() => {
 })
 
 const tradingTimePoints = [
+  '09:20', '09:25',
   '09:30', '09:35', '09:40', '09:45', '09:50', '09:55',
   '10:00', '10:05', '10:10', '10:15', '10:20', '10:25', '10:30', '10:35', '10:40', '10:45', '10:50', '10:55',
-  '11:00', '11:05', '11:10', '11:15', '11:20', '11:25', '11:30',
+  '11:00', '11:05', '11:10', '11:15', '11:20', '11:25', '11:30', '11:35', '11:40', '11:45', '11:50', '11:55',
+  '12:00',
   '13:00', '13:05', '13:10', '13:15', '13:20', '13:25', '13:30', '13:35', '13:40', '13:45', '13:50', '13:55',
   '14:00', '14:05', '14:10', '14:15', '14:20', '14:25', '14:30', '14:35', '14:40', '14:45', '14:50', '14:55', '15:00',
   '15:05', '15:10', '15:15', '15:20', '15:25', '15:30', '15:35', '15:40', '15:45', '15:50', '15:55', '16:00'
 ]
 
-function getCurrentTimeStr(): string {
-  const now = new Date()
-  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-}
-
-function getCurrentTimeIndex(): number {
-  const currentTime = getCurrentTimeStr()
-  let idx = -1
-  for (let i = 0; i < tradingTimePoints.length; i++) {
-    if (tradingTimePoints[i] <= currentTime) {
-      idx = i
-    } else {
-      break
-    }
-  }
-  return idx
-}
-
-const isHistoryTimeshare = computed(() => holdingIsHistory.value || indexIsHistory.value)
-
 function filterToCurrentTime(data: TimesharePoint[]): TimesharePoint[] {
-  if (isHistoryTimeshare.value) return data
-  const idx = getCurrentTimeIndex()
-  if (idx < 0) return []
-  const cutoffTime = tradingTimePoints[idx]
-  return data.filter(p => p.time <= cutoffTime)
+  return data
 }
+
+const holdingOpeningAmount = ref(0)
 
 const todayStr = new Date().toLocaleDateString('sv-SE')
 const tradingDayStr = computed(() => fundStore.tradingDay || todayStr)
@@ -556,21 +539,15 @@ const indexTimeshareVisible = computed(() => {
 })
 
 const latestHoldingPercent = computed(() => {
-  const visible = holdingTimeshareVisible.value
-  if (visible.length === 0) {
-    if (holdingTimeshare.value.length === 0) return 0
-    return holdingTimeshare.value[holdingTimeshare.value.length - 1].percent
-  }
-  return visible[visible.length - 1].percent
+  const data = holdingTimeshareVisible.value
+  if (data.length === 0) return 0
+  return data[data.length - 1].percent
 })
 
 const latestIndexPercent = computed(() => {
-  const visible = indexTimeshareVisible.value
-  if (visible.length === 0) {
-    if (indexTimeshare.value.length === 0) return 0
-    return indexTimeshare.value[indexTimeshare.value.length - 1].percent
-  }
-  return visible[visible.length - 1].percent
+  const data = indexTimeshareVisible.value
+  if (data.length === 0) return 0
+  return data[data.length - 1].percent
 })
 
 const currentExcessReturn = computed(() => {
@@ -593,33 +570,34 @@ const timeshareDateInfo = computed(() => {
 
 const profitHistory = ref<ProfitRecord[]>([])
 const todayIsTradingDay = ref(true)
+const marketOpened = ref(false)
 
 const dailyProfitMap = computed(() => {
-  const map = new Map<string, { profit: number; rate: number }>()
+  const map = new Map<string, { profit: number; openingAmount: number }>()
   for (const r of profitHistory.value) {
     if (r.profitDate === todayStr) continue
     const existing = map.get(r.profitDate)
     if (existing) {
       existing.profit += r.dayProfit
-      existing.rate = (existing.rate + r.dayProfitRate) / 2
+      existing.openingAmount += r.openingAmount
     } else {
-      map.set(r.profitDate, { profit: r.dayProfit, rate: r.dayProfitRate })
+      map.set(r.profitDate, { profit: r.dayProfit, openingAmount: r.openingAmount })
     }
   }
 
   const sameMonth = tradingDayStr.value.substring(0, 7) === todayStr.substring(0, 7)
-  if (tradingDayStr.value !== todayStr && sameMonth && profitHistory.value.length > 0) {
+  if (tradingDayStr.value !== todayStr && sameMonth && profitHistory.value.length > 0 && !todayIsTradingDay.value) {
     const historyForToday = profitHistory.value
       .filter(r => r.profitDate === tradingDayStr.value)
     if (historyForToday.length > 0) {
       const profit = historyForToday.reduce((s, r) => s + r.dayProfit, 0)
-      const rate = historyForToday.reduce((s, r) => s + r.dayProfitRate, 0) / historyForToday.length
-      map.set(todayStr, { profit, rate })
+      const opening = historyForToday.reduce((s, r) => s + r.openingAmount, 0)
+      map.set(todayStr, { profit, openingAmount: opening })
     }
-  } else if (tradingDayStr.value === todayStr) {
+  } else if (tradingDayStr.value === todayStr && marketOpened.value) {
     const realtime = todayProfit.value
     if (realtime !== 0) {
-      map.set(todayStr, { profit: realtime, rate: 0 })
+      map.set(todayStr, { profit: realtime, openingAmount: 0 })
     }
   }
 
@@ -644,6 +622,10 @@ function calculateTempTotalProfit(): number {
 const todayProfit = computed(() => {
   const settledDate = tradingDayStr.value
 
+  if (todayIsTradingDay.value && !marketOpened.value && settledDate === todayStr) {
+    return 0
+  }
+
   if (settledDate !== todayStr && profitHistory.value.length > 0) {
     const historyProfit = profitHistory.value
       .filter(r => r.profitDate === settledDate)
@@ -656,10 +638,6 @@ const todayProfit = computed(() => {
     if (!holding || holding.amount <= 0) return total
 
     if (holding.settled && holding.currentDayProfit != null && holding.lastSettledDate === settledDate) {
-      return total + holding.currentDayProfit
-    }
-
-    if (holding.currentDayProfit != null && holding.lastSettledDate === settledDate) {
       return total + holding.currentDayProfit
     }
 
@@ -686,7 +664,7 @@ const todayProfit = computed(() => {
       return total + (holding.amount * growth / 100)
     }
 
-    if (holding.lastSettledDate && holding.currentDayProfit != null) {
+    if (holding.settled && holding.lastSettledDate && holding.currentDayProfit != null) {
       return total + holding.currentDayProfit
     }
 
@@ -796,7 +774,7 @@ const calendarCells = computed<CalendarCell[]>(() => {
       date,
       isToday: date === todayStr,
       profit: cellIsHoliday ? null : (profitData ? Math.round(profitData.profit * 100) / 100 : null),
-      rate: profitData ? Math.round(profitData.rate * 100) / 100 : null,
+      rate: profitData && profitData.openingAmount > 0 ? Math.round(profitData.profit / profitData.openingAmount * 10000) / 100 : null,
       isHoliday: cellIsHoliday
     })
   }
@@ -832,23 +810,23 @@ function formatGroupLabel(key: string, period: string): string {
 
 const groupedData = computed<GroupedData[]>(() => {
   const period = selectedPeriod.value
-  const groups = new Map<string, { profit: number; rate: number; count: number }>()
+  const groups = new Map<string, { profit: number; openingAmount: number; count: number }>()
   for (const record of profitHistory.value) {
     const key = getGroupKey(record.profitDate, period)
-    const existing = groups.get(key) || { profit: 0, rate: 0, count: 0 }
+    const existing = groups.get(key) || { profit: 0, openingAmount: 0, count: 0 }
     existing.profit += record.dayProfit
-    existing.rate += record.dayProfitRate
+    existing.openingAmount += record.openingAmount
     existing.count += 1
     groups.set(key, existing)
   }
   const result: GroupedData[] = []
   for (const [key, data] of groups) {
-    const avgRate = data.count > 0 ? data.rate / data.count : 0
+    const weightedRate = data.openingAmount > 0 ? data.profit / data.openingAmount * 100 : 0
     result.push({
       key,
       label: formatGroupLabel(key, period),
       totalProfit: Math.round(data.profit * 100) / 100,
-      totalProfitRate: Math.round(avgRate * 100) / 100,
+      totalProfitRate: Math.round(weightedRate * 100) / 100,
       count: data.count
     })
   }
@@ -1057,6 +1035,7 @@ async function fetchData() {
     if (data.loggedIn) {
       profitHistory.value = data.history || []
       todayIsTradingDay.value = data.todayIsTradingDay !== false
+      marketOpened.value = data.marketOpened !== false
       accumulatedProfit.value = profitHistory.value.reduce((sum, r) => sum + r.dayProfit, 0)
     } else {
       // 临时用户：前端计算累计收益（简化版，只显示累计收益，不显示历史）
@@ -1090,6 +1069,7 @@ async function fetchTimeshareData() {
         holdingDate.value = holdingRes.data.date
       }
       holdingIsHistory.value = !!holdingRes.data.isHistory
+      holdingOpeningAmount.value = holdingRes.data.openingAmount || holdingRes.data.totalAmount || 0
     } else if (holdingRes.data.loggedIn) {
       holdingTimeshare.value = []
       holdingDate.value = ''
@@ -1127,29 +1107,38 @@ async function fetchTimeshareData() {
   }
 }
 
-async function fetchProfitTrend(period: string) {
-  const rid = ++timeshareRequestId
-  profitTrendLoading.value = true
+async function fetchProfitTrend(_period: string) {
+  profitTrendLoading.value = false
+}
 
-  try {
-    const { data } = await axios.get('/api/holdings/daily-profit/profit-trend', {
-      params: { period }
-    })
-    if (rid !== timeshareRequestId) return
-
-    if (data.loggedIn && data.hasData) {
-      profitTrendData.value = data.data || []
-    } else {
-      profitTrendData.value = []
-    }
-  } catch {
-    if (rid !== timeshareRequestId) return
-    profitTrendData.value = []
-  } finally {
-    if (rid === timeshareRequestId) {
-      profitTrendLoading.value = false
-    }
+function computeProfitTrendData(period: string) {
+  const now = new Date()
+  let startDate: string
+  switch (period) {
+    case 'month':
+      startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+      break
+    case 'year':
+      startDate = `${now.getFullYear()}-01-01`
+      break
+    default:
+      startDate = '2000-01-01'
   }
+
+  const dateMap = new Map<string, number>()
+  for (const r of profitHistory.value) {
+    if (r.profitDate < startDate) continue
+    dateMap.set(r.profitDate, (dateMap.get(r.profitDate) || 0) + r.dayProfit)
+  }
+
+  const entries = Array.from(dateMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+
+  let cumSum = 0
+  profitTrendData.value = entries.map(([date, profit]) => {
+    cumSum += profit
+    return { date, totalProfit: cumSum }
+  })
 }
 
 async function switchTrendPeriod(period: string) {
@@ -1162,7 +1151,7 @@ async function switchTrendPeriod(period: string) {
     await nextTick()
     drawIntradayChart()
   } else {
-    await fetchProfitTrend(period)
+    computeProfitTrendData(period)
     await nextTick()
     drawProfitTrendChart()
   }
@@ -1184,44 +1173,13 @@ function drawIntradayChart() {
     }
   }
 
-  if (!chartInstance) {
-    chartInstance = echarts.init(container)
-    chartInstance.on('updateAxisPointer', (event: any) => {
-      const xAxis = event.axesInfo?.[0]
-      if (!xAxis) {
-        hoveredTimePoint.value = null
-        return
-      }
-      const dataIndex = event.dataIndex
-      if (dataIndex == null) {
-        hoveredTimePoint.value = null
-        return
-      }
-      const holdingData = holdingTimeshareVisible.value
-      const indexData = indexTimeshareVisible.value
+  const holdingData = holdingTimeshareVisible.value
+  const indexData = indexTimeshareVisible.value
 
-      const timeSet = new Set<string>()
-      holdingData.forEach(d => timeSet.add(d.time))
-      indexData.forEach(d => timeSet.add(d.time))
-      const allTimes = Array.from(timeSet).sort()
+  const hasHoldingData = holdingData.length > 0
+  const hasIndexData = indexData.length > 0
 
-      if (dataIndex >= allTimes.length) {
-        hoveredTimePoint.value = null
-        return
-      }
-      const time = allTimes[dataIndex]
-      const holdingPoint = holdingData.find(p => p.time === time)
-      const indexPoint = indexData.find(p => p.time === time)
-      hoveredTimePoint.value = {
-        time,
-        holdingPercent: holdingPoint ? holdingPoint.percent : null,
-        indexPercent: indexPoint ? indexPoint.percent : null
-      }
-    })
-  }
-
-  const allVisible = [...holdingTimeshareVisible.value, ...indexTimeshareVisible.value]
-  if (allVisible.length === 0) {
+  if (!hasHoldingData && !hasIndexData) {
     if (chartInstance) {
       chartInstance.setOption({
         title: { text: '暂无分时数据', left: 'center', top: 'center', textStyle: { color: '#9CA3AF', fontSize: 14, fontWeight: 400 } },
@@ -1233,8 +1191,75 @@ function drawIntradayChart() {
     return
   }
 
-  const dataMin = Math.min(...allVisible.map(d => d.percent))
-  const dataMax = Math.max(...allVisible.map(d => d.percent))
+  const holdingMap = new Map(holdingData.map(d => [d.time, d.percent]))
+  const indexMap = new Map(indexData.map(d => [d.time, d.percent]))
+
+  const holdingSeriesData: (number | null)[] = tradingTimePoints.map(t => holdingMap.get(t) ?? null)
+  const indexSeriesData: (number | null)[] = tradingTimePoints.map(t => indexMap.get(t) ?? null)
+
+  function getCurrentCutoffIndex(): number {
+    const now = new Date()
+    const currentMinutes = now.getHours() * 60 + now.getMinutes()
+    if (currentMinutes >= 16 * 60) return tradingTimePoints.length
+    for (let i = 0; i < tradingTimePoints.length; i++) {
+      const tpMinutes = parseInt(tradingTimePoints[i].substring(0, 2)) * 60 + parseInt(tradingTimePoints[i].substring(3, 5))
+      if (tpMinutes > currentMinutes) return i
+    }
+    return tradingTimePoints.length
+  }
+
+  const holdingCutoff = !holdingIsHistory.value ? getCurrentCutoffIndex() : tradingTimePoints.length
+  const indexCutoff = !indexIsHistory.value ? getCurrentCutoffIndex() : tradingTimePoints.length
+
+  function fillMissingBetween(data: (number | null)[], end: number): void {
+    const validIndices: number[] = []
+    for (let i = 0; i < end; i++) {
+      if (data[i] != null) validIndices.push(i)
+    }
+    if (validIndices.length === 0) return
+
+    for (let i = 0; i < validIndices[0]; i++) {
+      data[i] = data[validIndices[0]]
+    }
+    for (let v = 0; v < validIndices.length - 1; v++) {
+      const si = validIndices[v], ei = validIndices[v + 1]
+      const sv = data[si]!, ev = data[ei]!
+      for (let i = si + 1; i < ei; i++) {
+        data[i] = Math.round((sv + (ev - sv) * (i - si) / (ei - si)) * 100) / 100
+      }
+    }
+  }
+
+  fillMissingBetween(holdingSeriesData, holdingCutoff)
+  fillMissingBetween(indexSeriesData, indexCutoff)
+  for (let i = holdingCutoff; i < tradingTimePoints.length; i++) {
+    holdingSeriesData[i] = null
+  }
+  for (let i = indexCutoff; i < tradingTimePoints.length; i++) {
+    indexSeriesData[i] = null
+  }
+
+  const lastValidHoldingIdx = (() => {
+    for (let i = holdingSeriesData.length - 1; i >= 0; i--) {
+      if (holdingSeriesData[i] != null) return i
+    }
+    return -1
+  })()
+  const lastValidIndexIdx = (() => {
+    for (let i = indexSeriesData.length - 1; i >= 0; i--) {
+      if (indexSeriesData[i] != null) return i
+    }
+    return -1
+  })()
+
+  const allValidPercents: number[] = []
+  holdingSeriesData.forEach(v => { if (v != null) allValidPercents.push(v) })
+  indexSeriesData.forEach(v => { if (v != null) allValidPercents.push(v) })
+
+  if (allValidPercents.length === 0) return
+
+  const dataMin = Math.min(...allValidPercents)
+  const dataMax = Math.max(...allValidPercents)
   let minPercent = dataMin
   let maxPercent = dataMax
   if (minPercent === maxPercent) {
@@ -1255,35 +1280,54 @@ function drawIntradayChart() {
   if (minPercent >= dataMin) minPercent -= interval
 
   const showZeroLine = minPercent < 0 && maxPercent > 0
+  const openAmt = holdingOpeningAmount.value
 
-  const holdingData = holdingTimeshareVisible.value
-  const indexData = indexTimeshareVisible.value
+  const lastHoldingTime = lastValidHoldingIdx >= 0 ? tradingTimePoints[lastValidHoldingIdx] : ''
+  const lastHoldingPercent = lastValidHoldingIdx >= 0 ? holdingSeriesData[lastValidHoldingIdx] : null
+  const lastIndexTime = lastValidIndexIdx >= 0 ? tradingTimePoints[lastValidIndexIdx] : ''
+  const lastIndexPercent = lastValidIndexIdx >= 0 ? indexSeriesData[lastValidIndexIdx] : null
 
-  const timeSet = new Set<string>()
-  holdingData.forEach(d => timeSet.add(d.time))
-  indexData.forEach(d => timeSet.add(d.time))
-  const allTimes = Array.from(timeSet).sort()
-
-  if (allTimes.length === 0) return
-
-  const holdingMap = new Map(holdingData.map(d => [d.time, d.percent]))
-  const indexMap = new Map(indexData.map(d => [d.time, d.percent]))
-
-  const lastHolding = holdingData.length > 0 ? holdingData[holdingData.length - 1] : null
-  const lastIndex = indexData.length > 0 ? indexData[indexData.length - 1] : null
+  if (!chartInstance) {
+    chartInstance = echarts.init(container)
+  }
+  chartInstance.off('updateAxisPointer')
+  chartInstance.on('updateAxisPointer', (event: any) => {
+    const xAxis = event.axesInfo?.[0]
+    if (!xAxis) {
+      hoveredTimePoint.value = null
+      return
+    }
+    const di = event.dataIndex
+    if (di == null || di >= tradingTimePoints.length) {
+      hoveredTimePoint.value = null
+      return
+    }
+    const time = tradingTimePoints[di]
+    const hPercent = holdingSeriesData[di] ?? null
+    const iPercent = indexSeriesData[di] ?? null
+    const hProfit = hPercent != null && openAmt > 0
+      ? Math.round(openAmt * hPercent / 100 * 100) / 100
+      : null
+    hoveredTimePoint.value = {
+      time,
+      holdingPercent: hPercent,
+      indexPercent: iPercent,
+      holdingProfit: hProfit
+    }
+  })
 
   const option: echarts.EChartsOption = {
     animation: false,
     grid: { left: 50, right: 15, top: 20, bottom: 25 },
     xAxis: {
       type: 'category',
-      data: allTimes,
+      data: tradingTimePoints,
       axisLine: { show: false },
       axisTick: { show: false },
       axisLabel: {
         color: '#9CA3AF',
         fontSize: 10,
-        interval: Math.ceil(allTimes.length / 6) - 1
+        interval: Math.ceil(tradingTimePoints.length / 6) - 1
       },
       splitLine: { show: false }
     },
@@ -1310,18 +1354,26 @@ function drawIntradayChart() {
       formatter: (params: any) => {
         if (!Array.isArray(params)) return ''
         const time = params[0]?.axisValue || ''
-        let html = `<div style="font-size:11px;color:#9CA3AF;margin-bottom:4px">${time}</div>`
-        for (const p of params) {
-          if (p.value == null || isNaN(p.value)) continue
-          const color = p.seriesName === '持仓收益率'
+        const validParams = params.filter((p: any) => p.value != null && !isNaN(p.value))
+        if (validParams.length === 0) return ''
+        let html = `<div style="font-size:9px;color:#9CA3AF;margin-bottom:4px">${time}</div>`
+        html += `<div style="display:grid;grid-template-columns:auto 1fr;font-size:9px;line-height:1.8">`
+        for (const p of validParams) {
+          const isHolding = p.seriesName === '持仓收益率'
+          const color = isHolding
             ? (p.value >= 0 ? '#EF4444' : '#10B981')
             : '#3B82F6'
           const sign = p.value >= 0 ? '+' : ''
-          html += `<div style="display:flex;justify-content:space-between;gap:16px;font-size:12px;line-height:1.8">
-            <span style="color:${color};display:inline-flex;align-items:center"><span style="font-size:8px">●</span>&nbsp;${p.seriesName}</span>
-            <span style="color:${color};font-weight:500">${sign}${p.value.toFixed(2)}%</span>
-          </div>`
+          html += `<span style="color:${color};white-space:nowrap"><span style="font-size:8px">●</span> ${p.seriesName}</span>`
+          html += `<span style="color:${color};font-weight:500;text-align:right">${sign}${p.value.toFixed(2)}%</span>`
+          if (isHolding && openAmt > 0) {
+            const profit = Math.round(openAmt * p.value / 100 * 100) / 100
+            const pSign = profit >= 0 ? '+' : ''
+            html += `<span></span>`
+            html += `<span style="color:${color};text-align:right">${pSign}¥${profit.toFixed(2)}</span>`
+          }
         }
+        html += `</div>`
         return html
       }
     },
@@ -1329,11 +1381,10 @@ function drawIntradayChart() {
       {
         name: '持仓收益率',
         type: 'line',
-        data: allTimes.map(t => holdingMap.get(t) ?? null),
+        data: holdingSeriesData,
         smooth: false,
         symbol: 'none',
         lineStyle: { color: '#EF4444', width: 1.5 },
-        connectNulls: true,
         ...(showZeroLine
           ? { markLine: { silent: true, symbol: 'none', label: { show: false }, data: [{ yAxis: 0 }], lineStyle: { color: '#9CA3AF', width: 1, type: 'dashed' } } }
           : {}),
@@ -1341,28 +1392,27 @@ function drawIntradayChart() {
       {
         name: '上证指数',
         type: 'line',
-        data: allTimes.map(t => indexMap.get(t) ?? null),
+        data: indexSeriesData,
         smooth: false,
         symbol: 'none',
         lineStyle: { color: '#3B82F6', width: 1.5 },
-        connectNulls: true
       },
       {
         name: '持仓终点',
         type: 'line',
-        data: lastHolding ? allTimes.map(t => t === lastHolding.time ? lastHolding.percent : null) : [],
+        data: lastHoldingTime ? tradingTimePoints.map(t => t === lastHoldingTime ? lastHoldingPercent : null) : [],
         smooth: false,
         symbol: 'circle',
         symbolSize: 4,
         showSymbol: true,
         lineStyle: { width: 0 },
-        itemStyle: { color: lastHolding && lastHolding.percent >= 0 ? '#EF4444' : '#10B981' },
+        itemStyle: { color: lastHoldingPercent != null && lastHoldingPercent >= 0 ? '#EF4444' : '#10B981' },
         tooltip: { show: false }
       },
       {
         name: '指数终点',
         type: 'line',
-        data: lastIndex ? allTimes.map(t => t === lastIndex.time ? lastIndex.percent : null) : [],
+        data: lastIndexTime ? tradingTimePoints.map(t => t === lastIndexTime ? lastIndexPercent : null) : [],
         smooth: false,
         symbol: 'circle',
         symbolSize: 4,
@@ -1429,19 +1479,20 @@ function drawProfitTrendChart() {
     yMin -= 1
     yMax += 1
   }
-  const yRange = yMax - yMin
-  const yPadding = yRange * 0.1
-  yMin -= yPadding
-  yMax += yPadding
 
-  const splitCount = 5
-  const rawInterval = (yMax - yMin) / splitCount
-  const interval = Math.ceil(rawInterval * 100) / 100
+  const targetSplits = 5
+  const range = yMax - yMin
+  const rough = range / targetSplits
+  const mag = Math.pow(10, Math.floor(Math.log10(Math.abs(rough) || 1)))
+  const res = rough / mag
+  let nice: number
+  if (res <= 1.5) nice = 1
+  else if (res <= 3) nice = 2
+  else if (res <= 7) nice = 5
+  else nice = 10
+  const interval = nice * mag
   yMin = Math.floor(yMin / interval) * interval
-  yMax = yMin + splitCount * interval
-
-  if (yMax <= dataMax) yMax += interval
-  if (yMin >= dataMin) yMin -= interval
+  yMax = Math.ceil(yMax / interval) * interval
   const actualSplitCount = Math.round((yMax - yMin) / interval)
 
   const showZeroLine = dataMin < 0 && dataMax > 0

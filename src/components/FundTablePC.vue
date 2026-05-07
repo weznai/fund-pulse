@@ -55,7 +55,7 @@
       <tbody>
         <tr v-for="row in funds" :key="row.code" @click="$emit('row-click', row)">
           <td class="col-name">
-            <div class="fund-info" @click.stop="$emit('detail-click', row)">
+            <div class="fund-info" @click.stop="$emit('detail-click', row)" title="点击查询详情">
               <div class="fund-name-row">
                 <span class="fund-name fund-name-link">{{ row.fundName }}</span>
                 <span v-if="row.holdingAmountValue" class="hold-badge">持</span>
@@ -93,7 +93,7 @@
             </div>
           </td>
           <td class="col-holding">
-            <div class="holding-cell" @click.stop="$emit('holding-click', row)">
+            <div class="holding-cell" @click.stop="$emit('holding-click', row)" :title="row.holdingAmountValue ? '点击修改持仓' : '点击设置持仓'">
               <div class="holding-content">
                 <template v-if="hideAmount">
                   <span v-if="row.holdingAmountValue" class="holding-value">********</span>

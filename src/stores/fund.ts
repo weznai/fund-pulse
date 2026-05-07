@@ -626,7 +626,7 @@ export const useFundStore = defineStore('fund', () => {
     }
 
     // 兜底：非交易日或未开盘时，用最近交易日的结算收益
-    if (todayProfit === null && holding && holding.lastSettledDate && holding.currentDayProfit != null && holding.currentDayProfitRate != null) {
+    if (todayProfit === null && holding && holding.settled && holding.lastSettledDate && holding.currentDayProfit != null && holding.currentDayProfitRate != null) {
       todayProfit = holding.currentDayProfit
       isHistoryProfit = true
       todayProfitDate = holding.lastSettledDate
