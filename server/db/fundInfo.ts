@@ -15,6 +15,7 @@ export interface FundInfo {
   is_recommend: number
   created_at: number
   updated_at: number
+  data_source?: string
 }
 
 export interface FundInfoListResult {
@@ -41,6 +42,7 @@ export function getFundInfo(code: string): FundInfo | null {
       benchmark: result.benchmark || undefined,
       status: result.status || 'active',
       is_recommend: result.is_recommend || 0,
+      data_source: result.data_source || 'standard',
       created_at: result.created_at,
       updated_at: result.updated_at
     }

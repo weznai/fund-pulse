@@ -27,6 +27,7 @@ import {
   updateSystemTradingDays
 } from '../db.js'
 import { checkTradingDay } from '../services/holidayService.js'
+import { fetchFinalNavFromMobApi } from '../external/eastmoney.js'
 
 function isQDIIFund(code: string): boolean {
   const info = getFundInfo(code)
@@ -35,6 +36,12 @@ function isQDIIFund(code: string): boolean {
   if (info.name && /qdii/i.test(info.name)) return true
   if (info.ftype && /海外/i.test(info.ftype)) return true
   return false
+}
+
+function isEstimateOnlyFund(code: string): boolean {
+  const info = getFundInfo(code)
+  if (!info) return false
+  return info.data_source === 'estimate_only'
 }
 
 let stopScheduledSettlementTimer: (() => void) | null = null
@@ -250,12 +257,21 @@ export async function manualSettlement(settleDate?: string): Promise<{
   }
 
   for (const fundCode of allFundCodes) {
-    if (NO_HISTORY_NAV_CODES.has(fundCode)) {
-      logger.log(`📭 ${fundCode} 无历史净值数据源，跳过手动结算`)
-      continue
-    }
+    const estOnly = isEstimateOnlyFund(fundCode)
 
     if (!hasFinalGrowth(fundCode, targetDate)) {
+      if (estOnly) {
+        logger.log(`📡 ${fundCode} 估值数据源基金，尝试MobAPI获取...`)
+        const mobData = await fetchFinalNavFromMobApi(fundCode)
+        if (mobData) {
+          updateFinalGrowth(fundCode, targetDate, mobData.nav, mobData.growth)
+          logger.log(`✅ ${fundCode} MobAPI: nav=${mobData.nav}, growth=${mobData.growth}% (净值日: ${mobData.date})`)
+        } else {
+          logger.log(`⚠️ ${fundCode} MobAPI获取失败`)
+        }
+        continue
+      }
+
       logger.log(`📊 ${fundCode} 无最终涨跌幅，尝试获取...`)
       const fundData = await fetchFinalGrowth(fundCode)
       if (fundData) {

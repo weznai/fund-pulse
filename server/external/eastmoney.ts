@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { getStockChangePercent } from './tencent.js'
+import { logger } from '../logger.js'
 
 export interface HistoryData {
   date: string
@@ -126,4 +127,52 @@ export async function getFundHoldings(code: string): Promise<HoldingsData[]> {
   }
 
   return holdings
+}
+
+export interface MobApiNavData {
+  nav: number
+  growth: number
+  date: string
+}
+
+export async function fetchFinalNavFromMobApi(code: string): Promise<MobApiNavData | null> {
+  try {
+    const response = await axios.get('https://fundmobapi.eastmoney.com/FundMNewApi/FundMNFInfo', {
+      params: {
+        plat: 'Android',
+        appType: 'ttjj',
+        product: 'EFund',
+        Version: '1',
+        deviceid: '3f8b2c5d-7a1e-4d9b-b6e3-2c4f8a1d5e7b',
+        Fcodes: code
+      },
+      headers: {
+        'Referer': 'https://mpservice.com/eastmoneyfund/',
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'
+      },
+      timeout: 8000
+    })
+
+    const datas = response.data?.Datas
+    if (!datas || !Array.isArray(datas) || datas.length === 0) {
+      logger.error(`[MobAPI] ${code} no datas:`, JSON.stringify(response.data).substring(0, 200))
+      return null
+    }
+
+    const item = datas[0]
+    const nav = parseFloat(item.NAV) || 0
+    const growth = parseFloat(item.NAVCHGRT) || 0
+    const date = item.PDATE || ''
+
+    if (nav <= 0 || !date) {
+      logger.error(`[MobAPI] ${code} invalid data: nav=${nav}, date=${date}`, JSON.stringify(item).substring(0, 200))
+      return null
+    }
+
+    logger.log(`[MobAPI] ${code}: nav=${nav}, growth=${growth}, date=${date}`)
+    return { nav, growth, date }
+  } catch (error) {
+    logger.error(`[MobAPI] ${code} fetch error:`, error instanceof Error ? error.message : error)
+    return null
+  }
 }

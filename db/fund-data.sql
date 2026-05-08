@@ -178,6 +178,7 @@ CREATE TABLE fund_info (
   benchmark VARCHAR(200),
   status VARCHAR(20) DEFAULT 'active',
   is_recommend TINYINT DEFAULT 0,
+  data_source VARCHAR(20) DEFAULT 'standard',
   created_at BIGINT NOT NULL,
   updated_at BIGINT NOT NULL
 );

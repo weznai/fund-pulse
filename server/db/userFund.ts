@@ -4,6 +4,11 @@ import type { UserId } from './connection.js'
 import { getRecommendFundCodes } from './fundInfo.js'
 import { logger } from '../logger.js'
 
+function getFundNameFromInfo(fundCode: string): string {
+  const row = db.prepare('SELECT name FROM fund_info WHERE code = ?').get(fundCode) as { name: string } | undefined
+  return row?.name || ''
+}
+
 export interface Holding {
   fundCode: string
   fundName: string
@@ -77,7 +82,12 @@ export interface UserFund {
 export function getHoldings(): Map<string, Holding> {
   const userId = getCurrentUserId().id
   const today = getLocalDate()
-  const stmt = db.prepare('SELECT * FROM user_funds WHERE user_id = ? AND is_held = 1')
+  const stmt = db.prepare(`
+    SELECT uf.*, COALESCE(NULLIF(NULLIF(uf.fund_name, ''), uf.fund_code), fi.name, '') as fund_name
+    FROM user_funds uf
+    LEFT JOIN fund_info fi ON uf.fund_code = fi.code
+    WHERE uf.user_id = ? AND uf.is_held = 1
+  `)
   const results = stmt.all(userId) as any[]
 
   const holdings = new Map<string, Holding>()
@@ -792,9 +802,11 @@ export function getUnsettledHoldings(settleDate?: string): Array<{
   logger.log(`📊 getUnsettledHoldings: userId=${userId}, targetDate=${targetDate}`)
 
   const stmt = db.prepare(`
-    SELECT fund_code, fund_name, amount FROM user_funds
-    WHERE user_id = ? AND is_held = 1 AND amount > 0
-      AND (settled = 0 OR settled IS NULL OR last_settled_date IS NULL OR last_settled_date = ? OR last_settled_date < ?)
+    SELECT uf.fund_code, COALESCE(NULLIF(NULLIF(uf.fund_name, ''), uf.fund_code), fi.name, '') as fund_name, uf.amount
+    FROM user_funds uf
+    LEFT JOIN fund_info fi ON uf.fund_code = fi.code
+    WHERE uf.user_id = ? AND uf.is_held = 1 AND uf.amount > 0
+      AND (uf.settled = 0 OR uf.settled IS NULL OR uf.last_settled_date IS NULL OR uf.last_settled_date = ? OR uf.last_settled_date < ?)
   `)
 
   const holdings = stmt.all(userId, targetDate, targetDate) as any[]
@@ -814,9 +826,11 @@ export function executeBatchSettlement(settleDate?: string): {
   const targetDate = settleDate || getLocalDate()
 
   const stmt = db.prepare(`
-    SELECT * FROM user_funds
-    WHERE user_id = ? AND is_held = 1 AND amount > 0
-      AND (last_settled_date IS NULL OR last_settled_date < ? OR settled = 0)
+    SELECT uf.*, COALESCE(NULLIF(NULLIF(uf.fund_name, ''), uf.fund_code), fi.name, '') as fund_name
+    FROM user_funds uf
+    LEFT JOIN fund_info fi ON uf.fund_code = fi.code
+    WHERE uf.user_id = ? AND uf.is_held = 1 AND uf.amount > 0
+      AND (uf.last_settled_date IS NULL OR uf.last_settled_date < ? OR uf.settled = 0)
   `)
 
   const holdings = stmt.all(userId, targetDate) as any[]
@@ -860,7 +874,12 @@ export const executeBatchSettlementFromDb = executeBatchSettlement
 
 export function getUserFunds(): Map<string, UserFund> {
   const userId = getCurrentUserId().id
-  const stmt = db.prepare("SELECT * FROM user_funds WHERE user_id = ? AND (status IS NULL OR status != 'd')")
+  const stmt = db.prepare(`
+    SELECT uf.*, COALESCE(NULLIF(NULLIF(uf.fund_name, ''), uf.fund_code), fi.name, '') as fund_name
+    FROM user_funds uf
+    LEFT JOIN fund_info fi ON uf.fund_code = fi.code
+    WHERE uf.user_id = ? AND (uf.status IS NULL OR uf.status != 'd')
+  `)
   const results = stmt.all(userId) as any[]
 
   const funds = new Map<string, UserFund>()
@@ -889,7 +908,12 @@ export function getUserFunds(): Map<string, UserFund> {
 
 export function getHeldFunds(): Map<string, UserFund> {
   const userId = getCurrentUserId().id
-  const stmt = db.prepare("SELECT * FROM user_funds WHERE user_id = ? AND is_held = 1 AND (status IS NULL OR status != 'd')")
+  const stmt = db.prepare(`
+    SELECT uf.*, COALESCE(NULLIF(NULLIF(uf.fund_name, ''), uf.fund_code), fi.name, '') as fund_name
+    FROM user_funds uf
+    LEFT JOIN fund_info fi ON uf.fund_code = fi.code
+    WHERE uf.user_id = ? AND uf.is_held = 1 AND (uf.status IS NULL OR uf.status != 'd')
+  `)
   const results = stmt.all(userId) as any[]
 
   const funds = new Map<string, UserFund>()
@@ -918,7 +942,12 @@ export function getHeldFunds(): Map<string, UserFund> {
 
 export function getFavoriteFunds(): Map<string, UserFund> {
   const userId = getCurrentUserId().id
-  const stmt = db.prepare('SELECT * FROM user_funds WHERE user_id = ? AND is_held = 0')
+  const stmt = db.prepare(`
+    SELECT uf.*, COALESCE(NULLIF(NULLIF(uf.fund_name, ''), uf.fund_code), fi.name, '') as fund_name
+    FROM user_funds uf
+    LEFT JOIN fund_info fi ON uf.fund_code = fi.code
+    WHERE uf.user_id = ? AND uf.is_held = 0
+  `)
   const results = stmt.all(userId) as any[]
 
   const funds = new Map<string, UserFund>()
@@ -940,13 +969,14 @@ export function getFavoriteFunds(): Map<string, UserFund> {
 export function addUserFund(fundCode: string, fundName?: string): boolean {
   const userId = getCurrentUserId().id
   const now = Date.now()
+  const name = fundName || getFundNameFromInfo(fundCode)
 
   try {
     const stmt = db.prepare(`
       INSERT OR IGNORE INTO user_funds (user_id, fund_code, fund_name, is_held, status, share, cost, amount, added_at)
       VALUES (?, ?, ?, 0, 'a', 0, 0, 0, ?)
     `)
-    const result = stmt.run(userId, fundCode, fundName || '', now)
+    const result = stmt.run(userId, fundCode, name, now)
     logger.log(`➕ 添加自选基金: ${fundCode}`)
     return result.changes > 0
   } catch (error) {
@@ -1332,13 +1362,13 @@ export function checkAndImportDefaultFunds(): boolean {
 function importFundsForUser(userId: string, codes: string[]): boolean {
   const now = Date.now()
   const insertStmt = db.prepare(`
-    INSERT OR IGNORE INTO user_funds (user_id, fund_code, is_held, share, cost, amount, added_at)
-    VALUES (?, ?, 0, 0, 0, 0, ?)
+    INSERT OR IGNORE INTO user_funds (user_id, fund_code, fund_name, is_held, share, cost, amount, added_at)
+    VALUES (?, ?, ?, 0, 0, 0, 0, ?)
   `)
 
   const transaction = db.transaction(() => {
     for (const code of codes) {
-      insertStmt.run(userId, code, now)
+      insertStmt.run(userId, code, getFundNameFromInfo(code), now)
     }
     const updateResult = db.prepare('UPDATE user_preferences SET default_funds_imported = 1, last_updated = ? WHERE user_id = ?')
       .run(now, userId)

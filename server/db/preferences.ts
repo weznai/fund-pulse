@@ -111,12 +111,14 @@ function syncUserFundsFromPreferences(userId: string, favoriteFunds: string[], h
 
   for (const code of favoriteFunds) {
     if (!existingCodes.has(code)) {
+      const nameRow = db.prepare('SELECT name FROM fund_info WHERE code = ?').get(code) as { name: string } | undefined
+      const fundName = nameRow?.name || ''
       const stmt = db.prepare(`
         INSERT OR IGNORE INTO user_funds (user_id, fund_code, fund_name, is_held, share, cost, amount, added_at)
-        VALUES (?, ?, '', ?, 0, 0, 0, ?)
+        VALUES (?, ?, ?, ?, 0, 0, 0, ?)
       `)
       const isHeld = heldFunds.includes(code) ? 1 : 0
-      stmt.run(userId, code, isHeld, now)
+      stmt.run(userId, code, fundName, isHeld, now)
     } else {
       const isHeld = heldFunds.includes(code) ? 1 : 0
       const stmt = db.prepare(`UPDATE user_funds SET is_held = ? WHERE user_id = ? AND fund_code = ?`)

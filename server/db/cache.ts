@@ -361,11 +361,6 @@ export function resetFundTodayStatus(fundCode: string, date: string): boolean {
   if (!row) return false
 
   let data = row.data || ''
-  try {
-    let estimates = JSON.parse(data) as Array<{ time: string; value: number; percent: number }>
-    estimates = estimates.filter(e => e.time !== '16:01')
-    data = JSON.stringify(estimates)
-  } catch (_) {}
 
   const stmt = db.prepare(`
     UPDATE fund_time_trend
@@ -373,7 +368,7 @@ export function resetFundTodayStatus(fundCode: string, date: string): boolean {
     WHERE code = ? AND date = ?
   `)
   const result = stmt.run(data, fundCode, date)
-  logger.log(`🔄 重置 ${fundCode} ${date} 状态: is_updated=0, settlement_status=0, 清除day_growth/nav/16:01点`)
+  logger.log(`🔄 重置 ${fundCode} ${date} 状态: is_updated=0, settlement_status=0, 清除day_growth/nav`)
   return result.changes > 0
 }
 

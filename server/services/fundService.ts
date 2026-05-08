@@ -188,7 +188,7 @@ async function fetchFundData(code: string) {
               parsed.gsz = estimateCache.nav
             }
             parsed.jzrq = today
-            parsed.gztime = `${today} 16:01`
+            parsed.gztime = `${today} 15:00`
             parsed.lastUpdate = parsed.gztime
             logger.log(`基金 ${code} QDII缓存覆盖: gszzl=${parsed.gszzl}%, dayGrowth=${parsed.dayGrowth}%`)
           }
@@ -325,7 +325,7 @@ async function fetchFundData(code: string) {
             fundData.dayGrowth = estimateCache.dayGrowth
             fundData.gsz = estimateCache.nav ?? fundData.gsz
             fundData.nav = estimateCache.nav ?? fundData.nav
-            fundData.gztime = `${getLocalDate()} 16:01`
+            fundData.gztime = `${getLocalDate()} 15:00`
             fundData.lastUpdate = fundData.gztime
             fundData.jzrq = getLocalDate()
             logger.log(`基金 ${code} QDII使用最终净值涨幅覆盖: ${estimateCache.dayGrowth.toFixed(2)}%`)

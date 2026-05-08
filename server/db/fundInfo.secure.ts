@@ -26,6 +26,7 @@ export interface FundInfo {
   is_recommend: number
   created_at: number
   updated_at: number
+  data_source?: string
 }
 
 export interface FundInfoListResult {

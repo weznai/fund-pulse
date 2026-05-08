@@ -338,6 +338,8 @@ const estimateChartRef = ref<HTMLDivElement | null>(null)
 let estimateChartInstance: echarts.ECharts | null = null
 const estimateCacheInfo = ref<{ date: string; dataCount: number } | null>(null)
 const estimateIsUpdated = ref(false)
+const finalNav = ref<number | null>(null)
+const finalGrowth = ref<number | null>(null)
 
 const holdingsData = ref<Array<{ name: string; code: string; ratio: string; change: string }>>([])
 const holdingsLoading = ref(false)
@@ -371,19 +373,12 @@ const totalChange = computed(() => {
 })
 
 const estimateChange = computed(() => {
-  if (estimateData.value.length === 0) return 0
-  const estimateDataWithoutFinal = estimateData.value.filter(d => d.time !== '16:01')
-  if (estimateDataWithoutFinal.length === 0) {
-    const final = estimateData.value.find(d => d.time === '16:01')
-    return final ? final.percent : 0
-  }
-  return estimateDataWithoutFinal[estimateDataWithoutFinal.length - 1].percent
+  if (estimateData.value.length === 0) return finalGrowth.value ?? 0
+  return estimateData.value[estimateData.value.length - 1].percent
 })
 
-// 16:01最终涨跌幅
 const finalPercent = computed(() => {
-  const final = estimateData.value.find(d => d.time === '16:01')
-  return final ? final.percent : null
+  return finalGrowth.value
 })
 
 const actualEstimateGrowth = computed(() => {
@@ -452,8 +447,12 @@ async function fetchEstimateData() {
       isHistoryData = response.isHistory || false
       historyDate = response.date || ''
       estimateIsUpdated.value = !!response.isUpdated
+      finalNav.value = response.finalNav ?? null
+      finalGrowth.value = response.finalGrowth ?? null
     } else {
       estimateIsUpdated.value = false
+      finalNav.value = null
+      finalGrowth.value = null
     }
     
     if (actualData && actualData.length > 0) {
@@ -471,6 +470,8 @@ async function fetchEstimateData() {
       if (cached && cached.length > 0) {
         estimateData.value = cached
         estimateIsUpdated.value = false
+        finalNav.value = null
+        finalGrowth.value = null
         estimateCacheInfo.value = getCacheInfo(props.fund.code)
         await nextTick()
         setTimeout(() => drawEstimateChart(), 100)
@@ -484,6 +485,8 @@ async function fetchEstimateData() {
     if (cached && cached.length > 0) {
       estimateData.value = cached
       estimateIsUpdated.value = false
+      finalNav.value = null
+      finalGrowth.value = null
       estimateCacheInfo.value = getCacheInfo(props.fund.code)
       await nextTick()
       setTimeout(() => drawEstimateChart(), 100)
@@ -781,7 +784,7 @@ function drawChart() {
 }
 
 function drawEstimateChart() {
-  if (!estimateChartRef.value || estimateData.value.length === 0) return
+  if (!estimateChartRef.value || (estimateData.value.length === 0 && !estimateIsUpdated.value)) return
   
   if (estimateChartInstance) {
     estimateChartInstance.dispose()
@@ -791,20 +794,18 @@ function drawEstimateChart() {
   estimateChartInstance = echarts.init(estimateChartRef.value)
   
   const data = estimateData.value
-  const finalPoint = data.find(d => d.time === '16:01')
-  const onlyFinal = finalPoint && data.length === 1
-  const lineColor = (onlyFinal ? finalPoint.percent : estimateChange.value) >= 0 ? '#EF4444' : '#10B981'
+  const hasFinal = estimateIsUpdated.value && finalGrowth.value !== null
+  const lineColor = (hasFinal ? finalGrowth.value! : estimateChange.value) >= 0 ? '#EF4444' : '#10B981'
   
-  const estimateDataWithoutFinal = data.filter(d => {
-    if (d.time === '16:01') return false
+  const filteredData = data.filter(d => {
     const mins = parseInt(d.time.split(':')[0]) * 60 + parseInt(d.time.split(':')[1])
     if (mins >= 12 * 60 + 5 && mins <= 12 * 60 + 55) return false
     return true
   })
 
-  if (onlyFinal) {
-    const val = finalPoint.percent
-    const xLabels = ['09:30', '11:30', '13:00', '15:00', '16:01']
+  if (filteredData.length === 0 && hasFinal) {
+    const val = finalGrowth.value!
+    const xLabels = ['09:30', '11:30', '13:00', '15:00']
     const seriesData = xLabels.map(() => val)
     
     estimateChartInstance.setOption({
@@ -860,15 +861,20 @@ function drawEstimateChart() {
         backgroundColor: 'rgba(0,0,0,0.7)',
         borderColor: 'transparent',
         textStyle: { color: '#fff', fontSize: 12 },
-        formatter: () => `净值: ${finalPoint.value.toFixed(4)} (${val >= 0 ? '+' : ''}${val.toFixed(2)}%)`
+        formatter: () => {
+          const navStr = finalNav.value != null ? finalNav.value.toFixed(4) : '—'
+          return `净值: ${navStr} (${val >= 0 ? '+' : ''}${val.toFixed(2)}%)`
+        }
       }
     })
     estimateChartInstance.resize()
     return
   }
+
+  if (filteredData.length === 0) return
   
-  const xAxisData = estimateDataWithoutFinal.map(d => d.time)
-  const seriesData = estimateDataWithoutFinal.map(d => d.percent)
+  const xAxisData = filteredData.map(d => d.time)
+  const seriesData = filteredData.map(d => d.percent)
   
   const series: any[] = [{
     type: 'line',
@@ -884,23 +890,40 @@ function drawEstimateChart() {
     }
   }]
   
-  if (finalPoint && seriesData.length > 0) {
+  if (hasFinal && seriesData.length > 0) {
     const lastIndex = seriesData.length - 1
-    const estimate16 = seriesData[lastIndex]
+    const estimateLast = seriesData[lastIndex]
     
     series.push({
       type: 'line',
       data: [
-        [lastIndex, estimate16],
-        [lastIndex, finalPoint.percent]
+        [lastIndex, estimateLast],
+        [lastIndex, finalGrowth.value!]
       ],
       symbol: 'none',
       lineStyle: { color: lineColor, width: 1.2 }
     })
+
+    series.push({
+      type: 'line',
+      data: [[lastIndex, finalGrowth.value!]],
+      symbol: 'circle',
+      symbolSize: 6,
+      lineStyle: { width: 0 },
+      itemStyle: { color: lineColor },
+      label: {
+        show: true,
+        position: 'right',
+        formatter: `${finalGrowth.value! >= 0 ? '+' : ''}${finalGrowth.value!.toFixed(2)}%`,
+        color: lineColor,
+        fontSize: 11,
+        fontWeight: 600
+      }
+    })
   }
   
-  const estimate16Value = estimateDataWithoutFinal.length > 0 
-    ? estimateDataWithoutFinal[estimateDataWithoutFinal.length - 1].value 
+  const lastEstimateValue = filteredData.length > 0 
+    ? filteredData[filteredData.length - 1].value 
     : 0
   
   const option: echarts.EChartsOption = {
@@ -937,13 +960,14 @@ function drawEstimateChart() {
       formatter: (params: any) => {
         if (!params || params.length === 0) return ''
         const idx = params[0].dataIndex
-        if (idx >= estimateDataWithoutFinal.length) return ''
+        if (idx >= filteredData.length) return ''
         
-        const d = estimateDataWithoutFinal[idx]
+        const d = filteredData[idx]
         let result = `${d.time}<br/>净值: ${d.value.toFixed(4)} (${d.percent >= 0 ? '+' : ''}${d.percent.toFixed(2)}%)`
         
-        if (finalPoint && d.time === '16:00') {
-          result = `16:00<br/>估值: ${estimate16Value.toFixed(4)} (${d.percent >= 0 ? '+' : ''}${d.percent.toFixed(2)}%)<br/>最终: ${finalPoint.value.toFixed(4)} (${finalPoint.percent >= 0 ? '+' : ''}${finalPoint.percent.toFixed(2)}%)`
+        if (hasFinal && d.time === '16:00') {
+          const navStr = finalNav.value != null ? finalNav.value.toFixed(4) : '—'
+          result = `16:00<br/>估值: ${lastEstimateValue.toFixed(4)} (${d.percent >= 0 ? '+' : ''}${d.percent.toFixed(2)}%)<br/>最终: ${navStr} (${finalGrowth.value! >= 0 ? '+' : ''}${finalGrowth.value!.toFixed(2)}%)`
         }
         return result
       }

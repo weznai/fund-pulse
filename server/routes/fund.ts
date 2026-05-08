@@ -146,7 +146,7 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
         try {
           const data = JSON.parse(latestCached.data)
           logger.log(`🕘 非交易日或未到9:30，使用历史分时数据 ${code} (${latestCached.date}):`, data.length, '条')
-          return res.json({ data, date: latestCached.date, isHistory: true, isUpdated: !!latestCached.isUpdated })
+          return res.json({ data, date: latestCached.date, isHistory: true, isUpdated: !!latestCached.isUpdated, finalNav: latestCached.nav ?? null, finalGrowth: latestCached.dayGrowth ?? null })
         } catch (e) {
           logger.error('解析历史分时数据失败:', e)
         }
@@ -158,7 +158,7 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
       try {
         const data = JSON.parse(globalCached.data)
         logger.log(`🌐 使用全局缓存分时数据 ${code}:`, data.length, '条')
-        return res.json({ data, isUpdated: !!globalCached.isUpdated })
+        return res.json({ data, isUpdated: !!globalCached.isUpdated, finalNav: globalCached.dayGrowth != null ? globalCached.nav : null, finalGrowth: globalCached.dayGrowth })
       } catch (e) {
         logger.error('解析全局缓存数据失败:', e)
       }
@@ -341,13 +341,8 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
               const dayGrowth = growthMatch ? parseFloat(growthMatch[1]) : (prevNav > 0 ? ((nav - prevNav) / prevNav) * 100 : 0)
 
               if (nav > 0) {
-                const qdiiData = [{
-                  time: '16:01',
-                  value: Number(nav.toFixed(4)),
-                  percent: Number(dayGrowth.toFixed(2))
-                }]
                 logger.log(`🌍 QDII基金获取最新净值 ${code}: nav=${nav.toFixed(4)}, growth=${dayGrowth.toFixed(2)}%, 净值日期=${dateStr}`)
-                return res.json({ data: qdiiData, date: dateStr, isHistory: true })
+                return res.json({ data: [], date: dateStr, isHistory: true, isUpdated: true, finalNav: nav, finalGrowth: dayGrowth })
               }
             }
           }
@@ -361,7 +356,7 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
         try {
           const data = latestCached.data ? JSON.parse(latestCached.data) : []
           logger.log(`🌍 QDII基金回退到历史缓存 ${code} (${latestCached.date}): nav=${latestCached.nav}, growth=${latestCached.dayGrowth}%`)
-          return res.json({ data, date: latestCached.date, isHistory: true })
+          return res.json({ data, date: latestCached.date, isHistory: true, isUpdated: !!latestCached.isUpdated, finalNav: latestCached.nav ?? null, finalGrowth: latestCached.dayGrowth ?? null })
         } catch (e) {
           logger.error('解析QDII历史数据失败:', e)
         }

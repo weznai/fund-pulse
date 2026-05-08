@@ -1,9 +1,9 @@
 /**
  * 定时估值任务
  * 功能：
- * - 9:25-16:01: 采集分时估值数据
+ * - 9:25-16:00: 采集分时估值数据
  * - 18:00-23:30: 采集非QDII基金最终涨幅值（从历史净值接口）
- * - 21:00-23:30: 采集QDII基金最终涨幅值（QDII净值延迟发布）
+ * - 20:00-23:30: 采集QDII基金最终涨幅值（QDII净值延迟发布）
  * - 获取到最终净值后调用 settlement.ts 触发结算
  */
 
@@ -34,6 +34,7 @@ import {
 } from '../db.js'
 import { checkTradingDay } from '../services/holidayService.js'
 import { settleFundForAllUsers } from './settlement.js'
+import { fetchFinalNavFromMobApi } from '../external/eastmoney.js'
 
 let stopScheduledFetchTimer: (() => void) | null = null
 
@@ -44,6 +45,12 @@ function isQDIIFund(code: string): boolean {
   if (info.name && /qdii/i.test(info.name)) return true
   if (info.ftype && /海外/i.test(info.ftype)) return true
   return false
+}
+
+function isEstimateOnlyFund(code: string): boolean {
+  const info = getFundInfo(code)
+  if (!info) return false
+  return info.data_source === 'estimate_only'
 }
 
 export function isTradingTime(): boolean {
@@ -68,7 +75,7 @@ function isInEstimateTime(): boolean {
   const hour = now.getHours()
   const minute = now.getMinutes()
   const currentTime = hour * 60 + minute
-  return currentTime >= 9 * 60 + 25 && currentTime <= 16 * 60 + 1
+  return currentTime >= 9 * 60 + 25 && currentTime <= 16 * 60
 }
 
 function isInFinalTime(): boolean {
@@ -82,7 +89,7 @@ function isInQDIIFinalTime(): boolean {
   const now = new Date()
   const hour = now.getHours()
   const currentTime = hour * 60 + now.getMinutes()
-  return currentTime >= 21 * 60 && currentTime <= 23 * 60 + 59
+  return currentTime >= 20 * 60 && currentTime <= 23 * 60 + 59
 }
 
 function getRecordTimePoint(hasOpenPoint: boolean): string {
@@ -94,11 +101,6 @@ function getRecordTimePoint(hasOpenPoint: boolean): string {
   const openTime = 9 * 60 + 30
   const firstInterval = 9 * 60 + 35
   const closeTime = 16 * 60
-  const finalTime = 16 * 60 + 1
-
-  if (totalMinutes >= finalTime) {
-    return '16:01'
-  }
 
   if (totalMinutes >= closeTime) {
     return '16:00'
@@ -340,21 +342,16 @@ async function fetchFinalData(codes: string[]): Promise<void> {
   const todayIsTradingDay = checkTradingDay(today)
   const results: Array<{ code: string; data: string; date: string; dayGrowth: number; nav: number; gsz: number; gszzl: number; isUpdated: boolean; isTradingDay: boolean }> = []
 
-  const NO_HISTORY_NAV_CODES = new Set(['968049'])
   const qdiiFinalTimeReady = isInQDIIFinalTime()
 
   const codesToFetch: string[] = []
   const codesToSettleOnly: string[] = []
 
   for (const code of codes) {
-    if (NO_HISTORY_NAV_CODES.has(code)) {
-      logger.log(`📭 ${code} 无历史净值数据源，跳过自动结算`)
-      continue
-    }
-
     const isQDII = isQDIIFund(code)
-    if (isQDII && !qdiiFinalTimeReady) {
-      logger.log(`🌍 ${code} QDII基金，21:00后才开始获取最终净值 (当前${new Date().toLocaleTimeString()})`)
+    const estOnly = isEstimateOnlyFund(code)
+    if (isQDII && !estOnly && !qdiiFinalTimeReady) {
+      logger.log(`🌍 ${code} QDII基金，20:00后才开始获取最终净值 (当前${new Date().toLocaleTimeString()})`)
       continue
     }
 
@@ -390,17 +387,29 @@ async function fetchFinalData(codes: string[]): Promise<void> {
     const batchResults = await Promise.all(batch.map(async (code) => {
       try {
         const cached = getGlobalEstimateCache(code, today)
+        const estOnly = isEstimateOnlyFund(code)
 
-        const finalData = await fetchFinalNavFromHistory(code, today)
-        if (!finalData) {
-          logger.log(`⚠️ ${code} 历史净值未更新，稍后重试`)
-          return null
+        let finalData: { nav: number; growth: number; date: string } | null = null
+
+        if (estOnly) {
+          finalData = await fetchFinalNavFromMobApi(code)
+          if (!finalData) {
+            logger.log(`⚠️ ${code} MobAPI净值未更新，稍后重试`)
+            return null
+          }
+          logger.log(`📡 ${code} MobAPI: nav=${finalData.nav.toFixed(4)} growth=${finalData.growth.toFixed(2)}% (净值日: ${finalData.date})`)
+        } else {
+          finalData = await fetchFinalNavFromHistory(code, today)
+          if (!finalData) {
+            logger.log(`⚠️ ${code} 历史净值未更新，稍后重试`)
+            return null
+          }
         }
 
         const lastEntry = getLatestGlobalEstimateCache(code, today)
         let effectiveGrowth = finalData.growth
 
-        if (isQDIIFund(code)) {
+        if (!estOnly && isQDIIFund(code)) {
           if (finalData.date !== today) {
             if (isNavDateAlreadySettled(code, finalData.date, finalData.nav, finalData.growth)) {
               logger.log(`🌍 ${code} QDII基金净值 ${finalData.date} 已被之前结算日使用，跳过本次结算`)
@@ -414,7 +423,7 @@ async function fetchFinalData(codes: string[]): Promise<void> {
           logger.log(`🌍 ${code} QDII基金: 净值日=${finalData.date}, 东方财富涨幅=${finalData.growth.toFixed(2)}%`)
         }
 
-        if (!isQDIIFund(code) && lastEntry && lastEntry.date !== finalData.date && lastEntry.nav === finalData.nav && lastEntry.dayGrowth === finalData.growth) {
+        if (!estOnly && !isQDIIFund(code) && lastEntry && lastEntry.date !== finalData.date && lastEntry.nav === finalData.nav && lastEntry.dayGrowth === finalData.growth) {
           effectiveGrowth = 0
           logger.log(`🌍 ${code} 海外休市净值未变 (${finalData.date}, nav=${finalData.nav})，按涨跌幅0%结算`)
         }
@@ -428,23 +437,7 @@ async function fetchFinalData(codes: string[]): Promise<void> {
           }
         }
 
-        const existingIndex = estimates.findIndex(e => e.time === '16:01')
-        const finalPoint = {
-          time: '16:01',
-          value: Number(finalData.nav.toFixed(4)),
-          percent: Number(effectiveGrowth.toFixed(2))
-        }
-
-        if (existingIndex >= 0) {
-          estimates[existingIndex] = finalPoint
-        } else {
-          estimates.push(finalPoint)
-          estimates.sort((a, b) => {
-            const [ah, am] = a.time.split(':').map(Number)
-            const [bh, bm] = b.time.split(':').map(Number)
-            return (ah * 60 + am) - (bh * 60 + bm)
-          })
-        }
+        estimates = estimates.filter(e => e.time !== '16:01')
 
         logger.log(`🎯 ${code} 获取最终净值: ${finalData.nav.toFixed(4)} 涨幅: ${effectiveGrowth.toFixed(2)}% (净值日期: ${finalData.date})`)
 
@@ -518,16 +511,27 @@ export async function fetchEstimateDataForCodes(codes: string[]): Promise<void> 
 
 export async function refreshFundToday(fundCode: string): Promise<{ success: boolean; message: string }> {
   const today = getLocalDate()
+  const estOnly = isEstimateOnlyFund(fundCode)
 
-  const finalData = await fetchFinalNavFromHistory(fundCode, today)
-  if (!finalData) {
-    return { success: false, message: `${fundCode} 历史净值未更新，请稍后重试` }
+  let finalData: { nav: number; growth: number; date: string } | null = null
+
+  if (estOnly) {
+    finalData = await fetchFinalNavFromMobApi(fundCode)
+    if (!finalData) {
+      return { success: false, message: `${fundCode} MobAPI净值未更新，请稍后重试` }
+    }
+    logger.log(`📡 ${fundCode} MobAPI: nav=${finalData.nav.toFixed(4)} growth=${finalData.growth.toFixed(2)}%`)
+  } else {
+    finalData = await fetchFinalNavFromHistory(fundCode, today)
+    if (!finalData) {
+      return { success: false, message: `${fundCode} 历史净值未更新，请稍后重试` }
+    }
   }
 
   const isQDII = isQDIIFund(fundCode)
   let effectiveGrowth = finalData.growth
 
-  if (isQDII) {
+  if (!estOnly && isQDII) {
     if (finalData.date !== today) {
       const lastEntry = getLatestGlobalEstimateCache(fundCode, today)
       if (isNavDateAlreadySettled(fundCode, finalData.date, finalData.nav, finalData.growth)) {
@@ -548,16 +552,6 @@ export async function refreshFundToday(fundCode: string): Promise<{ success: boo
     } catch (_) {}
   }
   estimates = estimates.filter(e => e.time !== '16:01')
-  estimates.push({
-    time: '16:01',
-    value: Number(finalData.nav.toFixed(4)),
-    percent: Number(effectiveGrowth.toFixed(2))
-  })
-  estimates.sort((a, b) => {
-    const [ah, am] = a.time.split(':').map(Number)
-    const [bh, bm] = b.time.split(':').map(Number)
-    return (ah * 60 + am) - (bh * 60 + bm)
-  })
 
   updateFinalGrowth(fundCode, today, finalData.nav, effectiveGrowth)
 
@@ -745,7 +739,7 @@ export function updateAllUsersDailyProfit(): void {
           try {
             const parsed = JSON.parse(cached.data)
             if (Array.isArray(parsed) && parsed.length > 0) {
-              timeshare = parsed.filter((p: any) => p.time !== '16:01')
+              timeshare = parsed
             }
           } catch { /* ignore */ }
 
@@ -875,7 +869,7 @@ async function fetchIndexTimeshare(): Promise<Array<{ time: string; value: numbe
     
     const timeSeries: Array<{ time: string; value: number; percent: number }> = [
       { time: '09:30', value: yesterdayClose, percent: 0 },
-      { time: currentTime, value: currentPrice, percent: Math.round(percent * 100) / 100 }
+      { time: currentTime, value: currentPrice, percent: Number(percent.toFixed(4)) }
     ]
     
     return timeSeries
