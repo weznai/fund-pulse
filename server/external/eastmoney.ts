@@ -6,6 +6,14 @@ export interface HistoryData {
   date: string
   nav: number
   growth: number
+  accNav?: number
+}
+
+export interface FullNavData {
+  date: string
+  nav: number
+  accNav: number
+  growth: number
 }
 
 export interface HoldingsData {
@@ -66,6 +74,40 @@ export async function getFundHistory(code: string, period: string, establishDate
   return filtered.map(item => ({
     date: formatTimestamp(item.x),
     nav: item.y,
+    growth: item.equityReturn || 0
+  }))
+}
+
+export async function fetchFullNavData(code: string): Promise<FullNavData[]> {
+  const response = await axios.get(`https://fund.eastmoney.com/pingzhongdata/${code}.js`, {
+    headers: { 'Referer': 'https://fund.eastmoney.com/' },
+    timeout: 10000,
+    responseType: 'text'
+  })
+
+  const jsContent = response.data || ''
+
+  const navMatch = jsContent.match(/var\s+Data_netWorthTrend\s*=\s*(\[[\s\S]+?\]);/)
+  if (!navMatch || !navMatch[1]) return []
+  const navItems: Array<{ x: number; y: number; equityReturn: number }> = JSON.parse(navMatch[1])
+
+  let accNavMap = new Map<number, number>()
+  const accMatch = jsContent.match(/var\s+Data_ACWorthTrend\s*=\s*(\[[\s\S]+?\]);/)
+  if (accMatch && accMatch[1]) {
+    try {
+      const accItems: Array<{ x: number; y: number }> = JSON.parse(accMatch[1])
+      for (const item of accItems) {
+        accNavMap.set(item.x, item.y)
+      }
+    } catch (e) {
+      logger.error(`解析累计净值数据失败 ${code}:`, e instanceof Error ? e.message : e)
+    }
+  }
+
+  return navItems.map(item => ({
+    date: formatTimestamp(item.x),
+    nav: item.y,
+    accNav: accNavMap.get(item.x) ?? item.y,
     growth: item.equityReturn || 0
   }))
 }

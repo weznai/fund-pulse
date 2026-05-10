@@ -105,6 +105,12 @@
               <span class="legend-item">
                 <span class="legend-line" style="background: #6366F1;"></span>
                 累计收益
+                <span v-if="trendLastDayProfit !== null" class="legend-value" :class="trendLastDayProfit >= 0 ? 'up' : 'down'">
+                  {{ trendLastDate }}  {{ trendLastDayProfit >= 0 ? '+' : '' }}¥{{ trendLastDayProfit.toFixed(2) }}
+                </span>
+                <span v-if="trendLastDayRate !== null" class="legend-value" :class="trendLastDayRate >= 0 ? 'up' : 'down'">
+                  {{ trendLastDayRate >= 0 ? '+' : '' }}{{ trendLastDayRate.toFixed(2) }}%
+                </span>
               </span>
             </div>
             <div class="timeshare-meta-row">
@@ -488,7 +494,9 @@ const trendPeriodOptions = [
 
 interface ProfitTrendItem {
   date: string
+  dayProfit: number
   totalProfit: number
+  openingAmount: number
 }
 const profitTrendData = ref<ProfitTrendItem[]>([])
 const profitTrendLoading = ref(false)
@@ -497,6 +505,27 @@ const trendTotalProfit = computed(() => {
   const data = profitTrendData.value
   if (data.length === 0) return 0
   return Math.round(data[data.length - 1].totalProfit * 100) / 100
+})
+
+const trendLastDayProfit = computed(() => {
+  const data = profitTrendData.value
+  if (data.length === 0) return null
+  const last = data[data.length - 1]
+  return Math.round(last.dayProfit * 100) / 100
+})
+
+const trendLastDayRate = computed(() => {
+  const data = profitTrendData.value
+  if (data.length === 0) return null
+  const last = data[data.length - 1]
+  if (!last.openingAmount || last.openingAmount === 0) return null
+  return Math.round(last.dayProfit / last.openingAmount * 10000) / 100
+})
+
+const trendLastDate = computed(() => {
+  const data = profitTrendData.value
+  if (data.length === 0) return ''
+  return data[data.length - 1].date
 })
 
 const trendPeriodLabel = computed(() => {
@@ -510,7 +539,7 @@ const trendPeriodLabel = computed(() => {
 })
 
 const tradingTimePoints = [
-  '09:20', '09:25',
+  '09:25',
   '09:30', '09:35', '09:40', '09:45', '09:50', '09:55',
   '10:00', '10:05', '10:10', '10:15', '10:20', '10:25', '10:30', '10:35', '10:40', '10:45', '10:50', '10:55',
   '11:00', '11:05', '11:10', '11:15', '11:20', '11:25', '11:30', '11:35', '11:40', '11:45', '11:50', '11:55',
@@ -592,7 +621,7 @@ const dailyProfitMap = computed(() => {
     if (historyForToday.length > 0) {
       const profit = historyForToday.reduce((s, r) => s + r.dayProfit, 0)
       const opening = historyForToday.reduce((s, r) => s + r.openingAmount, 0)
-      map.set(todayStr, { profit, openingAmount: opening })
+      map.set(tradingDayStr.value, { profit, openingAmount: opening })
     }
   } else if (tradingDayStr.value === todayStr && marketOpened.value) {
     const realtime = todayProfit.value
@@ -619,12 +648,13 @@ function calculateTempTotalProfit(): number {
   }, 0)
 }
 
+// 当日总收益计算说明（同 HomeView）：
+// 1. 已结算且 settleDate === settledDate：直接使用数据库结算值（精确）
+// 2. 未结算但有当日涨幅数据（盘中）：用 amount × growth / 100 实时估算
+// 3. 已结算但 settleDate !== settledDate（非交易日兜底）：使用最后一次结算值
+// 4. 新交易日初始化后到开盘前：settled=0, current_day_profit=0, 无当日涨幅数据 → 显示 0，属正常设计
 const todayProfit = computed(() => {
   const settledDate = tradingDayStr.value
-
-  if (todayIsTradingDay.value && !marketOpened.value && settledDate === todayStr) {
-    return 0
-  }
 
   if (settledDate !== todayStr && profitHistory.value.length > 0) {
     const historyProfit = profitHistory.value
@@ -637,7 +667,7 @@ const todayProfit = computed(() => {
     const holding = fundStore.holdings.getHolding(fund.code)
     if (!holding || holding.amount <= 0) return total
 
-    if (holding.settled && holding.currentDayProfit != null && holding.lastSettledDate === settledDate) {
+    if (holding.settled && holding.currentDayProfit != null && holding.settleDate === settledDate) {
       return total + holding.currentDayProfit
     }
 
@@ -652,19 +682,11 @@ const todayProfit = computed(() => {
       growth = fund.gszzl
     }
 
-    if (growth === null) {
-      if (fund.gszzl != null) {
-        growth = fund.gszzl
-      } else if (fund.dayGrowth != null) {
-        growth = fund.dayGrowth
-      }
-    }
-
     if (growth !== null) {
       return total + (holding.amount * growth / 100)
     }
 
-    if (holding.settled && holding.lastSettledDate && holding.currentDayProfit != null) {
+    if (holding.settled && holding.settleDate && holding.currentDayProfit != null) {
       return total + holding.currentDayProfit
     }
 
@@ -810,23 +832,38 @@ function formatGroupLabel(key: string, period: string): string {
 
 const groupedData = computed<GroupedData[]>(() => {
   const period = selectedPeriod.value
-  const groups = new Map<string, { profit: number; openingAmount: number; count: number }>()
-  for (const record of profitHistory.value) {
-    const key = getGroupKey(record.profitDate, period)
-    const existing = groups.get(key) || { profit: 0, openingAmount: 0, count: 0 }
-    existing.profit += record.dayProfit
-    existing.openingAmount += record.openingAmount
+  const groups = new Map<string, { profit: number; twr: number; count: number }>()
+
+  const dailyEntries = Array.from(dailyProfitMap.value.entries())
+    .filter(([, d]) => d.openingAmount > 0)
+    .sort(([a], [b]) => a.localeCompare(b))
+
+  for (const [date, daily] of dailyEntries) {
+    const key = getGroupKey(date, period)
+    const existing = groups.get(key) || { profit: 0, twr: 1, count: 0 }
+    existing.profit += daily.profit
+    const dailyRate = daily.openingAmount > 0 ? daily.profit / daily.openingAmount : 0
+    existing.twr *= (1 + dailyRate)
     existing.count += 1
     groups.set(key, existing)
   }
+
+  for (const [date, daily] of dailyProfitMap.value.entries()) {
+    if (daily.openingAmount > 0) continue
+    const key = getGroupKey(date, period)
+    if (!groups.has(key)) continue
+    const existing = groups.get(key)!
+    existing.profit += daily.profit
+  }
+
   const result: GroupedData[] = []
   for (const [key, data] of groups) {
-    const weightedRate = data.openingAmount > 0 ? data.profit / data.openingAmount * 100 : 0
+    const twrRate = (data.twr - 1) * 100
     result.push({
       key,
       label: formatGroupLabel(key, period),
       totalProfit: Math.round(data.profit * 100) / 100,
-      totalProfitRate: Math.round(weightedRate * 100) / 100,
+      totalProfitRate: Math.round(twrRate * 100) / 100,
       count: data.count
     })
   }
@@ -1125,19 +1162,25 @@ function computeProfitTrendData(period: string) {
       startDate = '2000-01-01'
   }
 
-  const dateMap = new Map<string, number>()
+  const dateMap = new Map<string, { profit: number; openingAmount: number }>()
   for (const r of profitHistory.value) {
     if (r.profitDate < startDate) continue
-    dateMap.set(r.profitDate, (dateMap.get(r.profitDate) || 0) + r.dayProfit)
+    const existing = dateMap.get(r.profitDate)
+    if (existing) {
+      existing.profit += r.dayProfit
+      existing.openingAmount += r.openingAmount
+    } else {
+      dateMap.set(r.profitDate, { profit: r.dayProfit, openingAmount: r.openingAmount })
+    }
   }
 
   const entries = Array.from(dateMap.entries())
     .sort(([a], [b]) => a.localeCompare(b))
 
   let cumSum = 0
-  profitTrendData.value = entries.map(([date, profit]) => {
+  profitTrendData.value = entries.map(([date, { profit, openingAmount }]) => {
     cumSum += profit
-    return { date, totalProfit: cumSum }
+    return { date, dayProfit: profit, totalProfit: cumSum, openingAmount }
   })
 }
 
@@ -1538,13 +1581,22 @@ function drawProfitTrendChart() {
       formatter: (params: any) => {
         if (!Array.isArray(params)) return ''
         const idx = params[0]?.dataIndex
-        const dateStr = data[idx]?.date || ''
+        const item = data[idx]
+        if (!item) return ''
         const val = params[0]?.value
         if (val == null) return ''
         const sign = val >= 0 ? '+' : ''
         const color = val >= 0 ? '#EF4444' : '#10B981'
-        return `<div style="font-size:10px;color:#9CA3AF;margin-bottom:4px">${dateStr}</div>
+        const daySign = item.dayProfit >= 0 ? '+' : ''
+        let html = `<div style="font-size:10px;color:#9CA3AF;margin-bottom:4px">${item.date}</div>
                 <div style="font-size:11px;font-weight:600;color:${color}">累计 ${sign}¥${val.toFixed(2)}</div>`
+        if (item.openingAmount > 0) {
+          const rate = (item.dayProfit / item.openingAmount * 100).toFixed(2)
+          html += `<div style="font-size:10px;color:${color};margin-top:2px">当日 ${daySign}¥${item.dayProfit.toFixed(2)} (${daySign}${rate}%)</div>`
+        } else {
+          html += `<div style="font-size:10px;color:${color};margin-top:2px">当日 ${daySign}¥${item.dayProfit.toFixed(2)}</div>`
+        }
+        return html
       }
     },
     series: [

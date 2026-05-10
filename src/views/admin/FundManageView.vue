@@ -124,6 +124,14 @@
                     详情
                   </button>
                   <span class="action-divider">|</span>
+                  <button class="btn-text" @click="openEditModal(fund)">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" stroke-width="2"/>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                    编辑
+                  </button>
+                  <span class="action-divider">|</span>
                   <button class="btn-icon danger" @click="deleteFund(fund)" title="删除">
                     <svg viewBox="0 0 24 24" fill="none">
                       <polyline points="3 6 5 6 21 6" stroke="currentColor" stroke-width="2"/>
@@ -137,10 +145,23 @@
         </table>
       </div>
 
-      <div class="pagination" v-if="totalPages > 1">
-        <button class="btn-page" :disabled="page === 1" @click="page--; loadFunds()">上一页</button>
-        <span class="page-info">{{ page }} / {{ totalPages }}</span>
-        <button class="btn-page" :disabled="page >= totalPages" @click="page++; loadFunds()">下一页</button>
+      <div class="pagination" v-if="totalCount > 0">
+        <div class="pagination-left">
+          <span class="page-size-label">每页</span>
+          <select v-model.number="pageSize" class="page-size-select" @change="onPageSizeChange">
+            <option :value="10">10</option>
+            <option :value="20">20</option>
+            <option :value="50">50</option>
+            <option :value="100">100</option>
+          </select>
+          <span class="page-size-label">条</span>
+        </div>
+        <div class="pagination-center">
+          <button class="btn-page" :disabled="page === 1" @click="page--; loadFunds()">上一页</button>
+          <span class="page-info">{{ (page - 1) * pageSize + 1 }}-{{ Math.min(page * pageSize, totalCount) }} / {{ totalCount }}</span>
+          <button class="btn-page" :disabled="page >= totalPages" @click="page++; loadFunds()">下一页</button>
+        </div>
+        <div class="pagination-right"></div>
       </div>
     </div>
 
@@ -223,9 +244,40 @@
             <div class="detail-item"><span class="detail-label">业绩比较基准</span><span class="detail-value">{{ detailFund.benchmark || '-' }}</span></div>
             <div class="detail-item"><span class="detail-label">状态</span><span class="detail-value">{{ detailFund.status }}</span></div>
             <div class="detail-item"><span class="detail-label">是否推荐</span><span class="detail-value">{{ detailFund.is_recommend ? '是' : '否' }}</span></div>
+            <div class="detail-item"><span class="detail-label">数据源</span><span class="detail-value">{{ detailFund.data_source || 'standard' }}</span></div>
             <div class="detail-item"><span class="detail-label">创建时间</span><span class="detail-value">{{ formatTime(detailFund.created_at) }}</span></div>
             <div class="detail-item"><span class="detail-label">更新时间</span><span class="detail-value">{{ formatTime(detailFund.updated_at) }}</span></div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" v-if="showEditModal" @click.self="showEditModal = false">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>编辑基金</h3>
+          <button class="modal-close" @click="showEditModal = false">×</button>
+        </div>
+        <div class="modal-body" v-if="editFund">
+          <div class="edit-info">
+            <span class="edit-code">{{ editFund.code }}</span>
+            <span class="edit-name">{{ editFund.name }}</span>
+          </div>
+          <div class="form-group">
+            <label>数据源</label>
+            <select v-model="editForm.data_source" class="form-select">
+              <option value="standard">standard（标准）</option>
+              <option value="estimate_only">estimate_only（仅估值）</option>
+            </select>
+            <div class="form-hint">standard: 从东方财富获取净值；estimate_only: 仅使用估值数据，适用于QDII等净值更新滞后的基金</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" @click="showEditModal = false">取消</button>
+          <button class="btn btn-primary" @click="saveEditFund" :disabled="editSaving">
+            <span class="spinner" v-if="editSaving"></span>
+            {{ editSaving ? '保存中...' : '保存' }}
+          </button>
         </div>
       </div>
     </div>
@@ -268,6 +320,7 @@ interface FundInfo {
   is_recommend: number
   created_at: number
   updated_at: number
+  data_source?: string
   syncing?: boolean
 }
 
@@ -282,10 +335,10 @@ const fundList = ref<FundInfo[]>([])
 const loading = ref(false)
 const searchKeyword = ref('')
 const page = ref(1)
-const pageSize = 20
+const pageSize = ref(20)
 const totalCount = ref(0)
 const recommendCount = ref(0)
-const totalPages = computed(() => Math.ceil(totalCount.value / pageSize))
+const totalPages = computed(() => Math.ceil(totalCount.value / pageSize.value))
 
 const selectedCodes = ref<Set<string>>(new Set())
 const isAllSelected = computed(() => fundList.value.length > 0 && fundList.value.every(f => selectedCodes.value.has(f.code)))
@@ -312,6 +365,11 @@ const parsedBatchCodes = computed(() => {
 const showDetailModal = ref(false)
 const detailFund = ref<FundInfo | null>(null)
 
+const showEditModal = ref(false)
+const editFund = ref<FundInfo | null>(null)
+const editForm = ref({ data_source: 'standard' })
+const editSaving = ref(false)
+
 const showSuccess = ref(false)
 const successMessage = ref('')
 const showError = ref(false)
@@ -324,7 +382,7 @@ onMounted(async () => {
 async function loadFunds() {
   loading.value = true
   try {
-    const { data } = await axios.get('/api/admin/fund-info', { params: { keyword: searchKeyword.value, page: page.value, pageSize } })
+    const { data } = await axios.get('/api/admin/fund-info', { params: { keyword: searchKeyword.value, page: page.value, pageSize: pageSize.value } })
     fundList.value = data.list || []
     totalCount.value = data.total || 0
     recommendCount.value = data.recommendCount || 0
@@ -342,6 +400,11 @@ function searchLocal() {
 
 function refreshList() {
   searchKeyword.value = ''
+  page.value = 1
+  loadFunds()
+}
+
+function onPageSizeChange() {
   page.value = 1
   loadFunds()
 }
@@ -404,7 +467,7 @@ async function batchImport() {
       const msg = data.failed > 0 
         ? `同步完成，更新 ${data.updated} 只，失败 ${data.failed} 只` 
         : `同步完成，更新 ${data.updated} 只基金`
-      showSuccessMessage(msg)
+      showSuccessMessage(msg + (data.fixedNames ? `，修复名称 ${data.fixedNames} 条` : ''))
       loadFunds()
     } catch (error: any) {
       showErrorMessage(error.response?.data?.error || '同步失败')
@@ -474,6 +537,31 @@ async function syncSingleFund(fund: FundInfo) {
 function viewDetail(fund: FundInfo) {
   detailFund.value = fund
   showDetailModal.value = true
+}
+
+function openEditModal(fund: FundInfo) {
+  editFund.value = fund
+  editForm.value = { data_source: fund.data_source || 'standard' }
+  showEditModal.value = true
+}
+
+async function saveEditFund() {
+  if (!editFund.value || editSaving.value) return
+  editSaving.value = true
+  try {
+    const { data } = await axios.put(`/api/admin/fund-info/${editFund.value.code}`, editForm.value)
+    if (data.success) {
+      Object.assign(editFund.value, data.fund)
+      showSuccessMessage('保存成功')
+      showEditModal.value = false
+    } else {
+      showErrorMessage(data.error || '保存失败')
+    }
+  } catch (error: any) {
+    showErrorMessage(error.response?.data?.error || '保存失败')
+  } finally {
+    editSaving.value = false
+  }
 }
 
 async function deleteFund(fund: FundInfo) {
@@ -615,7 +703,7 @@ function showErrorMessage(msg: string) {
 .recommend-btn svg { width: 16px; height: 16px; }
 .action-cell { display: flex; gap: 8px; align-items: center; justify-content: center; }
 .action-divider { color: #cbd5e1; font-size: 12px; }
-.action-header { width: 250px; text-align: center; }
+.action-header { width: 320px; text-align: center; }
 .btn-icon { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: transparent; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; color: #3b82f6; transition: all 0.2s; }
 .btn-icon.danger { color: #ef4444; }
 .btn-icon:hover { background: #dbeafe; color: #3b82f6; border-color: #93c5fd; }
@@ -627,7 +715,13 @@ function showErrorMessage(msg: string) {
 .btn-text svg { width: 14px; height: 14px; }
 .loading-cell, .empty-cell { text-align: center !important; padding: 48px !important; color: #94a3b8; }
 
-.pagination { display: flex; justify-content: center; align-items: center; gap: 16px; margin-top: 20px; }
+.pagination { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
+.pagination-left { display: flex; align-items: center; gap: 6px; }
+.page-size-label { font-size: 13px; color: #64748b; }
+.page-size-select { padding: 4px 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; color: #334155; background: #fff; cursor: pointer; }
+.page-size-select:focus { outline: none; border-color: #3b82f6; }
+.pagination-center { display: flex; align-items: center; gap: 16px; }
+.pagination-right { min-width: 100px; }
 .btn-page { padding: 8px 16px; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px; cursor: pointer; }
 .btn-page:hover:not(:disabled) { background: #f8fafc; border-color: #cbd5e1; }
 .btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -651,6 +745,12 @@ function showErrorMessage(msg: string) {
 .result-code { font-family: 'SF Mono', Consolas, monospace; font-weight: 600; color: #1e3a5f; font-size: 13px; }
 .result-name { font-size: 14px; color: #334155; }
 .result-type { font-size: 11px; color: #64748b; background: #f1f5f9; padding: 2px 8px; border-radius: 4px; }
+
+.edit-info { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; padding: 12px 16px; background: #f8fafc; border-radius: 8px; }
+.edit-code { font-family: 'SF Mono', Consolas, monospace; font-weight: 600; color: #1e3a5f; font-size: 15px; }
+.edit-name { font-size: 14px; color: #334155; }
+.form-select { width: 100%; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: #fff; cursor: pointer; }
+.form-select:focus { outline: none; border-color: #3b82f6; }
 
 .batch-textarea { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; font-family: 'SF Mono', Consolas, monospace; resize: vertical; }
 .batch-preview { background: #f8fafc; border-radius: 8px; padding: 12px; }
@@ -687,6 +787,8 @@ function showErrorMessage(msg: string) {
 .btn-save-config { background: linear-gradient(135deg, #64748b 0%, #94a3b8 100%); }
 
 .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+.btn-secondary .spinner { border-color: #cbd5e1; border-top-color: #475569; }
+.btn-text .spinner { border-color: #bfdbfe; border-top-color: #3b82f6; }
 .spinner.large { width: 24px; height: 24px; border-width: 3px; border-top-color: #3b82f6; border-color: #e2e8f0; }
 @keyframes spin { to { transform: rotate(360deg); } }
 

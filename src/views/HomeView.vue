@@ -12,9 +12,7 @@
             </div>
             <h1 class="title">实时基金跟踪</h1>
           </div>
-          <div class="last-update" v-if="store.lastUpdateTime">
-            最后更新: {{ store.lastUpdateTime }}
-          </div>
+
         </div>
         <div class="actions">
           <div class="view-mode-toggle">
@@ -46,7 +44,7 @@
             class="refresh-btn"
             @click="store.fetchFavorites"
             :disabled="store.loading"
-            title="手动刷新数据"
+            :title="store.lastUpdateTime ? `最后更新: ${store.lastUpdateTime}` : '手动刷新数据'"
           >
             <svg :class="{ spinning: store.loading }" viewBox="0 0 24 24" fill="none">
               <path d="M23 4v6h-6M1 20v-6h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -244,6 +242,9 @@
           </button>
         </div>
         <div class="modal-body">
+          <div v-if="!authStore.isLoggedIn" class="holding-guest-tip" @click="showImportDialog = false; showLoginModal = true">
+            游客仅提供部分功能，数据保存在浏览器容易丢失，建议<span class="holding-guest-highlight">登录</span>后使用
+          </div>
           <div class="import-mode-tabs">
             <button
               :class="['mode-tab', { active: importMode === 'withAmount' }]"
@@ -376,6 +377,9 @@
           </button>
         </div>
         <div class="modal-body">
+          <div v-if="!authStore.isLoggedIn" class="holding-guest-tip" @click="showHoldingDialog = false; showLoginModal = true">
+            游客仅提供部分功能，数据保存在浏览器容易丢失，建议<span class="holding-guest-highlight">登录</span>后使用
+          </div>
           <div class="holding-form">
             <div class="form-group">
               <label>持仓金额（元）</label>
@@ -409,6 +413,7 @@
       @close="showDetailDialog = false"
       @edit-holding="handleEditHolding"
       @delete="handleDeleteFromDetail"
+      @login="showDetailDialog = false; showLoginModal = true"
     />
 
     <!-- 删除确认弹窗 -->
@@ -569,6 +574,11 @@ async function loadHistoryProfit() {
   }
 }
 
+// 当日总收益计算说明：
+// 1. 已结算且 settleDate === tradingDay：直接使用数据库结算值（精确）
+// 2. 未结算且有当日涨幅数据（盘中）：用 amount × growth / 100 实时估算
+// 3. 已结算但 settleDate !== tradingDay（非交易日兜底）：使用最后一次结算值
+// 4. 新交易日初始化后到开盘前：settled=0, current_day_profit=0, 无当日涨幅数据 → 显示 0，属正常设计
 const totalTodayProfit = computed(() => {
   if (historyProfitCache.value != null) return historyProfitCache.value
 
@@ -577,7 +587,8 @@ const totalTodayProfit = computed(() => {
     const holding = store.holdings.getHolding(fund.code)
     if (!holding || holding.amount <= 0) return total
 
-    if (holding.settled && holding.currentDayProfit != null && holding.lastSettledDate === tradingDay) {
+    // 已结算（含非交易日：周末/节假日使用上次结算数据，直到新交易日初始化重置）
+    if (holding.settled && holding.currentDayProfit != null && holding.settleDate === tradingDay) {
       return total + holding.currentDayProfit
     }
 
@@ -592,19 +603,11 @@ const totalTodayProfit = computed(() => {
       growth = fund.gszzl
     }
 
-    if (growth === null) {
-      if (fund.gszzl != null) {
-        growth = fund.gszzl
-      } else if (fund.dayGrowth != null) {
-        growth = fund.dayGrowth
-      }
-    }
-
     if (growth !== null) {
       return total + (holding.amount * growth / 100)
     }
 
-    if (holding.settled && holding.lastSettledDate && holding.currentDayProfit != null) {
+    if (holding.settled && holding.settleDate && holding.currentDayProfit != null) {
       return total + holding.currentDayProfit
     }
 
@@ -975,7 +978,6 @@ function handleClearCache() {
 .home {
   min-height: 100vh;
   background: #F9FAFB;
-  overflow-x: hidden;
 }
 
 .header {
@@ -1033,11 +1035,6 @@ function handleClearCache() {
   font-weight: 700;
   color: #111827;
   margin: 0;
-}
-
-.last-update {
-  font-size: 12px;
-  color: #9CA3AF;
 }
 
 .actions {
@@ -1934,6 +1931,27 @@ function handleClearCache() {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.holding-guest-tip {
+  font-size: 12px;
+  color: #92400E;
+  background: #FFFDF5;
+  border: 1px solid #FEF3C7;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.holding-guest-tip:hover {
+  background: #FFFBEB;
+}
+
+.holding-guest-highlight {
+  color: #D97706;
+  font-weight: 500;
 }
 
 .form-group {

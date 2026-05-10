@@ -69,7 +69,7 @@ CREATE TABLE user_funds (
   total_cost REAL NOT NULL DEFAULT 0,
   holding_date TEXT,
   settled INTEGER NOT NULL DEFAULT 0,
-  last_settled_date TEXT,
+  settle_date TEXT,
   accumulated_profit REAL NOT NULL DEFAULT 0,
   current_day_profit REAL NOT NULL DEFAULT 0,
   current_day_profit_rate REAL NOT NULL DEFAULT 0,

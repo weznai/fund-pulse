@@ -67,7 +67,7 @@ export const useFundStore = defineStore('fund', () => {
           if (aIsToday && aHolding) {
             const aAmount = aHolding.share * (a.gsz || a.nav)
             aVal = aAmount * ((aGrowth!) / 100)
-          } else if (aHolding && aHolding.lastSettledDate && aHolding.currentDayProfit != null) {
+          } else if (aHolding && aHolding.settleDate && aHolding.currentDayProfit != null) {
             aVal = aHolding.currentDayProfit
           } else {
             aVal = 0
@@ -76,7 +76,7 @@ export const useFundStore = defineStore('fund', () => {
           if (bIsToday && bHolding) {
             const bAmount = bHolding.share * (b.gsz || b.nav)
             bVal = bAmount * ((bGrowth!) / 100)
-          } else if (bHolding && bHolding.lastSettledDate && bHolding.currentDayProfit != null) {
+          } else if (bHolding && bHolding.settleDate && bHolding.currentDayProfit != null) {
             bVal = bHolding.currentDayProfit
           } else {
             bVal = 0
@@ -596,16 +596,12 @@ export const useFundStore = defineStore('fund', () => {
     let effectiveGrowth: number | null = null
     let displayGrowthPercent = '—'
 
+    // 只使用当日匹配的涨幅，不使用旧数据 fallback
+    // 非交易日时 jzrq/gztime 等于 tradingDay 会匹配；新交易日初始化后未开盘时无匹配数据，effectiveGrowth=null
     if (isUpdated && fund.dayGrowth != null) {
       effectiveGrowth = fund.dayGrowth
       displayGrowthPercent = `${fund.dayGrowth > 0 ? '+' : ''}${fund.dayGrowth.toFixed(2)}%`
     } else if (isEstimateToday && fund.gszzl != null) {
-      effectiveGrowth = fund.gszzl
-      displayGrowthPercent = `${fund.gszzl > 0 ? '+' : ''}${fund.gszzl.toFixed(2)}%`
-    } else if (fund.dayGrowth != null) {
-      effectiveGrowth = fund.dayGrowth
-      displayGrowthPercent = `${fund.dayGrowth > 0 ? '+' : ''}${fund.dayGrowth.toFixed(2)}%`
-    } else if (fund.gszzl != null) {
       effectiveGrowth = fund.gszzl
       displayGrowthPercent = `${fund.gszzl > 0 ? '+' : ''}${fund.gszzl.toFixed(2)}%`
     }
@@ -615,24 +611,29 @@ export const useFundStore = defineStore('fund', () => {
     let isHistoryProfit = false
     let todayProfitDate = today
 
-    if (holding && holding.settled && holding.currentDayProfit != null && holding.lastSettledDate === today) {
+    if (holding && holding.settled && holding.currentDayProfit != null && holding.settleDate === today) {
       // 已结算且是今天的结算：使用数据库存储的当日收益（准确值）
       todayProfit = holding.currentDayProfit
       todayProfitDate = today
       isHistoryProfit = false
+      // 使用结算时的涨跌幅，避免与API返回的估值涨跌幅不一致
+      if (holding.currentDayProfitRate != null) {
+        displayGrowthPercent = `${holding.currentDayProfitRate > 0 ? '+' : ''}${holding.currentDayProfitRate.toFixed(2)}%`
+        effectiveGrowth = holding.currentDayProfitRate
+      }
     } else if (holdingAmount !== null && effectiveGrowth !== null) {
       // 未结算或结算数据过期：实时计算
       todayProfit = Math.round(holdingAmount * (effectiveGrowth / 100) * 100) / 100
     }
 
     // 兜底：非交易日或未开盘时，用最近交易日的结算收益
-    if (todayProfit === null && holding && holding.settled && holding.lastSettledDate && holding.currentDayProfit != null && holding.currentDayProfitRate != null) {
+    if (todayProfit === null && holding && holding.settled && holding.settleDate && holding.currentDayProfit != null && holding.currentDayProfitRate != null) {
       todayProfit = holding.currentDayProfit
       isHistoryProfit = true
-      todayProfitDate = holding.lastSettledDate
+      todayProfitDate = holding.settleDate
     }
 
-    // 收益率：已结算或兜底时用数据库值，否则用实时值
+    // 收益率：兜底场景用数据库值覆盖
     if (isHistoryProfit && holding && holding.currentDayProfitRate != null) {
       displayGrowthPercent = `${holding.currentDayProfitRate > 0 ? '+' : ''}${holding.currentDayProfitRate.toFixed(2)}%`
       effectiveGrowth = holding.currentDayProfitRate

@@ -63,7 +63,7 @@ export interface Holding {
   holdingDate: string      // 持有日期 YYYY-MM-DD
   // 收益相关字段
   settled?: boolean         // 是否已结算（当日收益已确认）
-  lastSettledDate?: string  // 最后结算日期
+  settleDate?: string  // 结算日期
   lastSettledStatus?: boolean // 最后结算日是否已结算（原始值）
   accumulatedProfit?: number // 累计历史收益（不含当天）
   currentDayProfit?: number  // 当日收益

@@ -139,7 +139,7 @@ export function initDatabase() {
     `ALTER TABLE fund_time_trend ADD COLUMN settlement_status INTEGER DEFAULT 0`,
     `ALTER TABLE fund_time_trend ADD COLUMN settlement_time TEXT`,
     `ALTER TABLE user_funds ADD COLUMN settled INTEGER DEFAULT 0`,
-    `ALTER TABLE user_funds ADD COLUMN last_settled_date TEXT DEFAULT ''`,
+    `ALTER TABLE user_funds ADD COLUMN settle_date TEXT DEFAULT ''`,
     `ALTER TABLE users ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE user_funds ADD COLUMN total_cost REAL NOT NULL DEFAULT 0`,
     `ALTER TABLE fund_info ADD COLUMN data_source VARCHAR(20) DEFAULT 'standard'`,
@@ -216,6 +216,18 @@ export function initDatabase() {
             }
           })()
           logger.log(`🔄 持仓数据迁移完成(历史重建): ${rows.length} 条记录`)
+        }
+      }
+    },
+    {
+      name: 'rename_settle_date_20260509',
+      description: '重命名 last_settled_date 为 settle_date',
+      up: () => {
+        const cols = db.prepare(`PRAGMA table_info(user_funds)`).all() as any[]
+        const hasOld = cols.some(c => c.name === 'last_settled_date')
+        const hasNew = cols.some(c => c.name === 'settle_date')
+        if (hasOld && !hasNew) {
+          db.exec(`ALTER TABLE user_funds RENAME COLUMN last_settled_date TO settle_date`)
         }
       }
     }
@@ -317,16 +329,31 @@ export function initDatabase() {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_stock_time_trend_timestamp ON stock_time_trend(timestamp)`)
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS fund_nav_history (
+      code TEXT NOT NULL,
+      date TEXT NOT NULL,
+      nav REAL NOT NULL,
+      acc_nav REAL,
+      growth REAL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (code, date)
+    )
+  `)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_fund_nav_history_code ON fund_nav_history(code)`)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_fund_nav_history_date ON fund_nav_history(code, date)`)
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS user_daily_profit (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT NOT NULL,
       profit_date TEXT NOT NULL,
-      opening_amount REAL NOT NULL DEFAULT 0,
-      time_profit_data TEXT,
-      final_rate REAL,
-      final_profit REAL,
-      final_amount REAL,
-      settled INTEGER DEFAULT 0,
+      opening_amount REAL NOT NULL DEFAULT 0,  -- 当日开盘总市值（所有持仓基金市值之和）
+      time_profit_data TEXT,                    -- 盘中分时走势JSON数组 [{time, amount, profit, rate}]
+      final_rate REAL,                          -- 当日总收益率(%): finalProfit / openingAmount * 100
+      final_profit REAL,                        -- 当日总收益金额: 所有基金收益之和（已结算用真实值，未结算用估值）
+      final_amount REAL,                        -- 当日收盘总市值 = openingAmount + finalProfit
+      settled INTEGER DEFAULT 0,                -- 是否全部基金已结算(1=是, 0=否，部分未结算时final_profit含估值)
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
       UNIQUE (user_id, profit_date)

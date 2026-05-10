@@ -122,7 +122,7 @@ export async function settleFundForAllUsers(
         const result = settleHoldingProfit(fundCode, {
           nav: fundData.nav,
           dayGrowth: fundData.growth
-        }, options)
+        }, { ...options, settleDate })
 
         if (result.settled) {
           totalSettled++

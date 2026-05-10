@@ -1,6 +1,7 @@
 import db from './connection.js'
 import { getLocalDate } from './connection.js'
 import { logger } from '../logger.js'
+import { hasFundDataForDate } from './userFund.js'
 
 export interface SystemInfo {
   name: string
@@ -25,8 +26,17 @@ export function updateSystemTradingDays(name: string = 'fund'): SystemInfo {
   const today = getLocalDate()
   const current = getSystemInfo(name)
 
-  if (current && current.tradingDay === today) {
+  if (current && current.tradingDay === today && hasFundDataForDate(today)) {
     return current
+  }
+
+  if (!hasFundDataForDate(today)) {
+    if (current && current.tradingDay === today) {
+      db.prepare(`UPDATE biz_system SET trading_day = ?, updated_at = ? WHERE name = ?`)
+        .run(current.lastTradingDay, Date.now(), name)
+      return { name, lastTradingDay: current.lastTradingDay, tradingDay: current.lastTradingDay, updatedAt: Date.now() }
+    }
+    return current || { name, lastTradingDay: '', tradingDay: '', updatedAt: 0 }
   }
 
   const lastTradingDay = current?.tradingDay || ''
@@ -54,12 +64,21 @@ function getLatestSettleDate(): string {
 
 export function getTradingDay(): string {
   const info = getSystemInfo()
-  const latest = getLatestSettleDate()
 
-  if (info?.tradingDay && info.tradingDay >= latest) {
+  if (info?.tradingDay && hasFundDataForDate(info.tradingDay)) {
     return info.tradingDay
   }
 
+  if (info?.lastTradingDay && hasFundDataForDate(info.lastTradingDay)) {
+    if (info.tradingDay !== info.lastTradingDay) {
+      db.prepare(`UPDATE biz_system SET trading_day = ?, updated_at = ? WHERE name = ?`)
+        .run(info.lastTradingDay, Date.now(), info.name)
+      logger.log(`📅 biz_system.trading_day 已修正: ${info.lastTradingDay}`)
+    }
+    return info.lastTradingDay
+  }
+
+  const latest = getLatestSettleDate()
   if (latest) {
     const lastTradingDay = (info?.tradingDay && info.tradingDay < latest) ? info.tradingDay : (info?.lastTradingDay || '')
     const now = Date.now()

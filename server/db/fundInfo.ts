@@ -103,6 +103,7 @@ export function getFundInfoList(options: {
       benchmark: r.benchmark || undefined,
       status: r.status || 'active',
       is_recommend: r.is_recommend || 0,
+      data_source: r.data_source || 'standard',
       created_at: r.created_at,
       updated_at: r.updated_at
     })),
@@ -216,6 +217,26 @@ export function batchSaveFundInfo(funds: Array<Partial<FundInfo> & { code: strin
   const result = saveMany(funds)
   logger.log(`[batchSaveFundInfo] 批量保存完成，成功 ${result} 条`)
   return result
+}
+
+export function updateFundInfoField(code: string, fields: Record<string, any>): boolean {
+  const existing = getFundInfo(code)
+  if (!existing) return false
+  const allowedKeys = ['data_source', 'ftype', 'fund_company', 'fund_manager', 'benchmark']
+  const updates: string[] = []
+  const values: any[] = []
+  for (const key of allowedKeys) {
+    if (key in fields) {
+      updates.push(`${key} = ?`)
+      values.push(fields[key])
+    }
+  }
+  if (updates.length === 0) return false
+  updates.push('updated_at = ?')
+  values.push(Date.now())
+  values.push(code)
+  const result = db.prepare(`UPDATE fund_info SET ${updates.join(', ')} WHERE code = ?`).run(...values)
+  return result.changes > 0
 }
 
 export function getAllFundInfoCodes(): string[] {

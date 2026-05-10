@@ -122,7 +122,7 @@ export function useHoldings(): UseHoldingsReturn {
       if (res.holding) {
         holding.amount = res.holding.amount
         holding.settled = res.holding.settled
-        holding.lastSettledDate = res.holding.lastSettledDate
+        holding.settleDate = res.holding.settleDate
         holding.currentDayProfit = res.holding.currentDayProfit
         holding.accumulatedProfit = res.holding.accumulatedProfit
       }
@@ -182,7 +182,7 @@ export function useHoldings(): UseHoldingsReturn {
         holding.share = res.holding.share ?? holding.share
         holding.cost = res.holding.cost ?? holding.cost
         holding.settled = res.holding.settled
-        holding.lastSettledDate = res.holding.lastSettledDate
+        holding.settleDate = res.holding.settleDate
         holding.currentDayProfit = res.holding.currentDayProfit
         holding.accumulatedProfit = res.holding.accumulatedProfit
         holding.totalCost = res.holding.totalCost ?? holding.totalCost
@@ -238,7 +238,7 @@ export function useHoldings(): UseHoldingsReturn {
         updated.share = res.holding.share ?? updated.share
         updated.cost = res.holding.cost ?? updated.cost
         updated.settled = res.holding.settled
-        updated.lastSettledDate = res.holding.lastSettledDate
+        updated.settleDate = res.holding.settleDate
         updated.currentDayProfit = res.holding.currentDayProfit
         updated.accumulatedProfit = res.holding.accumulatedProfit
         updated.totalCost = res.holding.totalCost ?? updated.totalCost

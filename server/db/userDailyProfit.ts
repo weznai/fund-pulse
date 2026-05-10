@@ -13,12 +13,12 @@ export interface UserDailyProfit {
   id: number
   userId: string
   profitDate: string
-  openingAmount: number
+  openingAmount: number          // 当日开盘总市值（所有持仓基金市值之和）
   timeProfitData: TimeProfitPoint[]
-  finalRate: number | null
-  finalProfit: number | null
-  finalAmount: number | null
-  settled: boolean
+  finalRate: number | null       // 当日总收益率(%): finalProfit / openingAmount * 100
+  finalProfit: number | null     // 当日总收益: 所有基金收益之和（已结算用真实值，未结算用估值）
+  finalAmount: number | null     // 当日收盘总市值 = openingAmount + finalProfit
+  settled: boolean               // 是否全部基金已结算；false时finalProfit中包含估值部分
   createdAt: number
   updatedAt: number
 }

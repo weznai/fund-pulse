@@ -11,7 +11,7 @@ import {
   resetFundTodayStatus,
   updateUserLabel, isUserLabelExists,
   getSystemParam, getAllSystemParams, setSystemParam, deleteSystemParam,
-  getFundInfo, getFundInfoList, saveFundInfo, updateFundInfoRecommend,
+  getFundInfo, getFundInfoList, saveFundInfo, updateFundInfoField, updateFundInfoRecommend,
   deleteFundInfo, batchSaveFundInfo, getAllFundInfoCodes,
   ensureVisitLogsTable, getVisitStats, migrateStatsToDatabase,
   getVisitLogs, getIpStats, deleteVisitLogsByIps, deleteVisitLogsByUserIds,
@@ -31,6 +31,34 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 const router = Router()
+
+function syncUserFundsName(code: string, name: string): void {
+  if (!name) return
+  const stmt = db.prepare(
+    `UPDATE user_funds SET fund_name = ? WHERE fund_code = ? AND (fund_name IS NULL OR fund_name = '' OR fund_name = fund_code)`
+  )
+  const result = stmt.run(name, code)
+  if (result.changes > 0) {
+    logger.log(`同步 user_funds 名称: ${code} -> ${name}, 更新 ${result.changes} 条`)
+  }
+}
+
+function fixAllUserFundsNames(): number {
+  const rows = db.prepare(
+    `SELECT uf.fund_code, fi.name FROM user_funds uf
+     JOIN fund_info fi ON uf.fund_code = fi.code
+     WHERE uf.fund_name IS NULL OR uf.fund_name = '' OR uf.fund_name = uf.fund_code`
+  ).all() as { fund_code: string; name: string }[]
+  if (rows.length === 0) return 0
+  const stmt = db.prepare('UPDATE user_funds SET fund_name = ? WHERE fund_code = ? AND (fund_name IS NULL OR fund_name = \'\' OR fund_name = fund_code)')
+  let count = 0
+  for (const row of rows) {
+    const result = stmt.run(row.name, row.fund_code)
+    count += result.changes
+  }
+  logger.log(`修复 user_funds 名称: 共 ${count} 条`)
+  return count
+}
 
 function parseIntSafe(value: unknown, defaultValue: number, min = 1, max?: number): number {
   const num = parseInt(String(value), 10)
@@ -407,30 +435,30 @@ router.get('/users/:userId/preferences', validateAdminToken, (req: Request, res:
 router.post('/users/:userId/holdings/:fundCode/settle', validateAdminToken, (req: Request, res: Response) => {
   try {
     const { userId, fundCode } = req.params
+    const settleDate = (req.body as { date?: string }).date || getLocalDate()
     const targetUserId = getUserIdFromClientId(userId) || getCurrentUserId()
 
     const result = userContext.run(targetUserId, () => {
-      const today = getLocalDate()
       const fundData = db.prepare(`
         SELECT nav, day_growth FROM fund_time_trend
         WHERE code = ? AND date = ?
-      `).get(fundCode, today) as { nav: number; day_growth: number } | undefined
+      `).get(fundCode, settleDate) as { nav: number; day_growth: number } | undefined
 
       if (!fundData || fundData.nav === null || fundData.day_growth === null) {
         return { noData: true }
       }
 
-      const settleResult = settleHoldingProfit(fundCode, { nav: fundData.nav, dayGrowth: fundData.day_growth })
+      const settleResult = settleHoldingProfit(fundCode, { nav: fundData.nav, dayGrowth: fundData.day_growth }, { settleDate })
 
       if (settleResult.settled) {
-        updateSettlementStatus(fundCode, today, 1)
+        updateSettlementStatus(fundCode, settleDate, 1)
       }
 
       return { ...settleResult, noData: false }
     })
 
     if (result.noData) {
-      res.status(400).json({ error: '当天净值数据不存在，无法结算' })
+      res.status(400).json({ error: `${settleDate} 净值数据不存在，无法结算` })
       return
     }
 
@@ -444,7 +472,7 @@ router.post('/users/:userId/holdings/:fundCode/settle', validateAdminToken, (req
 router.post('/funds/:fundCode/refresh-today', validateAdminToken, async (req: Request, res: Response) => {
   try {
     const { fundCode } = req.params
-    const today = getLocalDate()
+    const targetDate = (req.body as { date?: string }).date || getLocalDate()
 
     const users = getAllUsers()
     let resetCount = 0
@@ -458,17 +486,17 @@ router.post('/funds/:fundCode/refresh-today', validateAdminToken, async (req: Re
         const stmt = db.prepare(`
           UPDATE user_funds SET settled = 0
           WHERE fund_code = ? AND is_held = 1 AND amount > 0
-            AND (last_settled_date = ? OR last_settled_date IS NULL)
+            AND (settle_date = ? OR settle_date IS NULL)
         `)
-        const result = stmt.run(fundCode, today)
+        const result = stmt.run(fundCode, targetDate)
         resetCount += result.changes
       })
     }
 
-    resetFundTodayStatus(fundCode, today)
-    logger.log(`🔄 刷新 ${fundCode}: 重置 ${resetCount} 个用户持仓状态`)
+    resetFundTodayStatus(fundCode, targetDate)
+    logger.log(`🔄 刷新 ${fundCode} (${targetDate}): 重置 ${resetCount} 个用户持仓状态`)
 
-    const refreshResult = await refreshFundToday(fundCode)
+    const refreshResult = await refreshFundToday(fundCode, targetDate)
     res.json(refreshResult)
   } catch (error) {
     logger.error('刷新基金数据失败:', error)
@@ -732,11 +760,38 @@ router.post('/fund-info/:code/sync', validateAdminToken, async (req: Request, re
     }
 
     saveFundInfo(fundData, true)
+    syncUserFundsName(code, fundData.name)
     const updatedFund = getFundInfo(code)
     res.json({ success: true, fund: updatedFund })
   } catch (error) {
     logger.error('同步基金失败:', error)
     res.status(500).json({ error: '同步基金失败' })
+  }
+})
+
+router.put('/fund-info/:code', validateAdminToken, (req: Request, res: Response) => {
+  try {
+    const code = req.params.code
+    const existing = getFundInfo(code)
+    if (!existing) {
+      return res.status(404).json({ error: '基金不存在' })
+    }
+    const { data_source, ftype, fund_company, fund_manager, benchmark } = req.body
+    const fields: Record<string, any> = {}
+    if (data_source !== undefined) fields.data_source = data_source
+    if (ftype !== undefined) fields.ftype = ftype
+    if (fund_company !== undefined) fields.fund_company = fund_company
+    if (fund_manager !== undefined) fields.fund_manager = fund_manager
+    if (benchmark !== undefined) fields.benchmark = benchmark
+    if (Object.keys(fields).length === 0) {
+      return res.status(400).json({ error: '没有需要更新的字段' })
+    }
+    updateFundInfoField(code, fields)
+    const updated = getFundInfo(code)
+    res.json({ success: true, fund: updated })
+  } catch (error) {
+    logger.error('更新基金失败:', error)
+    res.status(500).json({ error: '更新基金失败' })
   }
 })
 
@@ -800,6 +855,7 @@ router.post('/fund-info/sync', validateAdminToken, async (req: Request, res: Res
             }
 
             saveFundInfo(fundData, true)
+            syncUserFundsName(code, detail.name)
             updated++
             logger.log(`同步基金 ${code}: ${detail.name} 成功`)
           }
@@ -815,7 +871,8 @@ router.post('/fund-info/sync', validateAdminToken, async (req: Request, res: Res
     }
 
     logger.log(`同步完成: 更新 ${updated}, 失败 ${failed}, 总数 ${codes.length}`)
-    res.json({ success: true, updated, failed, total: codes.length })
+    const fixedNames = fixAllUserFundsNames()
+    res.json({ success: true, updated, failed, total: codes.length, fixedNames })
   } catch (error) {
     logger.error('同步基金信息失败:', error)
     res.status(500).json({ error: '同步基金信息失败' })

@@ -17,7 +17,7 @@ export interface Holding {
   amount: number
   holdingDate: string
   settled?: boolean
-  lastSettledDate?: string
+  settleDate?: string
   lastSettledStatus?: boolean
   accumulatedProfit?: number
   currentDayProfit?: number
@@ -70,7 +70,7 @@ export interface UserFund {
   amount: number
   holdingDate?: string
   settled?: boolean
-  lastSettledDate?: string
+  settleDate?: string
   accumulatedProfit?: number
   currentDayProfit?: number
   currentDayProfitRate?: number
@@ -92,7 +92,7 @@ export function getHoldings(): Map<string, Holding> {
 
   const holdings = new Map<string, Holding>()
   for (const row of results) {
-    const settledDate = row.last_settled_date || ''
+    const settledDate = row.settle_date || ''
     const isSettledToday = Boolean(row.settled)
 
     holdings.set(row.fund_code, {
@@ -103,7 +103,7 @@ export function getHoldings(): Map<string, Holding> {
       amount: row.amount,
       holdingDate: row.holding_date,
       settled: isSettledToday,
-      lastSettledDate: settledDate,
+      settleDate: settledDate,
       lastSettledStatus: Boolean(row.settled),
       accumulatedProfit: row.accumulated_profit ?? 0,
       currentDayProfit: row.current_day_profit ?? null,
@@ -127,7 +127,7 @@ export interface SaveHoldingResult {
     cost?: number
     totalCost?: number
     settled: boolean
-    lastSettledDate: string
+    settleDate: string
     currentDayProfit: number
     accumulatedProfit: number
   }
@@ -173,11 +173,11 @@ export function saveHolding(holding: Holding): SaveHoldingResult {
   const today = getLocalDate()
 
   const existing = db.prepare(`
-    SELECT settled, last_settled_date, amount, accumulated_profit, current_day_profit,
+    SELECT settled, settle_date, amount, accumulated_profit, current_day_profit,
            share, cost, total_cost, is_held, fund_name
     FROM user_funds WHERE user_id = ? AND fund_code = ?
   `).get(userId, holding.fundCode) as {
-    settled: number; last_settled_date: string; amount: number;
+    settled: number; settle_date: string; amount: number;
     accumulated_profit: number; current_day_profit: number;
     share: number; cost: number; total_cost: number;
     is_held: number; fund_name: string
@@ -189,7 +189,7 @@ export function saveHolding(holding: Holding): SaveHoldingResult {
 
   const newAmount = Math.round(holding.amount * 100) / 100
   const isCurrentlyHeld = existing.is_held === 1
-  const settledToday = Boolean(existing.settled) && existing.last_settled_date === today
+  const settledToday = Boolean(existing.settled) && existing.settle_date === today
 
   let newShare: number
   let newCost: number
@@ -269,7 +269,7 @@ export function saveHolding(holding: Holding): SaveHoldingResult {
           cost: existing.cost,
           totalCost: existing.total_cost,
           settled: settledToday,
-          lastSettledDate: existing.last_settled_date || '',
+          settleDate: existing.settle_date || '',
           currentDayProfit: existing.current_day_profit || 0,
           accumulatedProfit: existing.accumulated_profit || 0
         }
@@ -281,7 +281,7 @@ export function saveHolding(holding: Holding): SaveHoldingResult {
 
   let finalAmount: number
   let settledState: boolean
-  let lastSettledDate: string
+  let settleDate: string
   let currentDayProfit: number
   let accumulatedProfit: number
 
@@ -294,7 +294,7 @@ export function saveHolding(holding: Holding): SaveHoldingResult {
 
     finalAmount = 0
     settledState = false
-    lastSettledDate = ''
+    settleDate = ''
     currentDayProfit = 0
     accumulatedProfit = 0
   } else if (settledToday && isCurrentlyHeld) {
@@ -308,14 +308,14 @@ export function saveHolding(holding: Holding): SaveHoldingResult {
     const reSettleResult = reSettleHoldingForToday(holding.fundCode, newAmount)
     finalAmount = reSettleResult.success ? reSettleResult.settledAmount : newAmount
     settledState = reSettleResult.success
-    lastSettledDate = reSettleResult.success ? today : existing.last_settled_date
+    settleDate = reSettleResult.success ? today : existing.settle_date
     currentDayProfit = reSettleResult.profit
     accumulatedProfit = reSettleResult.success ? reSettleResult.accumulatedProfit : (existing.accumulated_profit || 0)
   } else {
     db.prepare(`
       UPDATE user_funds
       SET is_held = 1, fund_name = ?, share = ?, cost = ?, amount = ?,
-          total_cost = ?, holding_date = ?, settled = 0, last_settled_date = ''
+          total_cost = ?, holding_date = ?, settled = 0, settle_date = ''
       WHERE user_id = ? AND fund_code = ?
     `).run(holding.fundName, newShare, newCost, newAmount, newTotalCost, today, userId, holding.fundCode)
 
@@ -327,13 +327,13 @@ export function saveHolding(holding: Holding): SaveHoldingResult {
       const reSettleResult = reSettleHoldingForToday(holding.fundCode, newAmount)
       finalAmount = reSettleResult.success ? reSettleResult.settledAmount : newAmount
       settledState = reSettleResult.success
-      lastSettledDate = reSettleResult.success ? today : ''
+      settleDate = reSettleResult.success ? today : ''
       currentDayProfit = reSettleResult.profit
       accumulatedProfit = reSettleResult.success ? reSettleResult.accumulatedProfit : (existing.accumulated_profit || 0)
     } else {
       finalAmount = newAmount
       settledState = false
-      lastSettledDate = ''
+      settleDate = ''
       currentDayProfit = 0
       accumulatedProfit = existing.accumulated_profit || 0
     }
@@ -361,7 +361,7 @@ export function saveHolding(holding: Holding): SaveHoldingResult {
       cost: newCost,
       totalCost: newTotalCost,
       settled: settledState,
-      lastSettledDate,
+      settleDate,
       currentDayProfit,
       accumulatedProfit
     }
@@ -383,7 +383,7 @@ export function saveHoldingsBatch(holdingsMap: Map<string, Holding>): void {
   const stmt = db.prepare(`
     INSERT INTO user_funds (
       user_id, fund_code, fund_name, is_held, share, cost, amount, holding_date,
-      settled, last_settled_date, accumulated_profit, current_day_profit,
+      settled, settle_date, accumulated_profit, current_day_profit,
       current_day_profit_rate, profit_type, last_profit_date, added_at
     ) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
@@ -398,7 +398,7 @@ export function saveHoldingsBatch(holdingsMap: Map<string, Holding>): void {
       holding.amount,
       holding.holdingDate,
       holding.settled ? 1 : 0,
-      holding.lastSettledDate || null,
+      holding.settleDate || null,
       holding.accumulatedProfit || 0,
       holding.currentDayProfit || 0,
       holding.currentDayProfitRate || 0,
@@ -421,6 +421,18 @@ export function updateHoldingCurrentProfit(
   const userId = getCurrentUserId().id
   const today = getLocalDate()
 
+  // 防护：已结算为 final 的记录不允许被 estimate 覆盖，避免结算后估值回写导致数据丢失
+  if (profitType === 'estimate') {
+    const existing = db.prepare(`
+      SELECT settled, profit_type, settle_date FROM user_funds
+      WHERE user_id = ? AND fund_code = ? AND is_held = 1
+    `).get(userId, fundCode) as any
+    if (existing && existing.settled && existing.settle_date === today && existing.profit_type === 'final') {
+      logger.log(`⛔ 跳过估值覆盖：${fundCode} 今日已结算为 final，忽略 estimate 写入`)
+      return false
+    }
+  }
+
   const roundedProfit = Math.round(currentProfit * 100) / 100
   const roundedRate = Math.round(profitRate * 100) / 100
 
@@ -430,7 +442,7 @@ export function updateHoldingCurrentProfit(
         current_day_profit_rate = ?,
         profit_type = ?,
         last_profit_date = ?,
-        settled = CASE WHEN last_settled_date = ? THEN settled ELSE 0 END
+        settled = CASE WHEN settle_date = ? THEN settled ELSE 0 END
     WHERE user_id = ? AND fund_code = ? AND is_held = 1
   `)
 
@@ -442,10 +454,10 @@ export function updateHoldingCurrentProfit(
 export function settleHoldingProfit(
   fundCode: string,
   fundData: { nav: number; dayGrowth: number },
-  options?: { reSettle?: boolean }
+  options?: { reSettle?: boolean; settleDate?: string }
 ): { settled: boolean; profit: number; historyId?: number } {
   const userId = getCurrentUserId().id
-  const today = getLocalDate()
+  const today = options?.settleDate || getLocalDate()
 
   const holding = db.prepare(`
     SELECT * FROM user_funds WHERE user_id = ? AND fund_code = ? AND is_held = 1
@@ -486,7 +498,7 @@ export function settleHoldingProfit(
       db.prepare(`
         UPDATE user_funds
         SET amount = ?, accumulated_profit = ?, current_day_profit = ?, current_day_profit_rate = ?,
-            settled = 1, last_settled_date = ?, profit_type = 'final', last_profit_date = ?
+            settled = 1, settle_date = ?, profit_type = 'final', last_profit_date = ?
         WHERE user_id = ? AND fund_code = ? AND is_held = 1
       `).run(closingAmount, newAccumulatedProfit, dayProfit, dayProfitRate, today, today, userId, fundCode)
 
@@ -510,7 +522,7 @@ export function settleHoldingProfit(
     db.prepare(`
       UPDATE user_funds
       SET amount = ?, holding_date = ?, accumulated_profit = ?, current_day_profit = ?,
-          current_day_profit_rate = ?, settled = 1, last_settled_date = ?,
+          current_day_profit_rate = ?, settled = 1, settle_date = ?,
           profit_type = 'final', last_profit_date = ?
       WHERE user_id = ? AND fund_code = ? AND is_held = 1
     `).run(closingAmount, today, newAccumulatedProfit, dayProfit, dayProfitRate, today, today, userId, fundCode)
@@ -536,22 +548,22 @@ export function isHoldingSettledToday(fundCode: string): boolean {
   const userId = getCurrentUserId().id
   const today = getLocalDate()
   const row = db.prepare(`
-    SELECT settled, last_settled_date FROM user_funds
+    SELECT settled, settle_date FROM user_funds
     WHERE user_id = ? AND fund_code = ? AND is_held = 1
-  `).get(userId, fundCode) as { settled: number; last_settled_date: string } | undefined
-  return !!row && Boolean(row.settled) && row.last_settled_date === today
+  `).get(userId, fundCode) as { settled: number; settle_date: string } | undefined
+  return !!row && Boolean(row.settled) && row.settle_date === today
 }
 
 export function getHoldingRawAmount(fundCode: string): { found: boolean; settledToday: boolean; rawAmount: number } {
   const userId = getCurrentUserId().id
   const today = getLocalDate()
   const row = db.prepare(`
-    SELECT amount, settled, last_settled_date FROM user_funds
+    SELECT amount, settled, settle_date FROM user_funds
     WHERE user_id = ? AND fund_code = ?
-  `).get(userId, fundCode) as { amount: number; settled: number; last_settled_date: string } | undefined
+  `).get(userId, fundCode) as { amount: number; settled: number; settle_date: string } | undefined
 
   if (!row) return { found: false, settledToday: false, rawAmount: 0 }
-  const settledToday = Boolean(row.settled) && row.last_settled_date === today
+  const settledToday = Boolean(row.settled) && row.settle_date === today
   return { found: true, settledToday, rawAmount: row.amount }
 }
 
@@ -623,7 +635,7 @@ export function reSettleHoldingForToday(fundCode: string, baseAmount: number): {
     db.prepare(`
       UPDATE user_funds
       SET amount = ?, accumulated_profit = ?, current_day_profit = ?, current_day_profit_rate = ?,
-          settled = 1, last_settled_date = ?, profit_type = 'final', last_profit_date = ?
+          settled = 1, settle_date = ?, profit_type = 'final', last_profit_date = ?
       WHERE user_id = ? AND fund_code = ? AND is_held = 1
     `).run(closingAmount, newAccumulatedProfit, dayProfit, trendData.day_growth, today, today, userId, fundCode)
   })
@@ -756,16 +768,6 @@ export function getHeldFundTotalAmount(): number {
   return result.total || 0
 }
 
-export function checkSettlementRequired(): boolean {
-  const now = new Date()
-  const hour = now.getHours()
-  const day = now.getDay()
-
-  if (day === 0 || day === 6) return false
-
-  return hour >= 18
-}
-
 export function hasFundDataForDate(date: string): boolean {
   const result = db.prepare(`
     SELECT 1 FROM fund_time_trend WHERE date = ? LIMIT 1
@@ -776,15 +778,21 @@ export function hasFundDataForDate(date: string): boolean {
 export function initDailySettlement(date?: string): boolean {
   const targetDate = date || getLocalDate()
 
+  // 结算初始化设计说明：
+  // 新交易日开始时将所有持仓的 settled/current_day_profit 重置为 0，
+  // 在初始化完成到开盘（9:30）之间的时间段内，当日收益会显示为 0，
+  // 这是正常设计 —— 新的一天尚未产生任何收益数据。
+  // 如果上一交易日已结算但新交易日尚未初始化（如周末、节假日、盘前），
+  // 则前端仍使用上一次结算后的数据（涨跌幅、收益等），直到本函数执行重置。
   const result = db.prepare(`
     UPDATE user_funds
-    SET last_settled_date = ?,
+    SET settle_date = ?,
         settled = 0,
         current_day_profit = 0,
         current_day_profit_rate = 0,
         profit_type = 'estimate'
     WHERE is_held = 1 AND amount > 0
-      AND (last_settled_date IS NULL OR last_settled_date < ? OR (last_settled_date = ? AND settled = 0))
+      AND (settle_date IS NULL OR settle_date < ? OR (settle_date = ? AND settled = 0))
   `).run(targetDate, targetDate, targetDate)
 
   logger.log(`📅 初始化 ${targetDate} 结算状态: ${result.changes} 条持仓`)
@@ -806,7 +814,7 @@ export function getUnsettledHoldings(settleDate?: string): Array<{
     FROM user_funds uf
     LEFT JOIN fund_info fi ON uf.fund_code = fi.code
     WHERE uf.user_id = ? AND uf.is_held = 1 AND uf.amount > 0
-      AND (uf.settled = 0 OR uf.settled IS NULL OR uf.last_settled_date IS NULL OR uf.last_settled_date = ? OR uf.last_settled_date < ?)
+      AND (uf.settled = 0 OR uf.settled IS NULL OR uf.settle_date IS NULL OR uf.settle_date = ? OR uf.settle_date < ?)
   `)
 
   const holdings = stmt.all(userId, targetDate, targetDate) as any[]
@@ -830,7 +838,7 @@ export function executeBatchSettlement(settleDate?: string): {
     FROM user_funds uf
     LEFT JOIN fund_info fi ON uf.fund_code = fi.code
     WHERE uf.user_id = ? AND uf.is_held = 1 AND uf.amount > 0
-      AND (uf.last_settled_date IS NULL OR uf.last_settled_date < ? OR uf.settled = 0)
+      AND (uf.settle_date IS NULL OR uf.settle_date < ? OR uf.settled = 0)
   `)
 
   const holdings = stmt.all(userId, targetDate) as any[]
@@ -893,7 +901,7 @@ export function getUserFunds(): Map<string, UserFund> {
       amount: row.amount,
       holdingDate: row.holding_date,
       settled: Boolean(row.settled),
-      lastSettledDate: row.last_settled_date,
+      settleDate: row.settle_date,
       accumulatedProfit: row.accumulated_profit || 0,
       currentDayProfit: row.current_day_profit || 0,
       currentDayProfitRate: row.current_day_profit_rate || 0,
@@ -927,7 +935,7 @@ export function getHeldFunds(): Map<string, UserFund> {
       amount: row.amount,
       holdingDate: row.holding_date,
       settled: Boolean(row.settled),
-      lastSettledDate: row.last_settled_date,
+      settleDate: row.settle_date,
       accumulatedProfit: row.accumulated_profit || 0,
       currentDayProfit: row.current_day_profit || 0,
       currentDayProfitRate: row.current_day_profit_rate || 0,
@@ -1005,11 +1013,11 @@ export function setHolding(
 
   try {
     const existing = db.prepare(`
-      SELECT settled, last_settled_date, accumulated_profit, current_day_profit,
+      SELECT settled, settle_date, accumulated_profit, current_day_profit,
              share, cost, total_cost, is_held
       FROM user_funds WHERE user_id = ? AND fund_code = ?
     `).get(userId, fundCode) as {
-      settled: number; last_settled_date: string; accumulated_profit: number;
+      settled: number; settle_date: string; accumulated_profit: number;
       current_day_profit: number; share: number; cost: number;
       total_cost: number; is_held: number
     } | undefined
@@ -1023,7 +1031,7 @@ export function setHolding(
     const roundedAmount = Math.round(amount * 100) / 100
     const computedTotalCost = Math.round(roundedShare * roundedCost * 100) / 100
 
-    const settledToday = Boolean(existing.settled) && existing.last_settled_date === today
+    const settledToday = Boolean(existing.settled) && existing.settle_date === today
 
     if (settledToday) {
       db.prepare(`
@@ -1044,7 +1052,7 @@ export function setHolding(
           cost: roundedCost,
           totalCost: computedTotalCost,
           settled: true,
-          lastSettledDate: today,
+          settleDate: today,
           currentDayProfit: reSettleResult.profit,
           accumulatedProfit: reSettleResult.success ? reSettleResult.accumulatedProfit : (existing.accumulated_profit || 0)
         }
@@ -1054,7 +1062,7 @@ export function setHolding(
     db.prepare(`
       UPDATE user_funds
       SET fund_name = ?, is_held = 1, share = ?, cost = ?, amount = ?,
-          total_cost = ?, holding_date = ?, settled = 0, last_settled_date = ?
+          total_cost = ?, holding_date = ?, settled = 0, settle_date = ?
       WHERE user_id = ? AND fund_code = ?
     `).run(fundName, roundedShare, roundedCost, roundedAmount, computedTotalCost, today, today, userId, fundCode)
 
@@ -1074,7 +1082,7 @@ export function setHolding(
           cost: roundedCost,
           totalCost: computedTotalCost,
           settled: reSettleResult.success,
-          lastSettledDate: reSettleResult.success ? today : '',
+          settleDate: reSettleResult.success ? today : '',
           currentDayProfit: reSettleResult.profit,
           accumulatedProfit: reSettleResult.success ? reSettleResult.accumulatedProfit : (existing.accumulated_profit || 0)
         }
@@ -1091,7 +1099,7 @@ export function setHolding(
         cost: roundedCost,
         totalCost: computedTotalCost,
         settled: false,
-        lastSettledDate: '',
+        settleDate: '',
         currentDayProfit: 0,
         accumulatedProfit: existing.accumulated_profit || 0
       }
@@ -1300,7 +1308,7 @@ export function addUserFundsBatch(funds: Array<{ code: string; name?: string; is
   const today = getLocalDate()
 
   const stmt = db.prepare(`
-    INSERT OR IGNORE INTO user_funds (user_id, fund_code, fund_name, is_held, status, share, cost, amount, added_at, settled, last_settled_date)
+    INSERT OR IGNORE INTO user_funds (user_id, fund_code, fund_name, is_held, status, share, cost, amount, added_at, settled, settle_date)
     VALUES (?, ?, ?, ?, 'a', 0, 0, 0, ?, 0, ?)
   `)
 

@@ -94,7 +94,7 @@ export interface UserFund {
   amount: number
   holdingDate?: string
   settled?: boolean
-  lastSettledDate?: string
+  settleDate?: string
   accumulatedProfit?: number
   currentDayProfit?: number
   currentDayProfitRate?: number
@@ -183,7 +183,7 @@ export interface SaveHoldingResponse {
     cost?: number
     totalCost?: number
     settled: boolean
-    lastSettledDate: string
+    settleDate: string
     currentDayProfit: number
     accumulatedProfit: number
   }

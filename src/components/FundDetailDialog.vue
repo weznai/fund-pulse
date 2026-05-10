@@ -227,13 +227,13 @@
           <!-- 巻加历史收益内容 -->
           <div v-show="activeTab === 'profit'" class="profit-content">
             <!-- 未登录提示 -->
-            <div v-if="!authStore.isLoggedIn" class="profit-login-tip">
+            <div v-if="!authStore.isLoggedIn" class="profit-login-tip" @click="$emit('login')">
               <div class="profit-login-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                   <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
               </div>
-              <p><span class="profit-highlight">注册登录</span>后可查看历史收益</p>
+              <p><span class="profit-highlight">登录</span>后可查看历史收益</p>
               <p class="profit-hint">记录您的持仓收益变化</p>
             </div>
 
@@ -311,6 +311,7 @@ defineEmits<{
   (e: 'close'): void
   (e: 'edit-holding', fund: FundTableRow): void
   (e: 'delete', fund: FundTableRow): void
+  (e: 'login'): void
 }>()
 
 const { getEstimateCache, setEstimateCache, getCacheInfo } = useEstimateCache()
@@ -386,6 +387,9 @@ const actualEstimateGrowth = computed(() => {
 })
 
 const actualTodayProfit = computed(() => {
+  if (props.fund?.todayProfitValue != null && !props.fund.isHistoryProfit) {
+    return props.fund.todayProfitValue
+  }
   if (!props.fund || !props.fund.holdingAmountValue || actualEstimateGrowth.value === 0) return null
   return Math.round(props.fund.holdingAmountValue * (actualEstimateGrowth.value / 100) * 100) / 100
 })
@@ -913,7 +917,7 @@ function drawEstimateChart() {
       itemStyle: { color: lineColor },
       label: {
         show: true,
-        position: 'right',
+        position: 'left',
         formatter: `${finalGrowth.value! >= 0 ? '+' : ''}${finalGrowth.value!.toFixed(2)}%`,
         color: lineColor,
         fontSize: 11,
@@ -1594,9 +1598,18 @@ watch(activeTab, (val) => {
 }
 
 .profit-login-tip {
-  padding: 40px 20px;
+  padding: 20px;
   text-align: center;
   color: #9CA3AF;
+  background: #FFFDF5;
+  border: 1px solid #FEF3C7;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.profit-login-tip:hover {
+  background: #FFFBEB;
 }
 
 .profit-login-icon {

@@ -20,7 +20,7 @@ export interface UserFund {
   amount: number
   holdingDate?: string
   settled?: boolean
-  lastSettledDate?: string
+  settleDate?: string
   accumulatedProfit?: number
   currentDayProfit?: number
   currentDayProfitRate?: number

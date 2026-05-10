@@ -9,7 +9,7 @@ export type { FundCacheData, TimeTrendData, TimeTrendCacheData, StockTimeTrendDa
 export { getUserPreferences, saveUserPreferences } from './preferences.js'
 export type { UserPreferences } from './preferences.js'
 
-export { getHoldings, saveHolding, deleteHolding, saveHoldingsBatch, updateHoldingCurrentProfit, settleHoldingProfit, reSettleHoldingForToday, isHoldingSettledToday, getHoldingRawAmount, getHoldingProfitHistory, getHoldingProfitStats, getAllProfitHistory, getHeldFundTotalAmount, checkSettlementRequired, hasFundDataForDate, initDailySettlement, getUnsettledHoldings, executeBatchSettlement, executeBatchSettlementFromDb, getUserFunds, getHeldFunds, getFavoriteFunds, addUserFund, deleteUserFund, setHolding, removeHolding, updateUserFund, addUserFundsBatch, isFundInUserList, isFundHeld, getAllUserFundCodes, checkAndImportDefaultFunds, getTransactions, getHoldingCostInfo, migrateExistingHoldings } from './userFund.js'
+export { getHoldings, saveHolding, deleteHolding, saveHoldingsBatch, updateHoldingCurrentProfit, settleHoldingProfit, reSettleHoldingForToday, isHoldingSettledToday, getHoldingRawAmount, getHoldingProfitHistory, getHoldingProfitStats, getAllProfitHistory, getHeldFundTotalAmount, hasFundDataForDate, initDailySettlement, getUnsettledHoldings, executeBatchSettlement, executeBatchSettlementFromDb, getUserFunds, getHeldFunds, getFavoriteFunds, addUserFund, deleteUserFund, setHolding, removeHolding, updateUserFund, addUserFundsBatch, isFundInUserList, isFundHeld, getAllUserFundCodes, checkAndImportDefaultFunds, getTransactions, getHoldingCostInfo, migrateExistingHoldings } from './userFund.js'
 export type { Holding, HoldingProfitHistory, UserFund, SaveHoldingResult, Transaction } from './userFund.js'
 
 export { saveOtp, verifyOtp, cleanExpiredOtps } from './auth.js'
@@ -24,7 +24,7 @@ export type { ReqSource as DbReqSource, VisitLog, VisitStats, VisitLogFromDb, Vi
 export { getSystemParam, setSystemParam, deleteSystemParam, getAllSystemParams, setSystemParams } from './systemParam.js'
 export type { SystemParam } from './systemParam.js'
 
-export { getFundInfo, getFundInfoList, saveFundInfo, updateFundInfoRecommend, getRecommendFundCodes, deleteFundInfo, batchSaveFundInfo, getAllFundInfoCodes } from './fundInfo.js'
+export { getFundInfo, getFundInfoList, saveFundInfo, updateFundInfoField, updateFundInfoRecommend, getRecommendFundCodes, deleteFundInfo, batchSaveFundInfo, getAllFundInfoCodes } from './fundInfo.js'
 export type { FundInfo, FundInfoListResult } from './fundInfo.js'
 
 export { getDailyProfit, getDailyProfitByDateRange, getLatestDailyProfit, upsertDailyProfitTimeshare, updateDailyProfitFinal, getDailyProfitSummaries } from './userDailyProfit.js'
@@ -38,6 +38,9 @@ export type { Suggestion, SuggestionListResult } from './suggestion.js'
 
 export { getSystemInfo, updateSystemTradingDays, getTradingDay } from './system.js'
 export type { SystemInfo } from './system.js'
+
+export { getLatestNavDate, getNavHistoryRange, getNavCount, saveNavHistoryBatch } from './navHistory.js'
+export type { NavHistoryRecord } from './navHistory.js'
 
 // Repository 模式 - 数据访问层
 export { 

@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express'
 import axios from 'axios'
 import iconv from 'iconv-lite'
 import { logger } from '../logger.js'
-import { getLocalDate, getCacheStats, getGlobalCacheStats, clearAllCache, getFundInfo, getGlobalEstimateCache, saveGlobalEstimateCache, getLatestGlobalEstimateCache, getRecommendFundCodes, getStockTimeTrend, getLatestStockTimeTrend, getSystemParam } from '../db/index.js'
+import { getLocalDate, getCacheStats, getGlobalCacheStats, clearAllCache, getFundInfo, getGlobalEstimateCache, saveGlobalEstimateCache, getLatestGlobalEstimateCache, getRecommendFundCodes, getStockTimeTrend, getLatestStockTimeTrend, getSystemParam, getLatestNavDate, getNavHistoryRange, saveNavHistoryBatch, getTradingDay } from '../db/index.js'
 import { isTradingTime, fetchEstimateDataForCodes } from '../scheduled/estimate.js'
 import { checkTradingDay } from '../services/holidayService.js'
 import { fetchFundData, fetchFundsBatch } from '../services/fundService.js'
@@ -117,8 +117,9 @@ router.get('/fund/holdings/:code', async (req: Request, res: Response) => {
   try {
     const { code } = req.params
     const { getFundHoldings } = await import('../external/eastmoney.js')
+    const fundInfo = getFundInfo(code)
     const holdings = await getFundHoldings(code)
-    logger.log(`重仓股数据 ${code}:`, holdings.length, '条')
+    logger.log(`重仓股数据 ${fundInfo?.name || code}(${code}):`, holdings.length, '条')
     res.json(holdings)
   } catch (error) {
     logger.error('获取重仓股数据失败:', error)
@@ -129,13 +130,15 @@ router.get('/fund/holdings/:code', async (req: Request, res: Response) => {
 router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
   try {
     const { code } = req.params
+    const tradingDay = getTradingDay()
     const today = getLocalDate()
     const currentHour = new Date().getHours()
     const currentMinute = new Date().getMinutes()
-    const todayIsTradingDay = checkTradingDay(today)
+    const todayIsTradingDay = checkTradingDay(today) && tradingDay === today
     const isBeforeTrading = currentHour < 9 || (currentHour === 9 && currentMinute < 30)
 
     const fundInfo = getFundInfo(code)
+    const fundName = fundInfo?.name || code
     const isQDII = fundInfo
       ? ((fundInfo.ftype && /qdii/i.test(fundInfo.ftype)) || !!(fundInfo.name && /qdii/i.test(fundInfo.name)))
       : false
@@ -145,7 +148,7 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
       if (latestCached && latestCached.data) {
         try {
           const data = JSON.parse(latestCached.data)
-          logger.log(`🕘 非交易日或未到9:30，使用历史分时数据 ${code} (${latestCached.date}):`, data.length, '条')
+          logger.log(`🕘 非交易日或未到9:30，使用历史分时数据 ${fundName}(${code}) (${latestCached.date}):`, data.length, '条')
           return res.json({ data, date: latestCached.date, isHistory: true, isUpdated: !!latestCached.isUpdated, finalNav: latestCached.nav ?? null, finalGrowth: latestCached.dayGrowth ?? null })
         } catch (e) {
           logger.error('解析历史分时数据失败:', e)
@@ -153,11 +156,11 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
       }
     }
 
-    const globalCached = getGlobalEstimateCache(code, today)
+    const globalCached = getGlobalEstimateCache(code, tradingDay)
     if (globalCached) {
       try {
         const data = JSON.parse(globalCached.data)
-        logger.log(`🌐 使用全局缓存分时数据 ${code}:`, data.length, '条')
+        logger.log(`🌐 使用全局缓存分时数据 ${fundName}(${code}):`, data.length, '条')
         return res.json({ data, isUpdated: !!globalCached.isUpdated, finalNav: globalCached.dayGrowth != null ? globalCached.nav : null, finalGrowth: globalCached.dayGrowth })
       } catch (e) {
         logger.error('解析全局缓存数据失败:', e)
@@ -213,8 +216,8 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
               })
 
               if (estimates.length > 0) {
-                saveGlobalEstimateCache({ code, data: JSON.stringify(estimates), date: today })
-                logger.log(`✅ 东方财富分时数据 ${code}:`, estimates.length, '条')
+                saveGlobalEstimateCache({ code, data: JSON.stringify(estimates), date: tradingDay })
+                logger.log(`✅ 东方财富分时数据 ${fundName}(${code}):`, estimates.length, '条')
                 return res.json(estimates)
               }
             }
@@ -247,7 +250,7 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
           const dayGrowth = parseFloat(parts[6]) || 0
 
           if (nav > 0) {
-            logger.log(`📊 新浪估值 ${code}: nav=${nav}, dayGrowth=${dayGrowth}%, 无分时数据`)
+            logger.log(`📊 新浪估值 ${fundName}(${code}): nav=${nav}, dayGrowth=${dayGrowth}%, 无分时数据`)
           }
         }
       }
@@ -272,7 +275,7 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
         const gszzl = parseFloat(gzData.gszzl) || 0
 
         if (nav > 0) {
-          logger.log(`📊 天天基金估值 ${code}: nav=${nav}, gszzl=${gszzl}%, 无分时数据`)
+          logger.log(`📊 天天基金估值 ${fundName}(${code}): nav=${nav}, gszzl=${gszzl}%, 无分时数据`)
         }
       }
     } catch (gzError: any) {
@@ -306,7 +309,7 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
 
             if (nav0 > 0 && nav1 > 0) {
               const dayGrowth = ((nav1 - nav0) / nav0) * 100
-              logger.log(`📈 历史净值 ${code}: nav=${nav1}, dayGrowth=${dayGrowth.toFixed(2)}%, 无分时数据`)
+              logger.log(`📈 历史净值 ${fundName}(${code}): nav=${nav1}, dayGrowth=${dayGrowth.toFixed(2)}%, 无分时数据`)
             }
           }
         }
@@ -341,7 +344,7 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
               const dayGrowth = growthMatch ? parseFloat(growthMatch[1]) : (prevNav > 0 ? ((nav - prevNav) / prevNav) * 100 : 0)
 
               if (nav > 0) {
-                logger.log(`🌍 QDII基金获取最新净值 ${code}: nav=${nav.toFixed(4)}, growth=${dayGrowth.toFixed(2)}%, 净值日期=${dateStr}`)
+                logger.log(`🌍 QDII基金获取最新净值 ${fundName}(${code}): nav=${nav.toFixed(4)}, growth=${dayGrowth.toFixed(2)}%, 净值日期=${dateStr}`)
                 return res.json({ data: [], date: dateStr, isHistory: true, isUpdated: true, finalNav: nav, finalGrowth: dayGrowth })
               }
             }
@@ -355,7 +358,7 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
       if (latestCached && latestCached.nav && latestCached.nav > 0) {
         try {
           const data = latestCached.data ? JSON.parse(latestCached.data) : []
-          logger.log(`🌍 QDII基金回退到历史缓存 ${code} (${latestCached.date}): nav=${latestCached.nav}, growth=${latestCached.dayGrowth}%`)
+          logger.log(`🌍 QDII基金回退到历史缓存 ${fundName}(${code}) (${latestCached.date}): nav=${latestCached.nav}, growth=${latestCached.dayGrowth}%`)
           return res.json({ data, date: latestCached.date, isHistory: true, isUpdated: !!latestCached.isUpdated, finalNav: latestCached.nav ?? null, finalGrowth: latestCached.dayGrowth ?? null })
         } catch (e) {
           logger.error('解析QDII历史数据失败:', e)
@@ -363,7 +366,18 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
       }
     }
 
-    logger.log(`⚠️  无法获取 ${code} 的分时数据`)
+    const latestCached = getLatestGlobalEstimateCache(code, today)
+    if (latestCached && latestCached.data) {
+      try {
+        const data = JSON.parse(latestCached.data)
+        logger.log(`⏪ 所有数据源失败，回退到历史分时数据 ${fundName}(${code}) (${latestCached.date}):`, data.length, '条')
+        return res.json({ data, date: latestCached.date, isHistory: true, isUpdated: !!latestCached.isUpdated, finalNav: latestCached.nav ?? null, finalGrowth: latestCached.dayGrowth ?? null })
+      } catch (e) {
+        logger.error('解析历史分时数据失败:', e)
+      }
+    }
+
+    logger.log(`⚠️  无法获取 ${fundName}(${code}) 的分时数据`)
     res.json([])
   } catch (error) {
     logger.error('获取实时估值走势失败:', error)
@@ -386,16 +400,59 @@ router.get('/fund/history/:code', async (req: Request, res: Response) => {
   try {
     const { code } = req.params
     const period = String(req.query.period || '1')
-    const { getFundHistory } = await import('../external/eastmoney.js')
     const fundInfo = getFundInfo(code)
-    const history = await getFundHistory(code, period, fundInfo?.establish_date)
-    logger.log(`历史净值 ${code} period=${period}:`, history.length, '条')
-    res.json(history)
+    const fundName = fundInfo?.name || code
+
+    const startDate = calcStartDate(period, fundInfo?.establish_date)
+    const localLatest = getLatestNavDate(code)
+    const today = getLocalDate()
+
+    let needsSync = !localLatest || localLatest < today
+
+    if (needsSync) {
+      const { fetchFullNavData } = await import('../external/eastmoney.js')
+      const fullData = await fetchFullNavData(code)
+      if (fullData.length > 0) {
+        saveNavHistoryBatch(code, fullData)
+        logger.log(`📊 同步NAV历史 ${fundName}(${code}): ${fullData.length} 条, 最新=${fullData[fullData.length - 1].date}`)
+      }
+    }
+
+    const localData = getNavHistoryRange(code, startDate)
+    logger.log(`历史净值 ${fundName}(${code}) period=${period}: 本地${localData.length}条${needsSync ? '(已同步)' : ''}`)
+    res.json(localData)
   } catch (error) {
     logger.error('获取历史净值失败:', error)
     res.json([])
   }
 })
+
+function calcStartDate(period: string, establishDate?: string): string {
+  const now = new Date()
+  let d: Date
+  if (period === 'all') {
+    if (establishDate) {
+      const parsed = new Date(establishDate)
+      if (!isNaN(parsed.getTime())) {
+        d = parsed
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      }
+    }
+    d = new Date(now.getFullYear() - 10, now.getMonth(), now.getDate())
+  } else {
+    const months = parseInt(period, 10)
+    if (isNaN(months) || months <= 0) {
+      d = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate())
+    } else if (months < 12) {
+      d = new Date(now.getFullYear(), now.getMonth() - months, now.getDate())
+    } else if (months < 24) {
+      d = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
+    } else {
+      d = new Date(now.getFullYear() - Math.floor(months / 12), now.getMonth(), now.getDate())
+    }
+  }
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 router.post('/estimate/fetch', async (req: Request, res: Response) => {
   try {

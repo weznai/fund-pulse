@@ -54,20 +54,12 @@ function isEstimateOnlyFund(code: string): boolean {
 }
 
 export function isTradingTime(): boolean {
-  const now = new Date()
-  const day = now.getDay()
-  const hour = now.getHours()
-  const minute = now.getMinutes()
-
-  if (day === 0 || day === 6) return false
-
   if (!checkTradingDay(getLocalDate())) return false
 
-  const currentTime = hour * 60 + minute
-  const openTime = 9 * 60 + 25
-  const closeTime = 23 * 60 + 30
+  const now = new Date()
+  const currentTime = now.getHours() * 60 + now.getMinutes()
 
-  return currentTime >= openTime && currentTime <= closeTime
+  return currentTime >= 9 * 60 + 25 && currentTime <= 23 * 60 + 30
 }
 
 function isInEstimateTime(): boolean {
@@ -92,22 +84,26 @@ function isInQDIIFinalTime(): boolean {
   return currentTime >= 20 * 60 && currentTime <= 23 * 60 + 59
 }
 
-function getRecordTimePoint(hasOpenPoint: boolean): string {
+function getRecordTimePoint(hasOpenPoint: boolean): string | null {
   const now = new Date()
   const hour = now.getHours()
   const minute = now.getMinutes()
 
   const totalMinutes = hour * 60 + minute
-  const openTime = 9 * 60 + 30
-  const firstInterval = 9 * 60 + 35
+  const openTime = 9 * 60 + 25
+  const firstInterval = 9 * 60 + 30
   const closeTime = 16 * 60
 
   if (totalMinutes >= closeTime) {
     return '16:00'
   }
 
+  if (totalMinutes > 12 * 60 && totalMinutes < 13 * 60) {
+    return null
+  }
+
   if (totalMinutes >= openTime && totalMinutes < firstInterval) {
-    return hasOpenPoint ? '09:35' : '09:30'
+    return hasOpenPoint ? '09:30' : '09:25'
   }
 
   const roundedMinutes = Math.floor(totalMinutes / 5) * 5
@@ -289,8 +285,9 @@ async function fetchEstimateData(codes: string[]): Promise<void> {
           if (!estimate || estimate.nav <= 0) return null
         }
 
-        const hasOpenPoint = estimates.some(e => e.time === '09:30')
+        const hasOpenPoint = estimates.some(e => e.time === '09:25' || e.time === '09:30')
         const recordTime = getRecordTimePoint(hasOpenPoint)
+        if (!recordTime) return null
 
         const existingIndex = estimates.findIndex(e => e.time === recordTime)
         const newData = {
@@ -509,8 +506,8 @@ export async function fetchEstimateDataForCodes(codes: string[]): Promise<void> 
   }
 }
 
-export async function refreshFundToday(fundCode: string): Promise<{ success: boolean; message: string }> {
-  const today = getLocalDate()
+export async function refreshFundToday(fundCode: string, targetDate?: string): Promise<{ success: boolean; message: string }> {
+  const today = targetDate || getLocalDate()
   const estOnly = isEstimateOnlyFund(fundCode)
 
   let finalData: { nav: number; growth: number; date: string } | null = null
@@ -666,7 +663,7 @@ export function stopEstimateFetch() {
 }
 
 const userProfitTradingTimePoints = [
-  '09:30', '09:35', '09:40', '09:45', '09:50', '09:55',
+  '09:25', '09:30', '09:35', '09:40', '09:45', '09:50', '09:55',
   '10:00', '10:05', '10:10', '10:15', '10:20', '10:25', '10:30', '10:35', '10:40', '10:45', '10:50', '10:55',
   '11:00', '11:05', '11:10', '11:15', '11:20', '11:25', '11:30', '11:35', '11:40', '11:45', '11:50', '11:55',
   '12:00',
@@ -680,7 +677,7 @@ function getCurrentTradingTimePoint(): string | null {
   const totalMinutes = now.getHours() * 60 + now.getMinutes()
 
   if (totalMinutes >= 16 * 60) return '16:00'
-  if (totalMinutes < 9 * 60 + 30) return null
+  if (totalMinutes < 9 * 60 + 25) return null
 
   const morningEnd = 11 * 60 + 30
   const lunchEnd = 12 * 60
@@ -806,7 +803,7 @@ export function updateAllUsersDailyProfitFinal(): void {
         for (const [code, fund] of holdings) {
           if (!fund.amount || fund.amount <= 0) continue
 
-          if (fund.settled && fund.lastSettledDate === today && fund.currentDayProfit != null) {
+          if (fund.settled && fund.settleDate === today && fund.currentDayProfit != null) {
             finalProfit += fund.currentDayProfit
           } else {
             allSettled = false
@@ -816,6 +813,9 @@ export function updateAllUsersDailyProfitFinal(): void {
           }
         }
 
+        // finalProfit = 所有基金收益之和（已结算用 currentDayProfit，未结算用估值 fund.amount * growth / 100）
+        // finalAmount = openingAmount + finalProfit（收盘总市值）
+        // settled = 是否所有基金都已结算；未全部结算时 finalProfit 中包含估值部分
         const openingAmount = record.openingAmount
         finalProfit = Math.round(finalProfit * 100) / 100
         const finalAmount = Math.round((openingAmount + finalProfit) * 100) / 100
@@ -884,7 +884,7 @@ function getStockCode(): string {
 }
 
 const tradingTimePoints = [
-  '09:30', '09:35', '09:40', '09:45', '09:50', '09:55',
+  '09:25', '09:30', '09:35', '09:40', '09:45', '09:50', '09:55',
   '10:00', '10:05', '10:10', '10:15', '10:20', '10:25', '10:30', '10:35', '10:40', '10:45', '10:50', '10:55',
   '11:00', '11:05', '11:10', '11:15', '11:20', '11:25', '11:30', '11:35', '11:40', '11:45', '11:50', '11:55',
   '12:00',

@@ -74,7 +74,7 @@
                   </span>
                 </td>
                 <td>
-                  <span v-if="holding.lastSettledDate">{{ formatDateShort(holding.lastSettledDate) }}</span>
+                  <span v-if="holding.settleDate">{{ formatDateShort(holding.settleDate) }}</span>
                   <span v-else class="no-settle-date">-</span>
                 </td>
                 <td :class="holding.currentDayProfit >= 0 ? 'positive' : holding.currentDayProfit < 0 ? 'negative' : ''">
@@ -168,6 +168,10 @@ const loading = ref(true)
 const settling = ref<string | null>(null)
 const refreshing = ref<string | null>(null)
 
+function getOperateDate(holding: any): string {
+  return holding.settleDate || new Date().toISOString().slice(0, 10)
+}
+
 const totalDailyProfit = computed(() => {
   return holdings.value.reduce((sum, h) => sum + (h.currentDayProfit || 0), 0)
 })
@@ -244,13 +248,14 @@ function goBack() {
 
 // 单基金结算
 async function settleFund(holding: any) {
-  if (!confirm(`确定要结算 ${holding.fundCode} (${holding.fundName}) 吗？`)) {
+  const date = getOperateDate(holding)
+  if (!confirm(`确定要结算 ${holding.fundCode} (${holding.fundName}) 的 ${date} 数据吗？`)) {
     return
   }
 
   settling.value = holding.fundCode
   try {
-    await axios.post(`/api/admin/users/${userId.value}/holdings/${holding.fundCode}/settle`)
+    await axios.post(`/api/admin/users/${userId.value}/holdings/${holding.fundCode}/settle`, { date })
     alert('结算成功')
     await loadUserData()
   } catch (error: any) {
@@ -261,15 +266,15 @@ async function settleFund(holding: any) {
   }
 }
 
-// 刷新基金数据并重新结算
 async function refreshFund(holding: any) {
-  if (!confirm(`确定要刷新 ${holding.fundCode} (${holding.fundName}) 的数据并重新结算吗？`)) {
+  const date = getOperateDate(holding)
+  if (!confirm(`确定要刷新 ${holding.fundCode} (${holding.fundName}) 的 ${date} 数据并重新结算吗？`)) {
     return
   }
 
   refreshing.value = holding.fundCode
   try {
-    const { data } = await axios.post(`/api/admin/funds/${holding.fundCode}/refresh-today`)
+    const { data } = await axios.post(`/api/admin/funds/${holding.fundCode}/refresh-today`, { date })
     alert(data.message || '刷新成功')
     await loadUserData()
   } catch (error: any) {
@@ -612,6 +617,7 @@ async function refreshFund(holding: any) {
 .header-right {
   display: flex;
   gap: 10px;
+  align-items: center;
 }
 
 /* 结算按钮样式 */

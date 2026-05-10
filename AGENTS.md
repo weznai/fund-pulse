@@ -54,5 +54,6 @@ Jest (`@jest/globals`). Tests live in `server/__tests__/` and test utility funct
 - Build output goes to `server/dist/`, **not** the repo root.
 - `db/*.db` files are gitignored (but `db/*.sql` is kept). Don't accidentally commit the database.
 - The `nul` and `dev/` entries in root are gitignored artifacts — ignore them.
+
 ## 编码要求
-- 修改任意代码都需要注意关联影响，代码质量
+- 修改任意代码都需要注意关联影响，代码质量，避免代码重复

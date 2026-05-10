@@ -6,7 +6,8 @@ import {
   getHoldingProfitHistory, getHoldingProfitStats, getAllProfitHistory,
   getHeldFundTotalAmount, executeBatchSettlement, getUnsettledHoldings,
   getUserIdFromClientId, getHeldFunds, getGlobalEstimateCache, getLatestGlobalEstimateCache,
-  getDailyProfit, getDailyProfitByDateRange, getLatestDailyProfit, getDailyProfitSummaries
+  getDailyProfit, getDailyProfitByDateRange, getLatestDailyProfit, getDailyProfitSummaries,
+  getTradingDay
 } from '../db/index.js'
 import { getClientUserId, isRegisteredUser } from '../middleware/userSession.js'
 import { checkTradingDay } from '../services/holidayService.js'
@@ -97,10 +98,12 @@ router.get('/profit-analysis', (req: Request, res: Response) => {
     }
 
     setCurrentUserId(userId)
-    const history = getAllProfitHistory()
+    const rawHistory = getAllProfitHistory()
+    const history = rawHistory.filter(h => checkTradingDay(h.profitDate))
     const totalHoldingAmount = getHeldFundTotalAmount()
+    const tradingDay = getTradingDay()
     const today = getLocalDate()
-    const todayIsTradingDay = checkTradingDay(today)
+    const todayIsTradingDay = checkTradingDay(today) && tradingDay === today
     const marketOpened = todayIsTradingDay && isMarketOpenedToday()
 
     const holdings = getHeldFunds()
@@ -112,11 +115,11 @@ router.get('/profit-analysis', (req: Request, res: Response) => {
     for (const [code, fund] of holdings) {
       if (!fund.amount || fund.amount <= 0) continue
 
-      const alreadyInHistory = history.some(h => h.profitDate === today && h.fundCode === code)
+      const alreadyInHistory = history.some(h => h.profitDate === tradingDay && h.fundCode === code)
       if (alreadyInHistory) continue
 
       let growth: number | null = null
-      const cached = getGlobalEstimateCache(code, today)
+      const cached = getGlobalEstimateCache(code, tradingDay)
       if (cached) {
         if (cached.isUpdated && cached.dayGrowth != null) {
           growth = cached.dayGrowth
@@ -148,7 +151,7 @@ router.get('/profit-analysis', (req: Request, res: Response) => {
       todayProfitCount++
 
       history.unshift({
-        profitDate: today,
+        profitDate: tradingDay,
         fundCode: code,
         fundName: fund.fundName,
         dayProfit: profit,
@@ -159,7 +162,7 @@ router.get('/profit-analysis', (req: Request, res: Response) => {
     }
     }
 
-    res.json({ loggedIn: true, history, totalHoldingAmount, todayIsTradingDay, marketOpened })
+    res.json({ loggedIn: true, history, totalHoldingAmount, todayIsTradingDay, marketOpened, tradingDay })
   } catch (error) {
     logger.error('获取收益分析失败:', error)
     res.status(500).json({ error: '获取收益分析失败' })
@@ -214,7 +217,7 @@ router.get('/timeshare', (req: Request, res: Response) => {
     const today = getLocalDate()
 
     const allTimePoints = [
-      '09:30', '09:35', '09:40', '09:45', '09:50', '09:55',
+      '09:25', '09:30', '09:35', '09:40', '09:45', '09:50', '09:55',
       '10:00', '10:05', '10:10', '10:15', '10:20', '10:25', '10:30', '10:35', '10:40', '10:45', '10:50', '10:55',
       '11:00', '11:05', '11:10', '11:15', '11:20', '11:25', '11:30', '11:35', '11:40', '11:45', '11:50', '11:55',
       '12:00',
@@ -241,15 +244,28 @@ router.get('/timeshare', (req: Request, res: Response) => {
         }
       }
 
-      const lastTime = timeshare.length > 0 ? timeshare[timeshare.length - 1].time : ''
-      if (lastTime !== '16:00' && dbRecord.finalRate != null) {
-        const closePercent = Math.round(dbRecord.finalRate * 100) / 100
-        timeshare.push({ time: '16:00', percent: closePercent })
-      }
-
-      let openingAmount = dbRecord.openingAmount
       let totalProfit = dbRecord.finalProfit ?? 0
       let actualRate = dbRecord.finalRate ?? 0
+
+      if (dbRecord.finalRate != null) {
+        const allHistory = getAllProfitHistory()
+        const todayHistory = allHistory.filter(r => r.profitDate === today)
+        if (todayHistory.length > 0) {
+          totalProfit = Math.round(todayHistory.reduce((sum, r) => sum + r.dayProfit, 0) * 100) / 100
+          actualRate = dbRecord.openingAmount > 0
+            ? Math.round(totalProfit / dbRecord.openingAmount * 10000) / 100
+            : 0
+        }
+        const closePercent = Math.round(actualRate * 100) / 100
+        const lastTime = timeshare.length > 0 ? timeshare[timeshare.length - 1].time : ''
+        if (lastTime === '16:00') {
+          timeshare[timeshare.length - 1] = { time: '16:00', percent: closePercent }
+        } else {
+          timeshare.push({ time: '16:00', percent: closePercent })
+        }
+      }
+
+      const openingAmount = dbRecord.openingAmount
 
       res.json({
         loggedIn: true,
@@ -406,6 +422,12 @@ router.get('/timeshare', (req: Request, res: Response) => {
         percent: Math.round((data.weightedPercent / data.totalWeight) * 100) / 100
       }))
       .sort((a, b) => a.time.localeCompare(b.time))
+
+    const p1200 = weightedTimeshare.find(p => p.time === '12:00')
+    const p1300 = weightedTimeshare.find(p => p.time === '13:00')
+    if (p1200 && p1300) {
+      p1300.percent = p1200.percent
+    }
 
     if (effectiveDate === today) {
       const now = new Date()

@@ -247,7 +247,7 @@ export class UserFundRepository extends BaseRepository {
       const now = Date.now()
       const today = getLocalDate()
       const stmt = this.db.prepare(`
-        INSERT OR IGNORE INTO user_funds (user_id, fund_code, fund_name, is_held, status, share, cost, amount, added_at, settled, last_settled_date)
+        INSERT OR IGNORE INTO user_funds (user_id, fund_code, fund_name, is_held, status, share, cost, amount, added_at, settled, settle_date)
         VALUES (?, ?, ?, ?, 'a', 0, 0, 0, ?, 0, ?)
       `)
       
@@ -293,7 +293,7 @@ export class UserFundRepository extends BaseRepository {
     try {
       const today = getLocalDate()
       const stmt = this.db.prepare(`
-        INSERT INTO user_funds (user_id, fund_code, fund_name, is_held, share, cost, amount, holding_date, added_at, settled, last_settled_date)
+        INSERT INTO user_funds (user_id, fund_code, fund_name, is_held, share, cost, amount, holding_date, added_at, settled, settle_date)
         VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, 0, ?)
         ON CONFLICT(user_id, fund_code) DO UPDATE SET
           fund_name = excluded.fund_name,
@@ -303,7 +303,7 @@ export class UserFundRepository extends BaseRepository {
           amount = excluded.amount,
           holding_date = excluded.holding_date,
           settled = 0,
-          last_settled_date = excluded.last_settled_date
+          settle_date = excluded.settle_date
       `)
       
       const now = Date.now()
