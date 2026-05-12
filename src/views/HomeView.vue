@@ -1641,36 +1641,48 @@ function handleClearCache() {
 
 .import-examples {
   display: flex;
-  gap: 20px;
+  gap: 0;
   margin: 0 0 16px 0;
   padding: 12px;
-  background: #F9FAFB;
+  background: #FFFBEB;
   border-radius: 6px;
+  border: 1px solid #FDE68A;
   font-size: 12px;
-  color: #6B7280;
+  color: #92400E;
   line-height: 1.8;
 }
 
 .import-examples-left {
   flex: 1;
+  padding-right: 20px;
 }
 
 .import-examples-right {
   flex: 1;
+  padding-left: 20px;
+  position: relative;
+}
+
+.import-examples-right::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background: #FDE68A;
 }
 
 .import-section-title {
   font-weight: 600;
-  color: #374151;
+  color: #92400E;
   margin-bottom: 4px;
 }
 
 .import-code-example {
   font-family: 'Courier New', monospace;
-  background: white;
   padding: 8px;
   border-radius: 4px;
-  border: 1px solid #E5E7EB;
   line-height: 1.6;
 }
 

@@ -776,9 +776,10 @@ router.put('/fund-info/:code', validateAdminToken, (req: Request, res: Response)
     if (!existing) {
       return res.status(404).json({ error: '基金不存在' })
     }
-    const { data_source, ftype, fund_company, fund_manager, benchmark } = req.body
+    const { data_source, data_extra, ftype, fund_company, fund_manager, benchmark } = req.body
     const fields: Record<string, any> = {}
     if (data_source !== undefined) fields.data_source = data_source
+    if (data_extra !== undefined) fields.data_extra = data_extra
     if (ftype !== undefined) fields.ftype = ftype
     if (fund_company !== undefined) fields.fund_company = fund_company
     if (fund_manager !== undefined) fields.fund_manager = fund_manager

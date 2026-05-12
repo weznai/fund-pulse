@@ -50,7 +50,7 @@ function isQDIIFund(code: string): boolean {
 function isEstimateOnlyFund(code: string): boolean {
   const info = getFundInfo(code)
   if (!info) return false
-  return info.data_source === 'estimate_only'
+  return info.data_source === 'mobapi'
 }
 
 export function isTradingTime(): boolean {
@@ -721,7 +721,7 @@ export function updateAllUsersDailyProfit(): void {
         if (holdings.size === 0) return
 
         let totalAmount = 0
-        const timeMap = new Map<string, { weightedRate: number; totalAmount: number }>()
+        const fundTimeMap = new Map<string, Map<string, number>>()
 
         for (const [code, fund] of holdings) {
           if (!fund.amount || fund.amount <= 0) continue
@@ -745,28 +745,40 @@ export function updateAllUsersDailyProfit(): void {
             dataMap.set(point.time, point.percent)
           }
 
-          totalAmount += fund.amount
-
+          // 对该基金填充缺失时间点：用最近已知值向前填充
+          const filledMap = new Map<string, number>()
+          let lastPercent: number | null = null
           for (const time of userProfitTradingTimePoints) {
             if (time > currentTimePoint) break
-
-            const percent = dataMap.get(time)
-            if (percent === undefined) continue
-
-            const existing = timeMap.get(time) || { weightedRate: 0, totalAmount: 0 }
-            existing.weightedRate += percent * fund.amount
-            existing.totalAmount += fund.amount
-            timeMap.set(time, existing)
+            if (dataMap.has(time)) {
+              lastPercent = dataMap.get(time)!
+            }
+            if (lastPercent !== null) {
+              filledMap.set(time, lastPercent)
+            }
           }
+
+          if (filledMap.size === 0) continue
+
+          totalAmount += fund.amount
+          fundTimeMap.set(code, filledMap)
         }
 
         if (totalAmount === 0) return
 
+        // 用固定分母（totalAmount）计算每个时间点的加权收益率
         const openingAmount = Math.round(totalAmount * 100) / 100
+        const timeMap = new Map<string, number>()
+        for (const [code, filledMap] of fundTimeMap) {
+          const weight = holdings.get(code)!.amount
+          for (const [time, percent] of filledMap) {
+            timeMap.set(time, (timeMap.get(time) || 0) + percent * weight)
+          }
+        }
+
         const timeProfitData = Array.from(timeMap.entries())
-          .filter(([, data]) => data.totalAmount > 0)
-          .map(([time, data]) => {
-            const rate = Math.round((data.weightedRate / data.totalAmount) * 100) / 100
+          .map(([time, weightedRate]) => {
+            const rate = Math.round((weightedRate / totalAmount) * 100) / 100
             const profit = Math.round(openingAmount * rate / 100 * 100) / 100
             const amount = Math.round((openingAmount + profit) * 100) / 100
             return { time, amount, profit, rate }

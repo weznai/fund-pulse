@@ -79,16 +79,17 @@
               <th>代码</th>
               <th>名称</th>
               <th>类型</th>
+              <th>数据源</th>
               <th>更新日期</th>
               <th class="action-header">操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="7" class="loading-cell"><span class="spinner large"></span><span>加载中...</span></td>
+              <td colspan="8" class="loading-cell"><span class="spinner large"></span><span>加载中...</span></td>
             </tr>
             <tr v-else-if="fundList.length === 0">
-              <td colspan="7" class="empty-cell"><span>暂无基金数据</span></td>
+              <td colspan="8" class="empty-cell"><span>暂无基金数据</span></td>
             </tr>
             <tr v-else v-for="fund in fundList" :key="fund.code" @dblclick="viewDetail(fund)" style="cursor: pointer;">
               <td class="checkbox-cell" @click.stop>
@@ -104,6 +105,7 @@
               <td class="code-cell">{{ fund.code }}</td>
               <td class="name-cell">{{ fund.name }}</td>
               <td><span class="type-tag" v-if="fund.ftype">{{ fund.ftype }}</span></td>
+              <td><span class="tag" :class="'tag-ds-' + (fund.data_source || 'standard')">{{ dataSourceLabel(fund.data_source) }}</span></td>
               <td class="date-cell">{{ formatTime(fund.updated_at) }}</td>
               <td>
                 <div class="action-cell">
@@ -244,7 +246,8 @@
             <div class="detail-item"><span class="detail-label">业绩比较基准</span><span class="detail-value">{{ detailFund.benchmark || '-' }}</span></div>
             <div class="detail-item"><span class="detail-label">状态</span><span class="detail-value">{{ detailFund.status }}</span></div>
             <div class="detail-item"><span class="detail-label">是否推荐</span><span class="detail-value">{{ detailFund.is_recommend ? '是' : '否' }}</span></div>
-            <div class="detail-item"><span class="detail-label">数据源</span><span class="detail-value">{{ detailFund.data_source || 'standard' }}</span></div>
+            <div class="detail-item"><span class="detail-label">数据源</span><span class="detail-value"><span class="tag" :class="'tag-ds-' + (detailFund.data_source || 'standard')">{{ dataSourceLabel(detailFund.data_source) }}</span></span></div>
+            <div class="detail-item" v-if="detailFund.data_extra"><span class="detail-label">扩展信息</span><span class="detail-value">{{ formatDataExtra(detailFund.data_extra) }}</span></div>
             <div class="detail-item"><span class="detail-label">创建时间</span><span class="detail-value">{{ formatTime(detailFund.created_at) }}</span></div>
             <div class="detail-item"><span class="detail-label">更新时间</span><span class="detail-value">{{ formatTime(detailFund.updated_at) }}</span></div>
           </div>
@@ -266,10 +269,19 @@
           <div class="form-group">
             <label>数据源</label>
             <select v-model="editForm.data_source" class="form-select">
-              <option value="standard">standard（标准）</option>
-              <option value="estimate_only">estimate_only（仅估值）</option>
+              <option value="standard">standard - 标准数据源</option>
+              <option value="overseas">overseas - 海外基金（互认基金）</option>
+              <option value="etf_linked">etf_linked - ETF联接基金</option>
+              <option value="mobapi">mobapi - 仅移动端API</option>
             </select>
-            <div class="form-hint">standard: 从东方财富获取净值；estimate_only: 仅使用估值数据，适用于QDII等净值更新滞后的基金</div>
+            <div class="form-hint">
+              standard: 标准东方财富数据；overseas: 互认基金(968xxx)，从海外站获取；etf_linked: ETF联接基金，穿透查底层ETF持仓；mobapi: 仅通过移动端API获取净值
+            </div>
+          </div>
+          <div class="form-group" v-if="editForm.data_source === 'etf_linked'">
+            <label>底层ETF代码</label>
+            <input v-model="editForm.etf_code" class="form-input" placeholder="例如 513010" />
+            <div class="form-hint">ETF联接基金穿透查询的底层ETF代码</div>
           </div>
         </div>
         <div class="modal-footer">
@@ -321,6 +333,7 @@ interface FundInfo {
   created_at: number
   updated_at: number
   data_source?: string
+  data_extra?: Record<string, string> | null
   syncing?: boolean
 }
 
@@ -367,7 +380,7 @@ const detailFund = ref<FundInfo | null>(null)
 
 const showEditModal = ref(false)
 const editFund = ref<FundInfo | null>(null)
-const editForm = ref({ data_source: 'standard' })
+const editForm = ref<{ data_source: string; etf_code: string }>({ data_source: 'standard', etf_code: '' })
 const editSaving = ref(false)
 
 const showSuccess = ref(false)
@@ -541,7 +554,11 @@ function viewDetail(fund: FundInfo) {
 
 function openEditModal(fund: FundInfo) {
   editFund.value = fund
-  editForm.value = { data_source: fund.data_source || 'standard' }
+  const extra = fund.data_extra || {}
+  editForm.value = {
+    data_source: fund.data_source || 'standard',
+    etf_code: extra.etf_code || ''
+  }
   showEditModal.value = true
 }
 
@@ -549,7 +566,11 @@ async function saveEditFund() {
   if (!editFund.value || editSaving.value) return
   editSaving.value = true
   try {
-    const { data } = await axios.put(`/api/admin/fund-info/${editFund.value.code}`, editForm.value)
+    const payload: any = { data_source: editForm.value.data_source }
+    if (editForm.value.data_source === 'etf_linked' && editForm.value.etf_code) {
+      payload.data_extra = { etf_code: editForm.value.etf_code }
+    }
+    const { data } = await axios.put(`/api/admin/fund-info/${editFund.value.code}`, payload)
     if (data.success) {
       Object.assign(editFund.value, data.fund)
       showSuccessMessage('保存成功')
@@ -562,6 +583,24 @@ async function saveEditFund() {
   } finally {
     editSaving.value = false
   }
+}
+
+function dataSourceLabel(ds?: string): string {
+  const map: Record<string, string> = {
+    standard: '标准',
+    overseas: '海外基金',
+    etf_linked: 'ETF联接',
+    mobapi: '仅移动端API'
+  }
+  return map[ds || 'standard'] || ds || '标准'
+}
+
+function formatDataExtra(extra: any): string {
+  if (!extra) return '-'
+  const parts: string[] = []
+  if (extra.etf_code) parts.push(`ETF: ${extra.etf_code}`)
+  if (extra.hkfcode) parts.push(`港基代码: ${extra.hkfcode}`)
+  return parts.join('，') || JSON.stringify(extra)
 }
 
 async function deleteFund(fund: FundInfo) {
@@ -696,6 +735,11 @@ function showErrorMessage(msg: string) {
 .code-cell { font-family: 'SF Mono', Consolas, monospace; font-weight: 600; color: #1e3a5f; }
 .name-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .type-tag { display: inline-block; padding: 2px 8px; background: #e0f2fe; color: #0369a1; border-radius: 4px; font-size: 12px; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
+.tag-ds-standard { background: #f1f5f9; color: #475569; }
+.tag-ds-overseas { background: #fef3c7; color: #92400e; }
+.tag-ds-etf_linked { background: #e0e7ff; color: #3730a3; }
+.tag-ds-mobapi { background: #fce7f3; color: #9d174d; }
 .date-cell { font-size: 13px; color: #64748b; white-space: nowrap; }
 .recommend-btn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: transparent; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; color: #94a3b8; }
 .recommend-btn:hover { border-color: #fbbf24; color: #fbbf24; }

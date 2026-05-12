@@ -41,7 +41,7 @@ function isQDIIFund(code: string): boolean {
 function isEstimateOnlyFund(code: string): boolean {
   const info = getFundInfo(code)
   if (!info) return false
-  return info.data_source === 'estimate_only'
+  return info.data_source === 'mobapi'
 }
 
 let stopScheduledSettlementTimer: (() => void) | null = null

@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express'
 import axios from 'axios'
 import iconv from 'iconv-lite'
 import { logger } from '../logger.js'
-import { getLocalDate, getCacheStats, getGlobalCacheStats, clearAllCache, getFundInfo, getGlobalEstimateCache, saveGlobalEstimateCache, getLatestGlobalEstimateCache, getRecommendFundCodes, getStockTimeTrend, getLatestStockTimeTrend, getSystemParam, getLatestNavDate, getNavHistoryRange, saveNavHistoryBatch, getTradingDay } from '../db/index.js'
+import { getLocalDate, getCacheStats, getGlobalCacheStats, clearAllCache, getFundInfo, updateFundInfoField, getGlobalEstimateCache, saveGlobalEstimateCache, getLatestGlobalEstimateCache, getRecommendFundCodes, getStockTimeTrend, getLatestStockTimeTrend, getSystemParam, getLatestNavDate, getNavHistoryRange, saveNavHistoryBatch, getTradingDay } from '../db/index.js'
 import { isTradingTime, fetchEstimateDataForCodes } from '../scheduled/estimate.js'
 import { checkTradingDay } from '../services/holidayService.js'
 import { fetchFundData, fetchFundsBatch } from '../services/fundService.js'
@@ -113,13 +113,75 @@ router.get('/fundgz/:code', async (req: Request, res: Response) => {
   }
 })
 
+/**
+ * 获取基金重仓股持仓数据
+ *
+ * 数据源策略（由 fund_info.data_source 字段控制）：
+ *   standard   → 东方财富标准API（FundArchivesDatas），适用于绝大多数基金
+ *   overseas   → 东方财富海外站API（overseas.1234567.com.cn），适用于互认基金(968xxx)
+ *   etf_linked → 穿透到底层ETF查询持仓，适用于ETF联接基金（如013309→513010）
+ *   mobapi     → 仅移动端API，无持仓数据
+ *
+ * 首次探测（data_source='standard' 时自动触发，探测成功后回写标记避免重复探测）：
+ *   1. 标准API返回数据 → 直接用
+ *   2. 标准API返回404页面(pageNotFound=true) → 该基金不在标准站 → 试海外站 → 成功则标记 overseas
+ *   3. 标准API返回空持仓(pageNotFound=false) → 先试ETF穿透(MobAPI查底层ETF) → 成功则标记 etf_linked
+ *   4. ETF穿透也无结果 → 最后试海外站兜底 → 成功则标记 overseas
+ *   5. 全部失败 → 确实无持仓数据（如货币基金、mobapi基金）
+ */
 router.get('/fund/holdings/:code', async (req: Request, res: Response) => {
   try {
     const { code } = req.params
-    const { getFundHoldings } = await import('../external/eastmoney.js')
+    const { getFundHoldings, getOverseasFundHoldings, getEtfUnderlyingCode } = await import('../external/eastmoney.js')
     const fundInfo = getFundInfo(code)
-    const holdings = await getFundHoldings(code)
-    logger.log(`重仓股数据 ${fundInfo?.name || code}(${code}):`, holdings.length, '条')
+    const ds = fundInfo?.data_source || 'standard'
+    let holdings: any[] = []
+    let source = ds
+
+    if (ds === 'overseas') {
+      holdings = await getOverseasFundHoldings(code)
+    } else if (ds === 'etf_linked') {
+      const etfCode = fundInfo?.data_extra?.etf_code
+      if (etfCode) {
+        holdings = (await getFundHoldings(etfCode)).data
+        source = `穿透ETF(${etfCode})`
+      }
+    } else {
+      const result = await getFundHoldings(code)
+      holdings = result.data
+      if (holdings.length === 0 && fundInfo) {
+        if (result.pageNotFound) {
+          // 情况2：标准API页面不存在(404) → 互认基金等，试海外站
+          holdings = await getOverseasFundHoldings(code)
+          if (holdings.length > 0) {
+            source = 'overseas(探测-404)'
+            updateFundInfoField(code, { data_source: 'overseas' })
+          }
+        } else {
+          // 情况3：标准API返回空持仓 → 先试ETF穿透
+          const etfCode = await getEtfUnderlyingCode(code)
+          if (etfCode) {
+            const etfResult = await getFundHoldings(etfCode)
+            holdings = etfResult.data
+            if (holdings.length > 0) {
+              source = `etf_linked(探测,${etfCode})`
+              updateFundInfoField(code, { data_source: 'etf_linked', data_extra: { etf_code: etfCode } })
+            }
+          }
+          // 情况4：ETF穿透也无结果 → 最后试海外站兜底
+          // （海外基金的持仓API返回"空内容"而非404，需要额外一次探测）
+          if (holdings.length === 0) {
+            holdings = await getOverseasFundHoldings(code)
+            if (holdings.length > 0) {
+              source = 'overseas(探测-兜底)'
+              updateFundInfoField(code, { data_source: 'overseas' })
+            }
+          }
+        }
+      }
+    }
+
+    logger.log(`重仓股数据 ${fundInfo?.name || code}(${code}):`, holdings.length, '条', source ? `来源:${source}` : '')
     res.json(holdings)
   } catch (error) {
     logger.error('获取重仓股数据失败:', error)
@@ -149,7 +211,7 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
         try {
           const data = JSON.parse(latestCached.data)
           logger.log(`🕘 非交易日或未到9:30，使用历史分时数据 ${fundName}(${code}) (${latestCached.date}):`, data.length, '条')
-          return res.json({ data, date: latestCached.date, isHistory: true, isUpdated: !!latestCached.isUpdated, finalNav: latestCached.nav ?? null, finalGrowth: latestCached.dayGrowth ?? null })
+          return res.json({ data, date: latestCached.date, isHistory: true, isUpdated: !!latestCached.isUpdated, finalNav: latestCached.nav ?? null, finalGrowth: latestCached.dayGrowth ?? null, isQDII })
         } catch (e) {
           logger.error('解析历史分时数据失败:', e)
         }
@@ -161,7 +223,7 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
       try {
         const data = JSON.parse(globalCached.data)
         logger.log(`🌐 使用全局缓存分时数据 ${fundName}(${code}):`, data.length, '条')
-        return res.json({ data, isUpdated: !!globalCached.isUpdated, finalNav: globalCached.dayGrowth != null ? globalCached.nav : null, finalGrowth: globalCached.dayGrowth })
+        return res.json({ data, isUpdated: !!globalCached.isUpdated, finalNav: globalCached.dayGrowth != null ? globalCached.nav : null, finalGrowth: globalCached.dayGrowth, isQDII })
       } catch (e) {
         logger.error('解析全局缓存数据失败:', e)
       }
@@ -218,7 +280,7 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
               if (estimates.length > 0) {
                 saveGlobalEstimateCache({ code, data: JSON.stringify(estimates), date: tradingDay })
                 logger.log(`✅ 东方财富分时数据 ${fundName}(${code}):`, estimates.length, '条')
-                return res.json(estimates)
+                return res.json({ data: estimates, isQDII })
               }
             }
           }
@@ -345,7 +407,7 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
 
               if (nav > 0) {
                 logger.log(`🌍 QDII基金获取最新净值 ${fundName}(${code}): nav=${nav.toFixed(4)}, growth=${dayGrowth.toFixed(2)}%, 净值日期=${dateStr}`)
-                return res.json({ data: [], date: dateStr, isHistory: true, isUpdated: true, finalNav: nav, finalGrowth: dayGrowth })
+                return res.json({ data: [], date: dateStr, isHistory: true, isUpdated: true, finalNav: nav, finalGrowth: dayGrowth, isQDII })
               }
             }
           }
@@ -359,7 +421,7 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
         try {
           const data = latestCached.data ? JSON.parse(latestCached.data) : []
           logger.log(`🌍 QDII基金回退到历史缓存 ${fundName}(${code}) (${latestCached.date}): nav=${latestCached.nav}, growth=${latestCached.dayGrowth}%`)
-          return res.json({ data, date: latestCached.date, isHistory: true, isUpdated: !!latestCached.isUpdated, finalNav: latestCached.nav ?? null, finalGrowth: latestCached.dayGrowth ?? null })
+          return res.json({ data, date: latestCached.date, isHistory: true, isUpdated: !!latestCached.isUpdated, finalNav: latestCached.nav ?? null, finalGrowth: latestCached.dayGrowth ?? null, isQDII })
         } catch (e) {
           logger.error('解析QDII历史数据失败:', e)
         }
@@ -371,7 +433,7 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
       try {
         const data = JSON.parse(latestCached.data)
         logger.log(`⏪ 所有数据源失败，回退到历史分时数据 ${fundName}(${code}) (${latestCached.date}):`, data.length, '条')
-        return res.json({ data, date: latestCached.date, isHistory: true, isUpdated: !!latestCached.isUpdated, finalNav: latestCached.nav ?? null, finalGrowth: latestCached.dayGrowth ?? null })
+        return res.json({ data, date: latestCached.date, isHistory: true, isUpdated: !!latestCached.isUpdated, finalNav: latestCached.nav ?? null, finalGrowth: latestCached.dayGrowth ?? null, isQDII })
       } catch (e) {
         logger.error('解析历史分时数据失败:', e)
       }
@@ -396,12 +458,26 @@ router.delete('/fund/estimate/cache/:code?', (req: Request, res: Response) => {
   }
 })
 
+/**
+ * 获取基金历史净值（业绩走势）数据
+ *
+ * 数据源策略：
+ *   standard → 东方财富 pingzhongdata/{code}.js
+ *   overseas → 东方财富海外站 F10页面解析 dwJQChartData
+ *   etf_linked / mobapi → 标准API（ETF联接基金的NAV走标准源）
+ *
+ * 首次探测（data_source='standard' 且需要同步时自动触发）：
+ *   1. pingzhongdata返回有效JS数据 → 直接用
+ *   2. pingzhongdata返回404页面(pageNotFound=true) → 试海外站F10 → 成功则标记 overseas
+ *   3. pingzhongdata返回空数据(非404) → 该基金暂无NAV数据，不做特殊处理
+ */
 router.get('/fund/history/:code', async (req: Request, res: Response) => {
   try {
     const { code } = req.params
     const period = String(req.query.period || '1')
     const fundInfo = getFundInfo(code)
     const fundName = fundInfo?.name || code
+    const ds = fundInfo?.data_source || 'standard'
 
     const startDate = calcStartDate(period, fundInfo?.establish_date)
     const localLatest = getLatestNavDate(code)
@@ -410,11 +486,25 @@ router.get('/fund/history/:code', async (req: Request, res: Response) => {
     let needsSync = !localLatest || localLatest < today
 
     if (needsSync) {
-      const { fetchFullNavData } = await import('../external/eastmoney.js')
-      const fullData = await fetchFullNavData(code)
+      const { fetchFullNavData, fetchOverseasFullNavData } = await import('../external/eastmoney.js')
+      let fullData: any[] = []
+
+      if (ds === 'overseas') {
+        fullData = await fetchOverseasFullNavData(code)
+      } else {
+        const result = await fetchFullNavData(code)
+        fullData = result.data
+        if (fullData.length === 0 && result.pageNotFound && fundInfo) {
+          fullData = await fetchOverseasFullNavData(code)
+          if (fullData.length > 0) {
+            updateFundInfoField(code, { data_source: 'overseas' })
+          }
+        }
+      }
+
       if (fullData.length > 0) {
         saveNavHistoryBatch(code, fullData)
-        logger.log(`📊 同步NAV历史 ${fundName}(${code}): ${fullData.length} 条, 最新=${fullData[fullData.length - 1].date}`)
+        logger.log(`📊 同步NAV历史 ${fundName}(${code}): ${fullData.length} 条, 来源:${ds}`)
       }
     }
 

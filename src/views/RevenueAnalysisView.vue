@@ -105,12 +105,6 @@
               <span class="legend-item">
                 <span class="legend-line" style="background: #6366F1;"></span>
                 累计收益
-                <span v-if="trendLastDayProfit !== null" class="legend-value" :class="trendLastDayProfit >= 0 ? 'up' : 'down'">
-                  {{ trendLastDate }}  {{ trendLastDayProfit >= 0 ? '+' : '' }}¥{{ trendLastDayProfit.toFixed(2) }}
-                </span>
-                <span v-if="trendLastDayRate !== null" class="legend-value" :class="trendLastDayRate >= 0 ? 'up' : 'down'">
-                  {{ trendLastDayRate >= 0 ? '+' : '' }}{{ trendLastDayRate.toFixed(2) }}%
-                </span>
               </span>
             </div>
             <div class="timeshare-meta-row">
@@ -507,27 +501,6 @@ const trendTotalProfit = computed(() => {
   return Math.round(data[data.length - 1].totalProfit * 100) / 100
 })
 
-const trendLastDayProfit = computed(() => {
-  const data = profitTrendData.value
-  if (data.length === 0) return null
-  const last = data[data.length - 1]
-  return Math.round(last.dayProfit * 100) / 100
-})
-
-const trendLastDayRate = computed(() => {
-  const data = profitTrendData.value
-  if (data.length === 0) return null
-  const last = data[data.length - 1]
-  if (!last.openingAmount || last.openingAmount === 0) return null
-  return Math.round(last.dayProfit / last.openingAmount * 10000) / 100
-})
-
-const trendLastDate = computed(() => {
-  const data = profitTrendData.value
-  if (data.length === 0) return ''
-  return data[data.length - 1].date
-})
-
 const trendPeriodLabel = computed(() => {
   switch (selectedTrendPeriod.value) {
     case 'today': return '当天'
@@ -554,6 +527,8 @@ function filterToCurrentTime(data: TimesharePoint[]): TimesharePoint[] {
 }
 
 const holdingOpeningAmount = ref(0)
+const timeshareTotalProfit = ref<number | null>(null)
+const timeshareActualRate = ref<number | null>(null)
 
 const todayStr = new Date().toLocaleDateString('sv-SE')
 const tradingDayStr = computed(() => fundStore.tradingDay || todayStr)
@@ -599,6 +574,7 @@ const timeshareDateInfo = computed(() => {
 
 const profitHistory = ref<ProfitRecord[]>([])
 const todayIsTradingDay = ref(true)
+const todayTradingDay = ref(true)
 const marketOpened = ref(false)
 
 const dailyProfitMap = computed(() => {
@@ -790,7 +766,7 @@ const calendarCells = computed<CalendarCell[]>(() => {
     const dow = new Date(y, m, d).getDay()
     if (dow === 0 || dow === 6) continue
     const profitData = dailyProfitMap.value.get(date)
-    const cellIsHoliday = date === todayStr && !todayIsTradingDay.value
+    const cellIsHoliday = date === todayStr && !todayTradingDay.value
     cells.push({
       day: d,
       date,
@@ -1072,6 +1048,7 @@ async function fetchData() {
     if (data.loggedIn) {
       profitHistory.value = data.history || []
       todayIsTradingDay.value = data.todayIsTradingDay !== false
+      todayTradingDay.value = data.todayTradingDay !== false
       marketOpened.value = data.marketOpened !== false
       accumulatedProfit.value = profitHistory.value.reduce((sum, r) => sum + r.dayProfit, 0)
     } else {
@@ -1107,10 +1084,14 @@ async function fetchTimeshareData() {
       }
       holdingIsHistory.value = !!holdingRes.data.isHistory
       holdingOpeningAmount.value = holdingRes.data.openingAmount || holdingRes.data.totalAmount || 0
+      timeshareTotalProfit.value = holdingRes.data.totalProfit ?? null
+      timeshareActualRate.value = holdingRes.data.actualRate ?? null
     } else if (holdingRes.data.loggedIn) {
       holdingTimeshare.value = []
       holdingDate.value = ''
       holdingIsHistory.value = false
+      timeshareTotalProfit.value = null
+      timeshareActualRate.value = null
     }
 
     if (indexRes.data.success && indexRes.data.data) {
@@ -1422,6 +1403,14 @@ function drawIntradayChart() {
     },
     series: [
       {
+        name: '上证指数',
+        type: 'line',
+        data: indexSeriesData,
+        smooth: false,
+        symbol: 'none',
+        lineStyle: { color: '#3B82F6', width: 1.5 },
+      },
+      {
         name: '持仓收益率',
         type: 'line',
         data: holdingSeriesData,
@@ -1431,14 +1420,6 @@ function drawIntradayChart() {
         ...(showZeroLine
           ? { markLine: { silent: true, symbol: 'none', label: { show: false }, data: [{ yAxis: 0 }], lineStyle: { color: '#9CA3AF', width: 1, type: 'dashed' } } }
           : {}),
-      },
-      {
-        name: '上证指数',
-        type: 'line',
-        data: indexSeriesData,
-        smooth: false,
-        symbol: 'none',
-        lineStyle: { color: '#3B82F6', width: 1.5 },
       },
       {
         name: '持仓终点',
@@ -1589,7 +1570,7 @@ function drawProfitTrendChart() {
         const color = val >= 0 ? '#EF4444' : '#10B981'
         const daySign = item.dayProfit >= 0 ? '+' : ''
         let html = `<div style="font-size:10px;color:#9CA3AF;margin-bottom:4px">${item.date}</div>
-                <div style="font-size:11px;font-weight:600;color:${color}">累计 ${sign}¥${val.toFixed(2)}</div>`
+                <div style="font-size:11px;color:${color}">累计 ${sign}¥${val.toFixed(2)}</div>`
         if (item.openingAmount > 0) {
           const rate = (item.dayProfit / item.openingAmount * 100).toFixed(2)
           html += `<div style="font-size:10px;color:${color};margin-top:2px">当日 ${daySign}¥${item.dayProfit.toFixed(2)} (${daySign}${rate}%)</div>`

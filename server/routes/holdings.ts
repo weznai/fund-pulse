@@ -104,6 +104,7 @@ router.get('/profit-analysis', (req: Request, res: Response) => {
     const tradingDay = getTradingDay()
     const today = getLocalDate()
     const todayIsTradingDay = checkTradingDay(today) && tradingDay === today
+    const todayTradingDay = checkTradingDay(today)
     const marketOpened = todayIsTradingDay && isMarketOpenedToday()
 
     const holdings = getHeldFunds()
@@ -162,7 +163,7 @@ router.get('/profit-analysis', (req: Request, res: Response) => {
     }
     }
 
-    res.json({ loggedIn: true, history, totalHoldingAmount, todayIsTradingDay, marketOpened, tradingDay })
+    res.json({ loggedIn: true, history, totalHoldingAmount, todayIsTradingDay, todayTradingDay, marketOpened, tradingDay })
   } catch (error) {
     logger.error('获取收益分析失败:', error)
     res.status(500).json({ error: '获取收益分析失败' })
@@ -215,6 +216,9 @@ router.get('/timeshare', (req: Request, res: Response) => {
 
     setCurrentUserId(userId)
     const today = getLocalDate()
+    // 从 biz_system 获取最近交易日（非交易日时仍为上一个交易日，如周末仍为周五）
+    const tradingDay = getTradingDay()
+    const queryDate = tradingDay || today
 
     const allTimePoints = [
       '09:25', '09:30', '09:35', '09:40', '09:45', '09:50', '09:55',
@@ -226,7 +230,8 @@ router.get('/timeshare', (req: Request, res: Response) => {
       '15:05', '15:10', '15:15', '15:20', '15:25', '15:30', '15:35', '15:40', '15:45', '15:50', '15:55', '16:00'
     ]
 
-    const dbRecord = getDailyProfit(today)
+    // 用最近交易日查询，确保非交易日也能命中 DB 记录（Path1），避免走 Path2 漏算部分基金
+    const dbRecord = getDailyProfit(queryDate)
     if (dbRecord && dbRecord.timeProfitData.length > 0) {
       const dataMap = new Map<string, number>()
       for (const p of dbRecord.timeProfitData) {
@@ -249,11 +254,13 @@ router.get('/timeshare', (req: Request, res: Response) => {
 
       if (dbRecord.finalRate != null) {
         const allHistory = getAllProfitHistory()
-        const todayHistory = allHistory.filter(r => r.profitDate === today)
+        const todayHistory = allHistory.filter(r => r.profitDate === queryDate)
         if (todayHistory.length > 0) {
           totalProfit = Math.round(todayHistory.reduce((sum, r) => sum + r.dayProfit, 0) * 100) / 100
-          actualRate = dbRecord.openingAmount > 0
-            ? Math.round(totalProfit / dbRecord.openingAmount * 10000) / 100
+          // 用 profitHistory 的 openingAmount 重新计算，避免盘中记录的 openingAmount 遗漏部分基金
+          const fullOpeningAmount = todayHistory.reduce((sum, r) => sum + r.openingAmount, 0)
+          actualRate = fullOpeningAmount > 0
+            ? Math.round(totalProfit / fullOpeningAmount * 10000) / 100
             : 0
         }
         const closePercent = Math.round(actualRate * 100) / 100
@@ -267,12 +274,13 @@ router.get('/timeshare', (req: Request, res: Response) => {
 
       const openingAmount = dbRecord.openingAmount
 
+      // date 返回最近交易日，非交易日时 isHistory=true，前端不按当前时间截断分时
       res.json({
         loggedIn: true,
         hasData: true,
         timeshare,
-        date: today,
-        isHistory: false,
+        date: queryDate,
+        isHistory: queryDate !== today,
         fundCount: 0,
         totalAmount: Math.round((openingAmount + totalProfit) * 100) / 100,
         openingAmount: Math.round(openingAmount * 100) / 100,

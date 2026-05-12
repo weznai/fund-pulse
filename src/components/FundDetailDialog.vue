@@ -155,6 +155,12 @@
                 <p class="empty-hint">非交易时间或数据源暂时不可用</p>
               </div>
             </div>
+            <div v-if="isQDIIFund" class="qdii-warning">
+              <svg viewBox="0 0 24 24" fill="none" class="qdii-warning-icon">
+                <path d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>QDII基金估值仅供参考，实际涨跌幅以最终净值为准</span>
+            </div>
           </div>
 
           <div v-show="activeTab === 'trend'" class="tab-content">
@@ -341,6 +347,7 @@ const estimateCacheInfo = ref<{ date: string; dataCount: number } | null>(null)
 const estimateIsUpdated = ref(false)
 const finalNav = ref<number | null>(null)
 const finalGrowth = ref<number | null>(null)
+const isQDIIFund = ref(false)
 
 const holdingsData = ref<Array<{ name: string; code: string; ratio: string; change: string }>>([])
 const holdingsLoading = ref(false)
@@ -446,17 +453,25 @@ async function fetchEstimateData() {
     let isHistoryData = false
     let historyDate = ''
     
-    if (response && typeof response === 'object' && 'data' in response) {
+    if (response && typeof response === 'object' && !Array.isArray(response) && 'data' in response) {
       actualData = response.data
       isHistoryData = response.isHistory || false
       historyDate = response.date || ''
       estimateIsUpdated.value = !!response.isUpdated
       finalNav.value = response.finalNav ?? null
       finalGrowth.value = response.finalGrowth ?? null
+      isQDIIFund.value = !!response.isQDII
+    } else if (Array.isArray(response)) {
+      actualData = response
+      estimateIsUpdated.value = false
+      finalNav.value = null
+      finalGrowth.value = null
+      isQDIIFund.value = false
     } else {
       estimateIsUpdated.value = false
       finalNav.value = null
       finalGrowth.value = null
+      isQDIIFund.value = false
     }
     
     if (actualData && actualData.length > 0) {
@@ -1540,6 +1555,27 @@ watch(activeTab, (val) => {
 .empty-hint {
   font-size: 11px !important;
   color: #9CA3AF;
+}
+
+.qdii-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #FFFBEB;
+  border: 1px solid #FEF3C7;
+  border-radius: 6px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #92400E;
+  line-height: 1.4;
+}
+
+.qdii-warning-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: #F59E0B;
 }
 
 /* 巻加历史收益相关样式 */

@@ -78,7 +78,12 @@ export async function getFundHistory(code: string, period: string, establishDate
   }))
 }
 
-export async function fetchFullNavData(code: string): Promise<FullNavData[]> {
+export interface NavDataResult {
+  data: FullNavData[]
+  pageNotFound: boolean
+}
+
+export async function fetchFullNavData(code: string): Promise<NavDataResult> {
   const response = await axios.get(`https://fund.eastmoney.com/pingzhongdata/${code}.js`, {
     headers: { 'Referer': 'https://fund.eastmoney.com/' },
     timeout: 10000,
@@ -87,8 +92,12 @@ export async function fetchFullNavData(code: string): Promise<FullNavData[]> {
 
   const jsContent = response.data || ''
 
+  if (jsContent.includes('页面未找到') || jsContent.includes('您访问的页面不存在')) {
+    return { data: [], pageNotFound: true }
+  }
+
   const navMatch = jsContent.match(/var\s+Data_netWorthTrend\s*=\s*(\[[\s\S]+?\]);/)
-  if (!navMatch || !navMatch[1]) return []
+  if (!navMatch || !navMatch[1]) return { data: [], pageNotFound: false }
   const navItems: Array<{ x: number; y: number; equityReturn: number }> = JSON.parse(navMatch[1])
 
   let accNavMap = new Map<number, number>()
@@ -104,15 +113,23 @@ export async function fetchFullNavData(code: string): Promise<FullNavData[]> {
     }
   }
 
-  return navItems.map(item => ({
-    date: formatTimestamp(item.x),
-    nav: item.y,
-    accNav: accNavMap.get(item.x) ?? item.y,
-    growth: item.equityReturn || 0
-  }))
+  return {
+    data: navItems.map(item => ({
+      date: formatTimestamp(item.x),
+      nav: item.y,
+      accNav: accNavMap.get(item.x) ?? item.y,
+      growth: item.equityReturn || 0
+    })),
+    pageNotFound: false
+  }
 }
 
-export async function getFundHoldings(code: string): Promise<HoldingsData[]> {
+export interface HoldingsResult {
+  data: HoldingsData[]
+  pageNotFound: boolean
+}
+
+export async function getFundHoldings(code: string): Promise<HoldingsResult> {
   const url = `https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=${code}&topline=10&year=&month=&_=${Date.now()}`
 
   const response = await axios.get(url, {
@@ -126,6 +143,10 @@ export async function getFundHoldings(code: string): Promise<HoldingsData[]> {
   const holdings: HoldingsData[] = []
   const data = response.data || ''
   const stockCodes: string[] = []
+
+  const apidataMatch = data.match(/var\s+apidata\s*=\s*\{/)
+  const hasEmptyContent = apidataMatch && data.match(/content:\s*""/)
+  const pageNotFound = !apidataMatch && (data.includes('页面未找到') || data.includes('您访问的页面不存在') || data.length < 100)
 
   const contentMatch = data.match(/content:\s*"([^"]+)"/s)
   if (contentMatch && contentMatch[1]) {
@@ -168,7 +189,141 @@ export async function getFundHoldings(code: string): Promise<HoldingsData[]> {
     }
   }
 
-  return holdings
+  return { data: holdings, pageNotFound: !!pageNotFound }
+}
+
+interface OverseasFundMeta {
+  hkfcode: string
+  holdingsDate: string
+}
+
+async function getOverseasFundMeta(code: string): Promise<OverseasFundMeta | null> {
+  try {
+    const response = await axios.get(`https://overseas.1234567.com.cn/${code}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
+      timeout: 10000,
+      responseType: 'text'
+    })
+    const html = response.data || ''
+    const hkfMatch = html.match(/hkfcode\s*=\s*['"](\d+)['"]/)
+    if (!hkfMatch) return null
+    const dateMatch = html.match(/持仓数据截止至[：:]\s*(\d{4}-\d{2}-\d{2})/)
+    return {
+      hkfcode: hkfMatch[1],
+      holdingsDate: dateMatch ? dateMatch[1] : ''
+    }
+  } catch (error) {
+    logger.error(`[Overseas] 获取基金元数据失败 ${code}:`, error instanceof Error ? error.message : error)
+    return null
+  }
+}
+
+export async function fetchOverseasFullNavData(code: string): Promise<FullNavData[]> {
+  try {
+    const response = await axios.get(`https://overseas.1234567.com.cn/f10/FundJz/${code}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
+      timeout: 15000,
+      responseType: 'text'
+    })
+
+    const html = response.data || ''
+    const chartMatch = html.match(/dwJZChartData\s*=\s*eval\((\{.*?\})\)/s)
+    if (!chartMatch || !chartMatch[1]) {
+      logger.error(`[Overseas] ${code} 未找到dwJZChartData`)
+      return []
+    }
+
+    const chartData = JSON.parse(chartMatch[1])
+    const dataList: Array<{ x: number; y: number; equityReturn: string }> = chartData.dataList
+    if (!dataList || !Array.isArray(dataList)) return []
+
+    return dataList.map(item => ({
+      date: formatTimestamp(item.x),
+      nav: item.y,
+      accNav: item.y,
+      growth: parseFloat(item.equityReturn) || 0
+    }))
+  } catch (error) {
+    logger.error(`[Overseas] 获取NAV历史失败 ${code}:`, error instanceof Error ? error.message : error)
+    return []
+  }
+}
+
+interface OverseasHoldingItem {
+  ITEMNAME: string
+  PCTNV: number
+  ENDDATE: string
+}
+
+export async function getOverseasFundHoldings(code: string): Promise<HoldingsData[]> {
+  try {
+    const meta = await getOverseasFundMeta(code)
+    if (!meta) {
+      logger.error(`[Overseas] ${code} 无法获取基金元数据`)
+      return []
+    }
+
+    const response = await axios.get('https://overseas.1234567.com.cn/overseasapi/OpenApiHander.ashx', {
+      params: {
+        api: 'HKFDApi',
+        m: 'MethodJJZH',
+        action: 1,
+        hkfcode: meta.hkfcode,
+        date: meta.holdingsDate,
+        pageindex: 0,
+        pagesize: 10
+      },
+      headers: {
+        'Referer': `https://overseas.1234567.com.cn/f10/FundTZZH/${code}`,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
+      timeout: 10000
+    })
+
+    let holdingsData: OverseasHoldingItem[] = response.data?.Data || []
+    if (!holdingsData || !Array.isArray(holdingsData) || holdingsData.length === 0) return []
+
+    return holdingsData.slice(0, 10).map(item => ({
+      code: '',
+      name: item.ITEMNAME || '-',
+      ratio: item.PCTNV ? `${item.PCTNV.toFixed(2)}%` : '-',
+      change: '-'
+    }))
+  } catch (error) {
+    logger.error(`[Overseas] 获取持仓数据失败 ${code}:`, error instanceof Error ? error.message : error)
+    return []
+  }
+}
+
+export async function getEtfUnderlyingCode(code: string): Promise<string | null> {
+  try {
+    const response = await axios.get('https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition', {
+      params: {
+        FCODE: code,
+        plat: 'Android',
+        appType: 'ttjj',
+        product: 'EFund',
+        Version: '1',
+        deviceid: '3f8b2c5d-7a1e-4d9b-b6e3-2c4f8a1d5e7b'
+      },
+      headers: {
+        'Referer': 'https://mpservice.com/eastmoneyfund/',
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'
+      },
+      timeout: 8000
+    })
+
+    const datas = response.data?.Datas
+    if (!datas) return null
+    return datas.ETFCODE || null
+  } catch (error) {
+    logger.error(`[MobAPI] 获取ETF底层代码失败 ${code}:`, error instanceof Error ? error.message : error)
+    return null
+  }
 }
 
 export interface MobApiNavData {

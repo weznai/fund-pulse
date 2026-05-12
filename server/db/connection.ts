@@ -230,6 +230,17 @@ export function initDatabase() {
           db.exec(`ALTER TABLE user_funds RENAME COLUMN last_settled_date TO settle_date`)
         }
       }
+    },
+    {
+      name: 'data_source_v2_20260511',
+      description: '新增data_extra字段，重命名estimate_only为mobapi',
+      up: () => {
+        const cols = db.prepare(`PRAGMA table_info(fund_info)`).all() as any[]
+        if (!cols.some(c => c.name === 'data_extra')) {
+          db.exec(`ALTER TABLE fund_info ADD COLUMN data_extra TEXT DEFAULT NULL`)
+        }
+        db.exec(`UPDATE fund_info SET data_source = 'mobapi' WHERE data_source = 'estimate_only'`)
+      }
     }
   ]
 

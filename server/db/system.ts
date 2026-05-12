@@ -2,6 +2,7 @@ import db from './connection.js'
 import { getLocalDate } from './connection.js'
 import { logger } from '../logger.js'
 import { hasFundDataForDate } from './userFund.js'
+import { isTradingDay } from './holiday.js'
 
 export interface SystemInfo {
   name: string
@@ -30,28 +31,29 @@ export function updateSystemTradingDays(name: string = 'fund'): SystemInfo {
     return current
   }
 
-  if (!hasFundDataForDate(today)) {
-    if (current && current.tradingDay === today) {
-      db.prepare(`UPDATE biz_system SET trading_day = ?, updated_at = ? WHERE name = ?`)
-        .run(current.lastTradingDay, Date.now(), name)
-      return { name, lastTradingDay: current.lastTradingDay, tradingDay: current.lastTradingDay, updatedAt: Date.now() }
+  if (isTradingDay(today)) {
+    if (hasFundDataForDate(today) || !current || current.tradingDay !== today) {
+      const lastTradingDay = current?.tradingDay || ''
+      const now = Date.now()
+      db.prepare(`
+        INSERT INTO biz_system (name, last_trading_day, trading_day, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(name) DO UPDATE SET
+          last_trading_day = excluded.last_trading_day,
+          trading_day = excluded.trading_day,
+          updated_at = excluded.updated_at
+      `).run(name, lastTradingDay, today, now)
+      return { name, lastTradingDay, tradingDay: today, updatedAt: now }
     }
-    return current || { name, lastTradingDay: '', tradingDay: '', updatedAt: 0 }
+    return current
   }
 
-  const lastTradingDay = current?.tradingDay || ''
-  const now = Date.now()
-
-  db.prepare(`
-    INSERT INTO biz_system (name, last_trading_day, trading_day, updated_at)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(name) DO UPDATE SET
-      last_trading_day = excluded.last_trading_day,
-      trading_day = excluded.trading_day,
-      updated_at = excluded.updated_at
-  `).run(name, lastTradingDay, today, now)
-
-  return { name, lastTradingDay, tradingDay: today, updatedAt: now }
+  if (current && current.tradingDay === today) {
+    db.prepare(`UPDATE biz_system SET trading_day = ?, updated_at = ? WHERE name = ?`)
+      .run(current.lastTradingDay, Date.now(), name)
+    return { name, lastTradingDay: current.lastTradingDay, tradingDay: current.lastTradingDay, updatedAt: Date.now() }
+  }
+  return current || { name, lastTradingDay: '', tradingDay: '', updatedAt: 0 }
 }
 
 function getLatestSettleDate(): string {
@@ -64,6 +66,28 @@ function getLatestSettleDate(): string {
 
 export function getTradingDay(): string {
   const info = getSystemInfo()
+  const today = getLocalDate()
+
+  if (info?.tradingDay && info.tradingDay === today && hasFundDataForDate(today)) {
+    return info.tradingDay
+  }
+
+  if (hasFundDataForDate(today) && isTradingDay(today)) {
+    if (info && info.tradingDay !== today) {
+      const lastTradingDay = info.tradingDay || ''
+      const now = Date.now()
+      db.prepare(`
+        INSERT INTO biz_system (name, last_trading_day, trading_day, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(name) DO UPDATE SET
+          last_trading_day = excluded.last_trading_day,
+          trading_day = excluded.trading_day,
+          updated_at = excluded.updated_at
+      `).run(info.name, lastTradingDay, today, now)
+      logger.log(`📅 biz_system.trading_day 已更新: ${lastTradingDay} → ${today}`)
+    }
+    return today
+  }
 
   if (info?.tradingDay && hasFundDataForDate(info.tradingDay)) {
     return info.tradingDay

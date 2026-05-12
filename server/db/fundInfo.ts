@@ -16,6 +16,7 @@ export interface FundInfo {
   created_at: number
   updated_at: number
   data_source?: string
+  data_extra?: Record<string, string> | null
 }
 
 export interface FundInfoListResult {
@@ -43,6 +44,7 @@ export function getFundInfo(code: string): FundInfo | null {
       status: result.status || 'active',
       is_recommend: result.is_recommend || 0,
       data_source: result.data_source || 'standard',
+      data_extra: result.data_extra ? JSON.parse(result.data_extra) : null,
       created_at: result.created_at,
       updated_at: result.updated_at
     }
@@ -104,6 +106,7 @@ export function getFundInfoList(options: {
       status: r.status || 'active',
       is_recommend: r.is_recommend || 0,
       data_source: r.data_source || 'standard',
+      data_extra: r.data_extra ? JSON.parse(r.data_extra) : null,
       created_at: r.created_at,
       updated_at: r.updated_at
     })),
@@ -222,13 +225,13 @@ export function batchSaveFundInfo(funds: Array<Partial<FundInfo> & { code: strin
 export function updateFundInfoField(code: string, fields: Record<string, any>): boolean {
   const existing = getFundInfo(code)
   if (!existing) return false
-  const allowedKeys = ['data_source', 'ftype', 'fund_company', 'fund_manager', 'benchmark']
+  const allowedKeys = ['data_source', 'data_extra', 'ftype', 'fund_company', 'fund_manager', 'benchmark']
   const updates: string[] = []
   const values: any[] = []
   for (const key of allowedKeys) {
     if (key in fields) {
       updates.push(`${key} = ?`)
-      values.push(fields[key])
+      values.push(key === 'data_extra' && fields[key] ? JSON.stringify(fields[key]) : fields[key])
     }
   }
   if (updates.length === 0) return false
