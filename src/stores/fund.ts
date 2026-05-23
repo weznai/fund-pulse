@@ -420,7 +420,7 @@ export const useFundStore = defineStore('fund', () => {
     }
   }
 
-  async function fetchFavorites() {
+  async function fetchFavorites(forceRefresh = false) {
     if (favoriteCodes.value.length === 0) {
       favoriteFunds.value = []
       return
@@ -430,7 +430,7 @@ export const useFundStore = defineStore('fund', () => {
     error.value = null
 
     try {
-      const funds = await fetchFunds(favoriteCodes.value)
+      const funds = await fetchFunds(favoriteCodes.value, forceRefresh)
       favoriteFunds.value = funds
       lastUpdateTime.value = new Date().toLocaleTimeString('zh-CN', {
         hour: '2-digit',
@@ -742,7 +742,8 @@ export const useFundStore = defineStore('fund', () => {
 
   async function init() {
     if (isInitialized.value) {
-      console.log('⚠️ Store 已经初始化，跳过重复初始化')
+      console.log('⚠️ Store 已经初始化，重启轮询')
+      startPolling()
       return
     }
 

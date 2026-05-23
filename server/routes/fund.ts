@@ -12,9 +12,9 @@ const router = Router()
 
 router.post('/funds', async (req: Request, res: Response) => {
   try {
-    const { codes } = req.body
+    const { codes, forceRefresh } = req.body
     if (!codes || !Array.isArray(codes)) return res.json([])
-    const results = await fetchFundsBatch(codes)
+    const results = await fetchFundsBatch(codes, !!forceRefresh)
     res.json(results)
   } catch (error) {
     logger.error('Batch fetch funds error:', error)
@@ -120,14 +120,14 @@ router.get('/fundgz/:code', async (req: Request, res: Response) => {
  *   standard   → 东方财富标准API（FundArchivesDatas），适用于绝大多数基金
  *   overseas   → 东方财富海外站API（overseas.1234567.com.cn），适用于互认基金(968xxx)
  *   etf_linked → 穿透到底层ETF查询持仓，适用于ETF联接基金（如013309→513010）
- *   mobapi     → 仅移动端API，无持仓数据
+ *   mobapi     → 仅移动端API获取净值，持仓和历史净值走海外站API，但不改写data_source
  *
  * 首次探测（data_source='standard' 时自动触发，探测成功后回写标记避免重复探测）：
  *   1. 标准API返回数据 → 直接用
  *   2. 标准API返回404页面(pageNotFound=true) → 该基金不在标准站 → 试海外站 → 成功则标记 overseas
  *   3. 标准API返回空持仓(pageNotFound=false) → 先试ETF穿透(MobAPI查底层ETF) → 成功则标记 etf_linked
  *   4. ETF穿透也无结果 → 最后试海外站兜底 → 成功则标记 overseas
- *   5. 全部失败 → 确实无持仓数据（如货币基金、mobapi基金）
+ *   5. 全部失败 → 确实无持仓数据（如货币基金）
  */
 router.get('/fund/holdings/:code', async (req: Request, res: Response) => {
   try {
@@ -138,7 +138,7 @@ router.get('/fund/holdings/:code', async (req: Request, res: Response) => {
     let holdings: any[] = []
     let source = ds
 
-    if (ds === 'overseas') {
+    if (ds === 'overseas' || ds === 'mobapi') {
       holdings = await getOverseasFundHoldings(code)
     } else if (ds === 'etf_linked') {
       const etfCode = fundInfo?.data_extra?.etf_code
@@ -428,6 +428,56 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
       }
     }
 
+    if (estimates.length === 0) {
+      try {
+        const marketPrefix = code.startsWith('5') ? '1' : '0'
+        const sinaPrefix = code.startsWith('5') ? 'sh' : 'sz'
+        const sinaUrl = `https://hq.sinajs.cn/list=${sinaPrefix}${code}`
+        const sinaResp = await axios.get(sinaUrl, {
+          headers: { 'Referer': 'https://finance.sina.com.cn/', 'User-Agent': 'Mozilla/5.0' },
+          responseType: 'arraybuffer', timeout: 8000
+        })
+        const sinaText = iconv.decode(Buffer.from(sinaResp.data), 'gbk')
+        const sinaMatch = sinaText.match(new RegExp(`${sinaPrefix}${code}="([^"]+)"`))
+
+        if (sinaMatch && sinaMatch[1]) {
+          const sinaParts = sinaMatch[1].split(',')
+          const preClose = parseFloat(sinaParts[2]) || 0
+
+          if (preClose > 0) {
+            const trendUrl = `https://push2his.eastmoney.com/api/qt/stock/trends2/get?secid=${marketPrefix}.${code}&fields1=f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12,f13&fields2=f51,f52,f53,f54,f55,f56,f57,f58&ndays=1&iscr=0&_=${Date.now()}`
+            const trendResp = await axios.get(trendUrl, {
+              headers: { 'Referer': 'https://quote.eastmoney.com/', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+              timeout: 8000
+            })
+
+            if (trendResp.data?.data?.trends) {
+              const trends = trendResp.data.data.trends
+              for (const trend of trends) {
+                const tParts = trend.split(',')
+                const timeStr = tParts[0].split(' ')[1]
+                const price = parseFloat(tParts[2])
+                const percent = ((price - preClose) / preClose) * 100
+                estimates.push({
+                  time: timeStr,
+                  value: Number(price.toFixed(4)),
+                  percent: Number(percent.toFixed(2))
+                })
+              }
+
+              if (estimates.length > 0) {
+                saveGlobalEstimateCache({ code, data: JSON.stringify(estimates), date: tradingDay })
+                logger.log(`📈 [场内ETF] 股票级分时数据 ${fundName}(${code}):`, estimates.length, '条')
+                return res.json({ data: estimates, isQDII })
+              }
+            }
+          }
+        }
+      } catch (etfError: any) {
+        logger.log('[场内ETF] 股票级分时接口失败:', etfError.message)
+      }
+    }
+
     const latestCached = getLatestGlobalEstimateCache(code, today)
     if (latestCached && latestCached.data) {
       try {
@@ -464,7 +514,7 @@ router.delete('/fund/estimate/cache/:code?', (req: Request, res: Response) => {
  * 数据源策略：
  *   standard → 东方财富 pingzhongdata/{code}.js
  *   overseas → 东方财富海外站 F10页面解析 dwJQChartData
- *   etf_linked / mobapi → 标准API（ETF联接基金的NAV走标准源）
+ *   etf_linked / mobapi → 海外站API（mobapi基金持仓和历史净值走海外站，净值估值走MobAPI）
  *
  * 首次探测（data_source='standard' 且需要同步时自动触发）：
  *   1. pingzhongdata返回有效JS数据 → 直接用
@@ -489,7 +539,7 @@ router.get('/fund/history/:code', async (req: Request, res: Response) => {
       const { fetchFullNavData, fetchOverseasFullNavData } = await import('../external/eastmoney.js')
       let fullData: any[] = []
 
-      if (ds === 'overseas') {
+      if (ds === 'overseas' || ds === 'mobapi') {
         fullData = await fetchOverseasFullNavData(code)
       } else {
         const result = await fetchFullNavData(code)

@@ -1629,6 +1629,7 @@ function startRefresh() {
   stopRefresh()
   refreshTimer = setInterval(() => {
     if (authStore.isLoggedIn) {
+      fundStore.fetchFavorites()
       fetchData()
       if (selectedTrendPeriod.value === 'today') {
         fetchTimeshareData().then(() => drawIntradayChart())
@@ -1647,7 +1648,10 @@ function stopRefresh() {
 }
 
 async function loadRevenueData() {
-  if (dataLoaded) return
+  if (dataLoaded) {
+    startRefresh()
+    return
+  }
   dataLoaded = true
 
   loading.value = true

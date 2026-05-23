@@ -138,7 +138,7 @@ async function fetchSingleEstimate(code: string): Promise<{ nav: number; gsz: nu
   return null
 }
 
-async function fetchSingleEstimateFallback(code: string): Promise<{ nav: number; gsz: number; gszzl: number; gztime: string } | null> {
+async function fetchSingleEstimateFallback(code: string): Promise<{ nav: number; gsz: number; gszzl: number; gztime: string; isEtfStock?: boolean } | null> {
   try {
     const fsUrls = [
       `https://fund.eastmoney.com/tfsj_v1.0.0/fsdata_${code}.js`,
@@ -178,6 +178,29 @@ async function fetchSingleEstimateFallback(code: string): Promise<{ nav: number;
   } catch (error) {
     logger.log(`ETF ${code} 东方财富分时降级失败:`, error instanceof Error ? error.message : 'Unknown error')
   }
+
+  try {
+    const sinaPrefix = code.startsWith('5') ? 'sh' : 'sz'
+    const sinaUrl = `https://hq.sinajs.cn/list=${sinaPrefix}${code}`
+    const response = await axios.get(sinaUrl, {
+      headers: { 'Referer': 'https://finance.sina.com.cn/', 'User-Agent': 'Mozilla/5.0' },
+      responseType: 'arraybuffer', timeout: 8000
+    })
+    const iconv = await import('iconv-lite')
+    const decodedData = iconv.decode(Buffer.from(response.data), 'gbk')
+    const sinaMatch = decodedData.match(new RegExp(`${sinaPrefix}${code}="([^"]+)"`))
+    if (sinaMatch && sinaMatch[1]) {
+      const parts = sinaMatch[1].split(',')
+      const preClose = parseFloat(parts[2]) || 0
+      const currentPrice = parseFloat(parts[3]) || 0
+      if (preClose > 0 && currentPrice > 0) {
+        const percent = ((currentPrice - preClose) / preClose) * 100
+        logger.log(`🏦 [场内ETF] ${code} 股票行情降级: 昨收=${preClose} 现价=${currentPrice} 涨幅=${percent.toFixed(2)}%`)
+        return { nav: preClose, gsz: currentPrice, gszzl: percent, gztime: getLocalDate(), isEtfStock: true }
+      }
+    }
+  } catch (_e) { }
+
   return null
 }
 
@@ -308,7 +331,8 @@ async function fetchEstimateData(codes: string[]): Promise<void> {
         }
 
         const fundName = getFundInfo(code)?.name || ''
-        logger.log(`📊 采集 ${code}${fundName ? '(' + fundName + ')' : ''}: ${recordTime} 估值=${estimate.gsz.toFixed(4)} 涨幅=${estimate.gszzl.toFixed(2)}% (累计${estimates.length}点)`)
+        const etfTag = estimate.isEtfStock ? ' [场内ETF]' : ''
+        logger.log(`📊 采集${etfTag} ${code}${fundName ? '(' + fundName + ')' : ''}: ${recordTime} 估值=${estimate.gsz.toFixed(4)} 涨幅=${estimate.gszzl.toFixed(2)}% (累计${estimates.length}点)`)
 
         return {
           code,

@@ -22,9 +22,9 @@ function createPlaceholder(code: string): Fund {
   }
 }
 
-export async function fetchFunds(codes: string[]): Promise<Fund[]> {
+export async function fetchFunds(codes: string[], forceRefresh = false): Promise<Fund[]> {
   try {
-    const response = await axios.post('/api/funds', { codes }, { timeout: 30000 })
+    const response = await axios.post('/api/funds', { codes, forceRefresh }, { timeout: 30000 })
     const funds: any[] = response.data || []
     const fundsMap = new Map(funds.map(f => [f.code, f]))
 

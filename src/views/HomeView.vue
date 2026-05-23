@@ -42,7 +42,7 @@
           </div>
           <button
             class="refresh-btn"
-            @click="store.fetchFavorites"
+            @click="store.fetchFavorites(true)"
             :disabled="store.loading"
             :title="store.lastUpdateTime ? `最后更新: ${store.lastUpdateTime}` : '手动刷新数据'"
           >

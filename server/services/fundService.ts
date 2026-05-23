@@ -166,14 +166,14 @@ function isQDIIFund(code: string): boolean {
   return false
 }
 
-async function fetchFundData(code: string) {
+async function fetchFundData(code: string, forceRefresh = false) {
   const now = Date.now()
   const today = getLocalDate()
 
   const isTradeDay = checkTradingDay(today)
-  let cacheTtl = isTradeDay ? FUND_CACHE_TTL : 365 * 24 * 60 * 60 * 1000
+  let cacheTtl = isTradeDay ? FUND_CACHE_TTL : (forceRefresh ? 0 : 365 * 24 * 60 * 60 * 1000)
 
-  if (isTradeDay) {
+  if (isTradeDay && !forceRefresh) {
     const estimateCache = getGlobalEstimateCache(code, today)
     if (estimateCache && estimateCache.isUpdated) {
       const existingCache = getFundCache(code, 365 * 24 * 60 * 60 * 1000)
@@ -201,12 +201,14 @@ async function fetchFundData(code: string) {
     }
   }
 
-  const cached = getFundCache(code, cacheTtl)
-  if (cached) {
-    try {
-      return JSON.parse(cached.data)
-    } catch (e) {
-      logger.error('解析基金缓存数据失败:', e)
+  if (!forceRefresh) {
+    const cached = getFundCache(code, cacheTtl)
+    if (cached) {
+      try {
+        return JSON.parse(cached.data)
+      } catch (e) {
+        logger.error('解析基金缓存数据失败:', e)
+      }
     }
   }
 
@@ -496,7 +498,7 @@ function buildFallbackFund(code: string) {
   }
 }
 
-async function fetchFundsBatch(codes: string[]) {
+async function fetchFundsBatch(codes: string[], forceRefresh = false) {
   const results: any[] = []
   const concurrencyLimit = 10
 
@@ -505,7 +507,7 @@ async function fetchFundsBatch(codes: string[]) {
     const batchResults = await Promise.all(
       batch.map(async code => {
         try {
-          const result = await fetchFundData(code)
+          const result = await fetchFundData(code, forceRefresh)
           return result || buildFallbackFund(code)
         } catch (err) {
           logger.error(`获取基金 ${code} 失败:`, err)
