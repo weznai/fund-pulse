@@ -115,6 +115,11 @@ export function getSuggestionList(options: { page?: number; pageSize?: number; s
   return { list, total }
 }
 
+export function deleteSuggestion(id: number): boolean {
+  const result = db.prepare(`DELETE FROM suggestions WHERE id = ?`).run(id)
+  return result.changes > 0
+}
+
 export function getAdminSuggestionList(options: { page?: number; pageSize?: number; status?: string }): SuggestionListResult & { list: any[] } {
   const { page = 1, pageSize = 20, status } = options
   const offset = (page - 1) * pageSize

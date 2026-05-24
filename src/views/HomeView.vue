@@ -94,6 +94,12 @@
       <template v-else>
         <div class="search-section">
           <FundSearch @select="handleSearchSelect" />
+          <button class="ai-analysis-btn" @click="$router.push('/smart-analysis')" title="智能分析">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <span class="ai-analysis-text" @click="$router.push('/smart-analysis')">智能分析</span>
         </div>
         
         <div class="fund-header">
@@ -1233,6 +1239,41 @@ function handleClearCache() {
   margin-bottom: 16px;
   display: flex;
   justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
+
+.ai-analysis-btn {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0EA5E9 0%, #06B6D4 100%);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: white;
+  transition: all 0.2s;
+  box-shadow: 0 1px 4px rgba(14, 165, 233, 0.2);
+}
+
+.ai-analysis-btn:hover {
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+}
+
+.ai-analysis-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ai-analysis-text {
+  font-size: 12px;
+  color: #0EA5E9;
+  cursor: pointer;
+  white-space: nowrap;
+  font-weight: 500;
 }
 
 .toolbar-stats {

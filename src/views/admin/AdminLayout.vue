@@ -256,8 +256,8 @@ const menuItems = [
     }
   },
   {
-    path: '/admin/task-manage',
-    title: '任务管理',
+    path: '/admin/operation-logs',
+    title: '操作日志',
     icon: {
       render() {
         return h('svg', { viewBox: '0 0 24 24', fill: 'none' }, [
@@ -302,6 +302,24 @@ const menuItems = [
             'stroke-width': '1.8',
             'stroke-linecap': 'round',
             'stroke-linejoin': 'round'
+          })
+        ])
+      }
+    }
+  },
+  {
+    path: '/admin/model-manage',
+    title: '模型管理',
+    icon: {
+      render() {
+        return h('svg', { viewBox: '0 0 24 24', fill: 'none' }, [
+          h('path', {
+            d: 'M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93V13h3.75a2.5 2.5 0 0 1 2.5 2.5v1.57A4.001 4.001 0 0 1 18 25a4.001 4.001 0 0 1-3-6.93V15.5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0-.5.5v2.57A4.001 4.001 0 0 1 6 25a4.001 4.001 0 0 1-3-6.93V15.5A2.5 2.5 0 0 1 5.5 13h3.75V9.93A4.002 4.002 0 0 1 12 2z',
+            stroke: 'currentColor',
+            'stroke-width': '1.5',
+            'stroke-linecap': 'round',
+            'stroke-linejoin': 'round',
+            'fill': 'none'
           })
         ])
       }

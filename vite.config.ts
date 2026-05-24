@@ -10,7 +10,7 @@ export default defineConfig({
     }
   },
   server: {
-    allowedHosts: ['fund.wezin.cn', '192.168.1.3'],
+    allowedHosts: ['fund.wezin.cn', '192.168.1.3', '192.168.10.6'],
     host: true,
     port: 5173,
     open: true,

@@ -6,7 +6,8 @@ import {
   getSuggestionList,
   getAdminSuggestionList,
   getSuggestionById,
-  updateSuggestionStatus
+  updateSuggestionStatus,
+  deleteSuggestion
 } from '../db/suggestion.js'
 import { generateSuggestionSummary } from '../services/suggestionService.js'
 import { validateAdminToken } from '../middleware/auth.js'
@@ -100,6 +101,27 @@ router.put('/admin/suggestions/:id/status', validateAdminToken, (req: Request, r
   } catch (error) {
     logger.error('更新建议状态失败:', error)
     res.status(500).json({ error: '更新失败' })
+  }
+})
+
+router.delete('/admin/suggestions/:id', validateAdminToken, (req: Request, res: Response) => {
+  try {
+    ensureSuggestionsTable()
+    const id = parseInt(req.params.id, 10)
+    if (isNaN(id)) {
+      return res.status(400).json({ error: '无效的建议ID' })
+    }
+
+    const suggestion = getSuggestionById(id)
+    if (!suggestion) {
+      return res.status(404).json({ error: '建议不存在' })
+    }
+
+    const success = deleteSuggestion(id)
+    res.json({ success })
+  } catch (error) {
+    logger.error('删除建议失败:', error)
+    res.status(500).json({ error: '删除失败' })
   }
 })
 

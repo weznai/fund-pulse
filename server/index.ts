@@ -1,3 +1,4 @@
+import './config/index.js'
 import express from 'express'
 import cors from 'cors'
 import path from 'path'
@@ -12,6 +13,9 @@ import { validateAdminToken } from './middleware/auth.js'
 import { trackVisit } from './middleware/visitTracker.js'
 import { getClientUserId, setSessionCookie } from './middleware/userSession.js'
 import { userContext } from './db.js'
+import { ensureOperationLogTable } from './db/operationLog.js'
+import { ensureModelConfigTable } from './db/modelConfig.js'
+import { seedDefaultData } from './model_config.js'
 
 import fundRoutes from './routes/fund.js'
 import authRoutes from './routes/auth.js'
@@ -21,6 +25,7 @@ import adminRoutes from './routes/admin.js'
 import visitRoutes from './routes/visit.js'
 import cacheRoutes from './routes/cache.js'
 import suggestionRoutes from './routes/suggestion.js'
+import analysisRoutes from './routes/analysis.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -34,6 +39,9 @@ app.use(express.json())
 initDatabase()
 fixUsersDataIntegrity()
 ensureVisitLogsTable()
+ensureOperationLogTable()
+ensureModelConfigTable()
+seedDefaultData()
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
@@ -67,6 +75,7 @@ app.use('/api/admin', adminRoutes)
 app.use('/api', visitRoutes)
 app.use('/api/cache', cacheRoutes)
 app.use('/api', suggestionRoutes)
+app.use('/api', analysisRoutes)
 
 app.use('/api/users', (req, res) => {
   try {

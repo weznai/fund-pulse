@@ -18,7 +18,11 @@ import {
   getTaskList, createTask, updateTask, getTaskById,
   setUserDisabled,
   TaskType, TaskStatus,
-  FundInfo
+  FundInfo,
+  getOperationLogList,
+  getProviders, getProviderById, addProvider, updateProvider, deleteProvider,
+  getModelsByProvider, getAllModels, addModel, updateModel, deleteModel,
+  getSceneMappings, setSceneMapping
 } from '../db/index.js'
 import { setRegisteredUser } from '../db/index.js'
 import db from '../db/index.js'
@@ -877,6 +881,153 @@ router.post('/fund-info/sync', validateAdminToken, async (req: Request, res: Res
   } catch (error) {
     logger.error('同步基金信息失败:', error)
     res.status(500).json({ error: '同步基金信息失败' })
+  }
+})
+
+// ---- Operation Logs ----
+router.get('/operation-logs', validateAdminToken, (req: Request, res: Response) => {
+  try {
+    const page = parseIntSafe(req.query.page, 1, 1)
+    const pageSize = parseIntSafe(req.query.pageSize, 20, 1, 100)
+    const result = getOperationLogList({
+      page,
+      pageSize,
+      action: parseString(req.query.action as string),
+      username: parseString(req.query.username as string),
+      startDate: parseString(req.query.startDate as string),
+      endDate: parseString(req.query.endDate as string)
+    })
+    res.json(result)
+  } catch (error) {
+    logger.error('获取操作日志失败:', error)
+    res.status(500).json({ error: '获取操作日志失败' })
+  }
+})
+
+// ---- Model Management ----
+router.get('/model/providers', validateAdminToken, (_req: Request, res: Response) => {
+  try {
+    res.json(getProviders())
+  } catch (error) {
+    logger.error('获取模型提供商失败:', error)
+    res.status(500).json({ error: '获取模型提供商失败' })
+  }
+})
+
+router.post('/model/providers', validateAdminToken, (req: Request, res: Response) => {
+  try {
+    const { name, api_base, api_key } = req.body
+    if (!name || !api_base) return res.status(400).json({ error: '缺少必要参数' })
+    const provider = addProvider({ name, api_base, api_key: api_key || '' })
+    res.json({ success: true, provider })
+  } catch (error: any) {
+    if (error.message?.includes('UNIQUE')) return res.status(400).json({ error: '提供商名称已存在' })
+    logger.error('添加模型提供商失败:', error)
+    res.status(500).json({ error: '添加模型提供商失败' })
+  }
+})
+
+router.put('/model/providers/:id', validateAdminToken, (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id)
+    if (isNaN(id)) return res.status(400).json({ error: '无效的ID' })
+    updateProvider(id, req.body)
+    res.json({ success: true })
+  } catch (error) {
+    logger.error('更新模型提供商失败:', error)
+    res.status(500).json({ error: '更新模型提供商失败' })
+  }
+})
+
+router.delete('/model/providers/:id', validateAdminToken, (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id)
+    if (isNaN(id)) return res.status(400).json({ error: '无效的ID' })
+    const ok = deleteProvider(id)
+    if (!ok) return res.status(400).json({ error: '该提供商下仍有模型，无法删除' })
+    res.json({ success: true })
+  } catch (error) {
+    logger.error('删除模型提供商失败:', error)
+    res.status(500).json({ error: '删除模型提供商失败' })
+  }
+})
+
+router.get('/model/models', validateAdminToken, (_req: Request, res: Response) => {
+  try {
+    res.json(getAllModels())
+  } catch (error) {
+    logger.error('获取模型列表失败:', error)
+    res.status(500).json({ error: '获取模型列表失败' })
+  }
+})
+
+router.get('/model/providers/:id/models', validateAdminToken, (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id)
+    if (isNaN(id)) return res.status(400).json({ error: '无效的ID' })
+    res.json(getModelsByProvider(id))
+  } catch (error) {
+    logger.error('获取模型列表失败:', error)
+    res.status(500).json({ error: '获取模型列表失败' })
+  }
+})
+
+router.post('/model/models', validateAdminToken, (req: Request, res: Response) => {
+  try {
+    const { provider_id, model_id, model_name } = req.body
+    if (!provider_id || !model_id || !model_name) return res.status(400).json({ error: '缺少必要参数' })
+    addModel({ provider_id, model_id, model_name })
+    res.json({ success: true })
+  } catch (error: any) {
+    if (error.message?.includes('UNIQUE')) return res.status(400).json({ error: '该模型已存在' })
+    logger.error('添加模型失败:', error)
+    res.status(500).json({ error: '添加模型失败' })
+  }
+})
+
+router.put('/model/models/:id', validateAdminToken, (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id)
+    if (isNaN(id)) return res.status(400).json({ error: '无效的ID' })
+    updateModel(id, req.body)
+    res.json({ success: true })
+  } catch (error) {
+    logger.error('更新模型失败:', error)
+    res.status(500).json({ error: '更新模型失败' })
+  }
+})
+
+router.delete('/model/models/:id', validateAdminToken, (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id)
+    if (isNaN(id)) return res.status(400).json({ error: '无效的ID' })
+    const ok = deleteModel(id)
+    if (!ok) return res.status(404).json({ error: '模型不存在' })
+    res.json({ success: true })
+  } catch (error) {
+    logger.error('删除模型失败:', error)
+    res.status(500).json({ error: '删除模型失败' })
+  }
+})
+
+router.get('/model/scenes', validateAdminToken, (_req: Request, res: Response) => {
+  try {
+    res.json(getSceneMappings())
+  } catch (error) {
+    logger.error('获取场景映射失败:', error)
+    res.status(500).json({ error: '获取场景映射失败' })
+  }
+})
+
+router.put('/model/scenes/:scene', validateAdminToken, (req: Request, res: Response) => {
+  try {
+    const { scene_name, model_id, provider_id } = req.body
+    if (!model_id || !provider_id) return res.status(400).json({ error: '缺少必要参数' })
+    setSceneMapping({ scene: req.params.scene, scene_name: scene_name || req.params.scene, model_id, provider_id })
+    res.json({ success: true })
+  } catch (error) {
+    logger.error('更新场景映射失败:', error)
+    res.status(500).json({ error: '更新场景映射失败' })
   }
 })
 

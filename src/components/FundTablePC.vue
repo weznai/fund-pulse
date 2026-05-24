@@ -60,7 +60,13 @@
                 <span class="fund-name fund-name-link">{{ row.fundName }}</span>
                 <span v-if="row.holdingAmountValue" class="hold-badge">持</span>
               </div>
-              <span class="fund-code">{{ row.code }}</span>
+              <span class="fund-code-wrap" @click.stop="copyCode(row.code, $event)">
+                <span class="fund-code">{{ row.code }}</span>
+                <svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2"/>
+                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                </svg>
+              </span>
             </div>
           </td>
           <td class="col-change">
@@ -145,6 +151,16 @@ defineEmits<{
 function getChangeClass(value: number | null): string {
   if (value === null || value === 0) return ''
   return value > 0 ? 'up' : 'down'
+}
+
+function copyCode(code: string, e: MouseEvent) {
+  navigator.clipboard.writeText(code)
+  const wrap = (e.currentTarget as HTMLElement)
+  const icon = wrap.querySelector('.copy-icon')
+  if (icon) {
+    icon.classList.add('copied')
+    setTimeout(() => icon.classList.remove('copied'), 1200)
+  }
 }
 
 function isToday(dateStr: string): boolean {
@@ -369,6 +385,36 @@ tbody tr:hover .col-name {
   font-size: 12px;
   color: #9CA3AF;
   font-family: 'SF Mono', Consolas, monospace;
+}
+
+.fund-code-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.fund-code-wrap:hover .fund-code {
+  color: #3B82F6;
+}
+
+.copy-icon {
+  width: 12px;
+  height: 12px;
+  color: #9CA3AF;
+  opacity: 0;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.fund-code-wrap:hover .copy-icon {
+  opacity: 1;
+  color: #3B82F6;
+}
+
+.copy-icon.copied {
+  opacity: 1;
+  color: #3B82F6;
 }
 
 .col-change {

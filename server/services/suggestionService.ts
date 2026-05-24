@@ -1,21 +1,23 @@
 import axios from 'axios'
 import { logger } from '../logger.js'
 import { updateSuggestionSummary, updateSuggestionStatus } from '../db/suggestion.js'
+import { getLLMConfigForScene, getFallbackLLMConfig } from '../db/modelConfig.js'
 
-const LLM_CONFIG = {
-  model: 'Qwen/Qwen3-8B',
-  apiKey: 'sk-syxkwgeidzezrzpszuvjcctevrfpfkevuuthhzhpmkphwjxe',
-  apiBase: 'https://api.siliconflow.cn'
+function getLLMConfig() {
+  const config = getLLMConfigForScene('suggestion_summary')
+  if (config) return config
+  return getFallbackLLMConfig()
 }
 
 export async function generateSuggestionSummary(id: number, content: string): Promise<void> {
   try {
     updateSuggestionStatus(id, 'processing')
 
+    const llmConfig = getLLMConfig()
     const response = await axios.post(
-      `${LLM_CONFIG.apiBase}/v1/chat/completions`,
+      `${llmConfig.apiBase}/v1/chat/completions`,
       {
-        model: LLM_CONFIG.model,
+        model: llmConfig.model,
         messages: [
           {
             role: 'system',
@@ -31,7 +33,7 @@ export async function generateSuggestionSummary(id: number, content: string): Pr
       },
       {
         headers: {
-          'Authorization': `Bearer ${LLM_CONFIG.apiKey}`,
+          'Authorization': `Bearer ${llmConfig.apiKey}`,
           'Content-Type': 'application/json'
         },
         timeout: 30000

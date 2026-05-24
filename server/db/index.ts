@@ -42,6 +42,21 @@ export type { SystemInfo } from './system.js'
 export { getLatestNavDate, getNavHistoryRange, getNavCount, saveNavHistoryBatch } from './navHistory.js'
 export type { NavHistoryRecord } from './navHistory.js'
 
+export { ensureAnalysisUsageTable, getAnalysisUsage, incrementAnalysisUsage } from './analysisUsage.js'
+export type { AnalysisUsageRecord } from './analysisUsage.js'
+
+export { ensureOperationLogTable, addOperationLog, getOperationLogList } from './operationLog.js'
+export type { OperationLog, OperationLogListResult, OperationLogQuery } from './operationLog.js'
+
+export {
+  ensureModelConfigTable,
+  getProviders, getProviderById, getProviderByName, addProvider, updateProvider, deleteProvider,
+  getModelsByProvider, getAllModels, addModel, updateModel, deleteModel,
+  getSceneMappings, setSceneMapping,
+  getLLMConfigForScene, getFallbackLLMConfig
+} from './modelConfig.js'
+export type { ModelProvider, ModelItem, ModelSceneMapping, LLMRuntimeConfig } from './modelConfig.js'
+
 // Repository 模式 - 数据访问层
 export { 
   BaseRepository,

@@ -2,7 +2,7 @@
   <div v-if="visible" class="modal-overlay">
     <div class="modal detail-modal" @click.stop>
       <div class="modal-header">
-        <h3>{{ fund?.fundName }}</h3>
+        <h3 class="detail-title" @click.stop="copyName" title="点击复制名称">{{ fund?.fundName }}<transition name="toast-fade"><span v-if="showCopied" class="copied-toast">已复制</span></transition></h3>
         <button class="modal-close" @click="$emit('close')">
           <svg viewBox="0 0 24 24" fill="none">
             <path d="M6 18L18 6M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -13,7 +13,14 @@
         <div class="detail-fund-code">
           <div class="code-section">
             <span class="code-label">基金代码</span>
-            <span class="code-value">{{ fund.code }}</span>
+            <span class="code-value-wrap" @click.stop="copyCode(fund.code, $event)">
+              <span class="code-value">{{ fund.code }}</span>
+              <svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2"/>
+                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+              </svg>
+              <span v-if="codeCopied" class="copied-toast">已复制</span>
+            </span>
           </div>
           <button class="inline-delete-btn" @click="$emit('delete', fund)" title="删除基金">
             <svg viewBox="0 0 24 24" fill="none">
@@ -322,6 +329,31 @@ defineEmits<{
 
 const { getEstimateCache, setEstimateCache, getCacheInfo } = useEstimateCache()
 const authStore = useAuthStore()
+
+const showCopied = ref(false)
+const codeCopied = ref(false)
+
+function copyText(text: string) {
+  navigator.clipboard.writeText(text)
+}
+
+function copyName() {
+  copyText(props.fund?.fundName || '')
+  showCopied.value = true
+  setTimeout(() => { showCopied.value = false }, 500)
+}
+
+function copyCode(code: string, e: MouseEvent) {
+  copyText(code)
+  codeCopied.value = true
+  const wrap = (e.currentTarget as HTMLElement)
+  const icon = wrap.querySelector('.copy-icon')
+  if (icon) {
+    icon.classList.add('copied')
+    setTimeout(() => icon.classList.remove('copied'), 500)
+  }
+  setTimeout(() => { codeCopied.value = false }, 500)
+}
 
 const activeTab = ref('estimate')
 const selectedPeriod = ref('1')
@@ -1083,6 +1115,39 @@ watch(activeTab, (val) => {
   margin: 0;
 }
 
+.detail-title {
+  cursor: pointer;
+  transition: color 0.15s;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.detail-title:hover {
+  color: #3B82F6;
+}
+
+.copied-toast {
+  font-size: 9px;
+  color: #3B82F6;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.toast-fade-enter-active {
+  transition: opacity 0.1s;
+}
+
+.toast-fade-leave-active {
+  transition: opacity 0.3s;
+}
+
+.toast-fade-enter-from,
+.toast-fade-leave-to {
+  opacity: 0;
+}
+
 .modal-close {
   width: 32px;
   height: 32px;
@@ -1126,6 +1191,36 @@ watch(activeTab, (val) => {
   font-weight: 600;
   color: #3B82F6;
   font-family: 'SF Mono', Consolas, monospace;
+}
+
+.code-value-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.code-value-wrap:hover .code-value {
+  text-decoration: underline;
+}
+
+.code-value-wrap .copy-icon {
+  width: 11px;
+  height: 11px;
+  color: #9CA3AF;
+  opacity: 0;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.code-value-wrap:hover .copy-icon {
+  opacity: 1;
+  color: #3B82F6;
+}
+
+.copy-icon.copied {
+  opacity: 1;
+  color: #3B82F6;
 }
 
 .holding-profit-rate {

@@ -75,6 +75,7 @@
                       <option value="completed">已完成</option>
                       <option value="rejected">已拒绝</option>
                     </select>
+                    <button class="btn-delete" @click="confirmDelete(item.id)" title="删除">✕</button>
                   </div>
                 </td>
               </tr>
@@ -165,6 +166,16 @@ function resetFilters() {
   filters.value = { status: '' }
   page.value = 1
   loadList()
+}
+
+async function confirmDelete(id: number) {
+  if (!confirm('确定要删除这条建议吗？此操作不可恢复。')) return
+  try {
+    await axios.delete(`/api/admin/suggestions/${id}`)
+    loadList()
+  } catch (e: any) {
+    alert(e?.response?.data?.error || '删除失败')
+  }
 }
 
 function statusName(status: string) {
@@ -375,7 +386,24 @@ onMounted(() => { loadList() })
   background: #fff;
 }
 
-.action-btns { display: flex; gap: 4px; }
+.action-btns { display: flex; gap: 4px; align-items: center; }
+
+.btn-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid #fecaca;
+  border-radius: 4px;
+  background: #fef2f2;
+  color: #dc2626;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-delete:hover { background: #fee2e2; border-color: #f87171; }
 
 .loading-state {
   display: flex;

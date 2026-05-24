@@ -20,6 +20,11 @@ const router = createRouter({
       component: () => import('@/views/RevenueAnalysisView.vue')
     },
     {
+      path: '/smart-analysis',
+      name: 'smart-analysis',
+      component: () => import('@/views/SmartAnalysisView.vue')
+    },
+    {
       path: '/admin/login',
       name: 'admin-login',
       component: () => import('@/views/admin/AdminLoginView.vue'),
@@ -60,9 +65,14 @@ const router = createRouter({
           component: () => import('@/views/admin/SystemParamsView.vue')
         },
         {
-          path: 'task-manage',
-          name: 'admin-task-manage',
-          component: () => import('@/views/admin/TaskManageView.vue')
+          path: 'operation-logs',
+          name: 'admin-operation-logs',
+          component: () => import('@/views/admin/OperationLogView.vue')
+        },
+        {
+          path: 'model-manage',
+          name: 'admin-model-manage',
+          component: () => import('@/views/admin/ModelManageView.vue')
         },
 
         {
