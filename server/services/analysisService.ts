@@ -228,15 +228,14 @@ ${fundsInfo}
 注意：分析要基于数据，客观专业，语言简洁。最后附上免责声明。`
 }
 
-export function checkUsageLimit(): { allowed: boolean; used: number; limit: number; userType: string } {
+export function checkUsageLimit(): { allowed: boolean; credits: number; userType: string } {
   ensureAnalysisUsageTable()
   const userId = getCurrentUserId()
   const userType = userId.type === 'registered' ? 'registered' as const : 'guest' as const
   const usage = getAnalysisUsage(userId.id, userType)
   return {
-    allowed: usage.used < usage.limit,
-    used: usage.used,
-    limit: usage.limit,
+    allowed: usage.credits > 0,
+    credits: usage.credits,
     userType
   }
 }
@@ -251,8 +250,8 @@ export async function streamAnalysis(
   const userType = userId.type === 'registered' ? 'registered' as const : 'guest' as const
 
   const usage = getAnalysisUsage(userId.id, userType)
-  if (usage.used >= usage.limit) {
-    res.write(`data: ${JSON.stringify({ error: '今日分析次数已用完', used: usage.used, limit: usage.limit })}\n\n`)
+  if (usage.credits < 2) {
+    res.write(`data: ${JSON.stringify({ error: '积分不足，无法进行分析', credits: usage.credits })}\n\n`)
     res.end()
     return
   }
@@ -309,8 +308,8 @@ export async function streamAnalysis(
       return
     }
 
-    incrementAnalysisUsage(userId.id)
-    res.write(`data: ${JSON.stringify({ type: 'usage', used: usage.used + 1, limit: usage.limit })}\n\n`)
+    const deductResult = incrementAnalysisUsage(userId.id, 2)
+    res.write(`data: ${JSON.stringify({ type: 'usage', credits: deductResult.remaining })}\n\n`)
 
     const reader = llmResponse.body?.getReader()
     if (!reader) {

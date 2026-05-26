@@ -120,7 +120,7 @@
           <td class="col-action">
             <button class="delete-btn" @click.stop="$emit('delete', row)" title="删除">
               <svg viewBox="0 0 24 24" fill="none">
-                <path d="M6 18L18 6M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </button>
           </td>
@@ -592,27 +592,28 @@ tbody tr:hover .col-name {
 }
 
 .delete-btn {
-  width: 28px;
-  height: 28px;
+  width: 20px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: transparent;
-  border: none;
+  background: white;
+  border: 1px solid #FECACA;
   border-radius: 6px;
   cursor: pointer;
-  color: #9CA3AF;
+  color: #F87171;
   transition: all 0.15s;
 }
 
 .delete-btn:hover {
   background: #FEE2E2;
-  color: #EF4444;
+  border-color: #F87171;
+  color: #DC2626;
 }
 
 .delete-btn svg {
-  width: 14px;
-  height: 14px;
+  width: 9px;
+  height: 9px;
 }
 
 @media (max-width: 768px) {

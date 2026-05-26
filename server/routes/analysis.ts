@@ -7,6 +7,9 @@ import { getFundHistory } from '../external/eastmoney.js'
 import { getFundInfo } from '../db/fundInfo.js'
 import { addOperationLog } from '../db/operationLog.js'
 import { getCurrentUserId } from '../db/connection.js'
+import { runStockAnalysis, AGENT_ORDER, AGENT_CONFIGS } from '../trade_agent/index.js'
+import { getStockInfo } from '../trade_agent/data/eastmoneyStock.js'
+import { ensureAnalysisUsageTable, getAnalysisUsage, incrementAnalysisUsage } from '../db/analysisUsage.js'
 
 const router = Router()
 
@@ -67,7 +70,7 @@ router.post('/analysis/lookup', async (req: Request, res: Response) => {
 
 function getStartDate(period: string): string {
   const now = new Date()
-  const months = period === '1m' ? 1 : period === '3m' ? 3 : 12
+  const months = period === '1m' ? 1 : period === '3m' ? 3 : period === '6m' ? 6 : 12
   const start = new Date(now.getFullYear(), now.getMonth() - months, now.getDate())
   return start.toLocaleDateString('sv-SE')
 }
@@ -89,7 +92,7 @@ router.post('/analysis/nav-history', async (req: Request, res: Response) => {
       let navData = getNavHistoryRange(code, startDate)
       if (navData.length < 5) {
         try {
-          const months = period === '1m' ? '1' : period === '3m' ? '3' : '12'
+          const months = period === '1m' ? '1' : period === '3m' ? '3' : period === '6m' ? '6' : '12'
           const history = await getFundHistory(code, months)
           navData = history.map(h => ({ date: h.date, nav: h.nav, growth: h.growth }))
         } catch {
@@ -124,14 +127,14 @@ router.post('/analysis/stream', async (req: Request, res: Response) => {
       return res.status(400).json({ error: '最多支持6只基金对比' })
     }
 
-    const validPeriods = ['1m', '3m', '1y']
+    const validPeriods = ['1m', '3m', '6m', '1y']
     if (!period || !validPeriods.includes(period)) {
       return res.status(400).json({ error: '无效的时间范围' })
     }
 
     const usage = checkUsageLimit()
     if (!usage.allowed) {
-      return res.status(429).json({ error: '今日分析次数已用完', used: usage.used, limit: usage.limit })
+      return res.status(429).json({ error: '积分不足，无法进行分析', credits: usage.credits })
     }
 
     const userId = getCurrentUserId()
@@ -160,6 +163,114 @@ router.post('/analysis/stream', async (req: Request, res: Response) => {
     if (!res.headersSent) {
       res.status(500).json({ error: '分析服务异常' })
     } else {
+      res.end()
+    }
+  }
+})
+
+// ===== Stock Analysis Endpoints =====
+
+router.get('/analysis/stock/agents', (_req: Request, res: Response) => {
+  try {
+    const agents = AGENT_ORDER.map(name => {
+      const config = AGENT_CONFIGS[name]
+      return { name: config.name, label: config.label, phase: config.phase }
+    })
+    res.json({ agents })
+  } catch (error) {
+    logger.error('获取智能体列表失败:', error)
+    res.status(500).json({ error: '获取智能体列表失败' })
+  }
+})
+
+router.post('/analysis/stock/lookup', async (req: Request, res: Response) => {
+  try {
+    const { stockCode } = req.body
+    if (!stockCode || typeof stockCode !== 'string') {
+      return res.status(400).json({ error: '请提供股票代码' })
+    }
+    const code = stockCode.trim()
+    if (!/^\d{6}$/.test(code)) {
+      return res.status(400).json({ error: '股票代码格式不正确（6位数字）' })
+    }
+
+    const info = await getStockInfo(code)
+    if (!info) {
+      return res.json({ found: false, code })
+    }
+    res.json({
+      found: true,
+      code: info.code,
+      name: info.name,
+      industry: info.industry,
+      price: info.price,
+      change: info.change,
+      marketCap: info.marketCap,
+      pe: info.pe,
+      pb: info.pb,
+      totalShares: info.totalShares,
+      floatShares: info.floatShares,
+    })
+  } catch (error) {
+    logger.error('股票查询失败:', error)
+    res.status(500).json({ error: '查询失败' })
+  }
+})
+
+router.post('/analysis/stock/stream', async (req: Request, res: Response) => {
+  try {
+    const { stockCode } = req.body
+
+    if (!stockCode || typeof stockCode !== 'string') {
+      return res.status(400).json({ error: '请提供股票代码' })
+    }
+
+    const code = stockCode.trim()
+    if (!/^\d{6}$/.test(code)) {
+      return res.status(400).json({ error: '股票代码格式不正确（6位数字）' })
+    }
+
+    // Check usage limit (shares the same usage counter as fund analysis)
+    ensureAnalysisUsageTable()
+    const userId = getCurrentUserId()
+    const userType = userId.type === 'registered' ? 'registered' as const : 'guest' as const
+    const usage = getAnalysisUsage(userId.id, userType)
+    if (usage.credits < 10) {
+      return res.status(429).json({ error: '积分不足，无法进行股票分析（需要10积分）', credits: usage.credits })
+    }
+
+    // Log operation
+    const ip = req.headers['x-forwarded-for'] as string || req.headers['x-real-ip'] as string || req.ip || ''
+    const cleanIp = ip.split(',')[0].trim()
+    const username = userId.label || userId.id
+    addOperationLog({
+      username,
+      ip: cleanIp,
+      action: 'stock_analysis',
+      description: `股票智能分析: ${code}`,
+      extra: JSON.stringify({ stockCode: code, userType })
+    })
+
+    // Set SSE headers
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('Connection', 'keep-alive')
+    res.setHeader('X-Accel-Buffering', 'no')
+
+    // Deduct credits and notify client
+    const deductResult = incrementAnalysisUsage(userId.id, 10)
+    res.write(`data: ${JSON.stringify({ type: 'usage', credits: deductResult.remaining })}\n\n`)
+
+    // Run the multi-agent analysis pipeline
+    await runStockAnalysis(res, code)
+  } catch (error) {
+    logger.error('股票分析请求失败:', error)
+    if (!res.headersSent) {
+      res.status(500).json({ error: '分析服务异常' })
+    } else {
+      try {
+        res.write(`data: ${JSON.stringify({ type: 'error', error: '分析服务异常' })}\n\n`)
+      } catch { /* */ }
       res.end()
     }
   }

@@ -56,7 +56,7 @@
     
     <button class="delete-btn" @click.stop="handleDelete" title="移除自选">
       <svg viewBox="0 0 24 24" fill="none">
-        <path d="M6 18L18 6M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </button>
   </div>
@@ -413,14 +413,15 @@ function toggleHeld() {
   position: absolute;
   right: 8px;
   top: 8px;
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: white;
-  border: 1px solid #E5E7EB;
-  border-radius: 4px;
+  background: rgba(255,255,255,0.95);
+  backdrop-filter: blur(4px);
+  border: 1px solid #FECACA;
+  border-radius: 6px;
   cursor: pointer;
   opacity: 0;
   transition: all 0.2s;
@@ -428,9 +429,10 @@ function toggleHeld() {
 }
 
 .delete-btn svg {
-  width: 10px;
-  height: 10px;
-  color: #9CA3AF;
+  width: 12px;
+  height: 12px;
+  color: #F87171;
+  transition: color 0.15s;
 }
 
 .fund-card:hover .hold-btn {
@@ -442,8 +444,11 @@ function toggleHeld() {
 }
 
 .delete-btn:hover {
-  background: #FEF2F2;
-  border-color: #FEE2E2;
+  background: #FEE2E2;
+  border-color: #F87171;
+}
+.delete-btn:hover svg {
+  color: #DC2626;
 }
 
 .fund-mobile-data {

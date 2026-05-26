@@ -1,8 +1,8 @@
 <template>
   <div class="oplog-page">
     <div class="page-header">
-      <h2 class="page-title">操作日志</h2>
-      <p class="page-desc">查看系统操作记录</p>
+      <h2 class="page-title">操作流水</h2>
+      <p class="page-desc">查看系统操作流水记录</p>
     </div>
 
     <div class="content-body">

@@ -99,7 +99,6 @@
               <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
-          <span class="ai-analysis-text" @click="$router.push('/smart-analysis')">智能分析</span>
         </div>
         
         <div class="fund-header">
@@ -115,12 +114,12 @@
                 :title="store.hideAmount ? '显示金额' : '隐藏金额'"
               >
                 <svg v-if="store.hideAmount" viewBox="0 0 24 24" fill="none">
-                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  <line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" stroke="#94A3B8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <line x1="1" y1="1" x2="23" y2="23" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/>
                 </svg>
                 <svg v-else viewBox="0 0 24 24" fill="none">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="2"/>
-                  <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/>
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="#6366F1" stroke-width="2"/>
+                  <circle cx="12" cy="12" r="3" stroke="#6366F1" stroke-width="2"/>
                 </svg>
               </button>
             </div>
@@ -172,9 +171,9 @@
               title="导入基金"
             >
               <svg viewBox="0 0 24 24" fill="none">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <polyline points="7 10 12 15 17 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="#0EA5E9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <polyline points="7 10 12 15 17 10" stroke="#0EA5E9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <line x1="12" y1="15" x2="12" y2="3" stroke="#0EA5E9" stroke-width="2" stroke-linecap="round"/>
               </svg>
               <span>导入</span>
             </button>
@@ -184,9 +183,9 @@
               title="导出基金"
             >
               <svg viewBox="0 0 24 24" fill="none">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <polyline points="17 8 12 3 7 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <line x1="12" y1="3" x2="12" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <polyline points="17 8 12 3 7 8" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <line x1="12" y1="3" x2="12" y2="15" stroke="#F59E0B" stroke-width="2" stroke-linecap="round"/>
               </svg>
               <span>导出</span>
             </button>
@@ -231,6 +230,14 @@
         </div> -->
         <div class="footer-links">
           <router-link to="/suggestions" class="footer-link">建议与问题</router-link>
+          <span class="footer-divider">·</span>
+          <router-link to="/about" class="footer-link">
+            <svg viewBox="0 0 24 24" fill="none" style="width:11px;height:11px;vertical-align:-1px;margin-right:2px">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+              <path d="M12 16v-4M12 8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            说明
+          </router-link>
         </div>
         <div class="footer-copyright">© 2026  Powered by wezin</div>
       </div>
@@ -1243,6 +1250,14 @@ function handleClearCache() {
   gap: 10px;
 }
 
+.ai-analysis-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: -4px;
+}
+
 .ai-analysis-btn {
   width: 24px;
   height: 24px;
@@ -1934,6 +1949,11 @@ function handleClearCache() {
 .footer-link:hover {
   color: #1E40AF;
   text-decoration: underline;
+}
+
+.footer-divider {
+  color: #CBD5E1;
+  margin: 0 4px;
 }
 
 .footer-stats {

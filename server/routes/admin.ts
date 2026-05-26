@@ -28,6 +28,7 @@ import { setRegisteredUser } from '../db/index.js'
 import db from '../db/index.js'
 import { fetchFundDetailFromApi, fetchFundBasicInfoFromSearchApi } from '../services/fundService.js'
 import { validateAdminToken, handleAdminLogin } from '../middleware/auth.js'
+import { getAnalysisUsageList, updateUserCredits } from '../db/analysisUsage.js'
 import { manualSettlement } from '../scheduled/settlement.js'
 import { refreshFundToday } from '../scheduled/estimate.js'
 
@@ -881,6 +882,42 @@ router.post('/fund-info/sync', validateAdminToken, async (req: Request, res: Res
   } catch (error) {
     logger.error('同步基金信息失败:', error)
     res.status(500).json({ error: '同步基金信息失败' })
+  }
+})
+
+// ---- Credits Management ----
+router.get('/credits', validateAdminToken, (req: Request, res: Response) => {
+  try {
+    const page = parseIntSafe(req.query.page, 1, 1)
+    const pageSize = parseIntSafe(req.query.pageSize, 20, 1, 100)
+    const keyword = parseString(req.query.keyword as string)
+    const result = getAnalysisUsageList(page, pageSize, keyword)
+    res.json(result)
+  } catch (error) {
+    logger.error('获取积分列表失败:', error)
+    res.status(500).json({ error: '获取积分列表失败' })
+  }
+})
+
+router.post('/credits/:userId/adjust', validateAdminToken, (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params
+    const { credits, reason } = req.body as { credits: number; reason?: string }
+
+    if (typeof credits !== 'number' || isNaN(credits)) {
+      return res.status(400).json({ error: '积分调整量必须为数字' })
+    }
+
+    const success = updateUserCredits(userId, credits)
+    if (!success) {
+      return res.status(404).json({ error: '用户不存在' })
+    }
+
+    logger.log(`[积分调整] 用户 ${userId} 积分调整为 ${credits}${reason ? `, 原因: ${reason}` : ''}`)
+    res.json({ success: true })
+  } catch (error) {
+    logger.error('调整积分失败:', error)
+    res.status(500).json({ error: '调整积分失败' })
   }
 })
 

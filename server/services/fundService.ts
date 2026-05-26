@@ -187,9 +187,7 @@ async function fetchFundData(code: string, forceRefresh = false) {
               parsed.nav = estimateCache.nav
               parsed.gsz = estimateCache.nav
             }
-            parsed.jzrq = today
-            parsed.gztime = `${today} 15:00`
-            parsed.lastUpdate = parsed.gztime
+            // QDII基金保留原始jzrq，不强制覆盖为今天
             logger.log(`基金 ${code} QDII缓存覆盖: gszzl=${parsed.gszzl}%, dayGrowth=${parsed.dayGrowth}%`)
           }
           if (parsed.jzrq === today) {
@@ -327,15 +325,16 @@ async function fetchFundData(code: string, forceRefresh = false) {
             fundData.dayGrowth = estimateCache.dayGrowth
             fundData.gsz = estimateCache.nav ?? fundData.gsz
             fundData.nav = estimateCache.nav ?? fundData.nav
-            fundData.gztime = `${getLocalDate()} 15:00`
-            fundData.lastUpdate = fundData.gztime
-            fundData.jzrq = getLocalDate()
+            // QDII基金使用原始jzrq日期，不强制覆盖为今天
+            if (fundData.jzrq && fundData.jzrq !== getLocalDate()) {
+              fundData.gztime = `${fundData.jzrq} 15:00`
+              fundData.lastUpdate = fundData.gztime
+            }
             logger.log(`基金 ${code} QDII使用最终净值涨幅覆盖: ${estimateCache.dayGrowth.toFixed(2)}%`)
           } else if (estimateCache.gszzl != null) {
             fundData.gszzl = estimateCache.gszzl
             if (estimateCache.gsz) fundData.gsz = estimateCache.gsz
-            fundData.gztime = getLocalDate()
-            fundData.lastUpdate = getLocalDate()
+            // 分时估值也保留原始gztime，不强制覆盖
             logger.log(`基金 ${code} QDII使用分时估值覆盖gszzl: ${estimateCache.gszzl.toFixed(2)}%`)
           }
         }

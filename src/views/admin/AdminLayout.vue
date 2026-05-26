@@ -44,17 +44,51 @@
           </button>
         </div>
         <nav class="sidebar-nav">
-          <router-link
-            v-for="item in menuItems"
-            :key="item.path"
-            :to="item.path"
-            class="nav-item"
-            :class="{ active: isActive(item.path) }"
-            :title="item.title"
-          >
-            <component :is="item.icon" class="nav-icon" />
-            <span class="nav-text">{{ item.title }}</span>
-          </router-link>
+          <template v-for="item in menuItems" :key="item.path || item.title">
+            <!-- Sub-menu group -->
+            <div v-if="item.children" class="nav-group">
+              <div
+                class="nav-item nav-group-title"
+                :class="{ active: isGroupActive(item) }"
+                :title="item.title"
+                @click="toggleGroup(item.title)"
+              >
+                <component :is="item.icon" class="nav-icon" />
+                <span class="nav-text">{{ item.title }}</span>
+                <svg
+                  class="nav-arrow"
+                  :class="{ expanded: expandedGroups.has(item.title) }"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                >
+                  <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              <div class="nav-group-children" :class="{ expanded: expandedGroups.has(item.title) || isGroupActive(item) }">
+                <router-link
+                  v-for="child in item.children"
+                  :key="child.path"
+                  :to="child.path"
+                  class="nav-item nav-child-item"
+                  :class="{ active: isActive(child.path) }"
+                  :title="child.title"
+                >
+                  <span class="nav-text">{{ child.title }}</span>
+                </router-link>
+              </div>
+            </div>
+            <!-- Regular menu item -->
+            <router-link
+              v-else
+              :to="item.path"
+              class="nav-item"
+              :class="{ active: isActive(item.path) }"
+              :title="item.title"
+            >
+              <component :is="item.icon" class="nav-icon" />
+              <span class="nav-text">{{ item.title }}</span>
+            </router-link>
+          </template>
         </nav>
       </aside>
 
@@ -113,6 +147,22 @@ const sidebarCollapsed = ref(false)
 // 切换侧边栏折叠状态
 function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value
+}
+
+// 展开的子菜单组
+const expandedGroups = ref(new Set<string>())
+
+function toggleGroup(title: string) {
+  if (expandedGroups.value.has(title)) {
+    expandedGroups.value.delete(title)
+  } else {
+    expandedGroups.value.add(title)
+  }
+}
+
+function isGroupActive(item: any) {
+  if (!item.children) return false
+  return item.children.some((child: any) => isActive(child.path))
 }
 
 // 菜单项
@@ -256,8 +306,7 @@ const menuItems = [
     }
   },
   {
-    path: '/admin/operation-logs',
-    title: '操作日志',
+    title: '操作管理',
     icon: {
       render() {
         return h('svg', { viewBox: '0 0 24 24', fill: 'none' }, [
@@ -305,7 +354,11 @@ const menuItems = [
           })
         ])
       }
-    }
+    },
+    children: [
+      { path: '/admin/operation-logs', title: '操作流水' },
+      { path: '/admin/credit-manage', title: '积分管理' }
+    ]
   },
   {
     path: '/admin/model-manage',
@@ -355,8 +408,15 @@ const isActive = (path: string) => {
 }
 
 const currentPageTitle = computed(() => {
-  const item = menuItems.find(m => m.path === route.path || route.path.startsWith(m.path + '/'))
-  return item?.title || '管理后台'
+  for (const item of menuItems) {
+    if (item.children) {
+      const child = item.children.find((c: any) => c.path === route.path)
+      if (child) return child.title
+    } else if (item.path === route.path || route.path.startsWith(item.path + '/')) {
+      return item.title
+    }
+  }
+  return '管理后台'
 })
 
 // 退出登录
@@ -601,6 +661,55 @@ function handleLogout() {
   height: 18px;
   flex-shrink: 0;
   color: #3b82f6;
+}
+
+/* Sub-menu group */
+.nav-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.nav-group-title {
+  cursor: pointer;
+  user-select: none;
+}
+
+.nav-arrow {
+  width: 14px;
+  height: 14px;
+  margin-left: auto;
+  transition: transform 0.2s ease;
+  color: #94a3b8;
+}
+
+.nav-arrow.expanded {
+  transform: rotate(90deg);
+}
+
+.nav-group-children {
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 30px;
+}
+
+.nav-group-children.expanded {
+  display: flex;
+}
+
+.nav-child-item {
+  padding: 8px 16px !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  border-radius: 6px !important;
+}
+
+.sidebar-collapsed .nav-group-children {
+  display: none !important;
+}
+
+.sidebar-collapsed .nav-arrow {
+  display: none;
 }
 
 /* 内容区 */

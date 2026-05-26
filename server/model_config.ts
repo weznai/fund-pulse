@@ -49,7 +49,8 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
 
 export const DEFAULT_SCENE_MAPPINGS = [
   { scene: 'fund_analysis', scene_name: '基金智能分析' },
-  { scene: 'suggestion_summary', scene_name: '建议问题摘要' }
+  { scene: 'suggestion_summary', scene_name: '建议问题摘要' },
+  { scene: 'stock_agent', scene_name: '股票智能分析' }
 ]
 
 export function seedDefaultData(): void {

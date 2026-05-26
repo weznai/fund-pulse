@@ -10,13 +10,16 @@
           <h1 class="title">智能分析</h1>
         </div>
         <div class="header-right">
-          <div class="usage-pill" :class="{ warn: usage.used >= usage.limit }">
+          <div class="usage-pill" :class="{ warn: usage.credits <= 0 }">
             <span class="usage-dot"></span>
-            今日 {{ usage.used }}/{{ usage.limit }} 次
-          </div>
-          <div v-if="usage.userType === 'guest'" class="upgrade-tag" @click="$router.push('/login')">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M13 10V3L4 14h7v7l9-11h-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            升级解锁9次
+            <span>剩余 {{ usage.credits }} 积分</span>
+            <template v-if="usageLoaded && usage.userType === 'guest'">
+              <span class="usage-divider"></span>
+              <span class="usage-upgrade" @click="showLoginModal = true">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M12 15V3m0 0l-4 4m4-4l4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 17l.621 2.485A2 2 0 004.561 21h14.878a2 2 0 001.94-1.515L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                登录享 50 积分
+              </span>
+            </template>
           </div>
         </div>
       </div>
@@ -31,6 +34,10 @@
         <button class="tab" :class="{ active: activeTab === 'compare' }" @click="activeTab = 'compare'">
           <svg viewBox="0 0 24 24" fill="none"><path d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
 多基金对比
+        </button>
+        <button class="tab" :class="{ active: activeTab === 'stock' }" @click="activeTab = 'stock'">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          股票分析
         </button>
       </div>
 
@@ -92,15 +99,15 @@
             <button v-for="p in periods" :key="p.value" class="period-btn" :class="{ active: singlePeriod === p.value }" @click="singlePeriod = p.value">{{ p.label }}</button>
           </div>
           <div v-if="singleChartData" class="action-row center">
-            <button class="ai-btn" :disabled="analyzing || usage.used >= usage.limit" @click="confirmSingleAnalysis">
+            <button class="ai-btn" :disabled="analyzing || usage.credits < 2" @click="confirmSingleAnalysis">
               <svg v-if="!analyzing" viewBox="0 0 24 24" fill="none" class="btn-svg"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
               <div v-else class="spinner-xs white"></div>
               {{ analyzing ? 'AI 分析中...' : 'AI 智能分析' }}
             </button>
           </div>
-          <div v-if="usage.userType === 'guest' && usage.used >= usage.limit" class="upgrade-banner" @click="$router.push('/login')">
+          <div v-if="usage.userType === 'guest' && usage.credits < 2" class="upgrade-banner" @click="showLoginModal = true">
             <svg viewBox="0 0 24 24" fill="none"><path d="M13 10V3L4 14h7v7l9-11h-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span>今日体验次数已用完，<b>登录后每日可享 9 次分析</b></span>
+            <span>积分不足，<b>登录后可享 50 积分</b></span>
             <svg viewBox="0 0 24 24" fill="none"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
         </div>
@@ -209,15 +216,15 @@
           </div>
           <div class="chart-wrap" ref="chartRef"></div>
           <div class="chart-footer">
-            <button class="ai-btn" :disabled="comparing || usage.used >= usage.limit" @click="confirmCompareAnalysis">
+            <button class="ai-btn" :disabled="comparing || usage.credits < 2" @click="confirmCompareAnalysis">
               <svg v-if="!comparing" viewBox="0 0 24 24" fill="none" class="btn-svg"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
               <div v-else class="spinner-xs white"></div>
               {{ comparing ? 'AI 分析中...' : 'AI 智能分析' }}
             </button>
           </div>
-          <div v-if="usage.userType === 'guest' && usage.used >= usage.limit" class="upgrade-banner" @click="$router.push('/login')">
+          <div v-if="usage.userType === 'guest' && usage.credits < 2" class="upgrade-banner" @click="showLoginModal = true">
             <svg viewBox="0 0 24 24" fill="none"><path d="M13 10V3L4 14h7v7l9-11h-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span>今日体验次数已用完，<b>登录后每日可享 9 次分析</b></span>
+            <span>积分不足，<b>登录后可享 50 积分</b></span>
             <svg viewBox="0 0 24 24" fill="none"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
         </div>
@@ -249,6 +256,207 @@
         </div>
       </template>
 
+      <!-- ====== Stock Analysis ====== -->
+      <template v-if="activeTab === 'stock'">
+        <div class="card">
+          <div class="card-header">
+            <svg viewBox="0 0 24 24" fill="none" class="card-icon"><path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>股票分析</span>
+            <span class="card-hint">多智能体协同分析</span>
+          </div>
+          <div class="search-box">
+            <svg class="s-icon" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <input v-model="stockKeyword" placeholder="输入6位股票代码，如 600519..." @keydown.enter="handleStockLookup" class="s-input" maxlength="6" />
+            <button v-if="stockKeyword" @click="stockKeyword=''; stockLookupResult=null; stockErrorMsg=''; stockLookupLoading=false" class="s-clear">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+          <div v-if="stockLookupLoading" class="search-hint"><div class="spinner-xs"></div> 查询中...</div>
+          <div v-if="stockLookupResult && stockLookupResult.found" class="stock-info-panel">
+            <div class="sip-row">
+              <div class="sip-left">
+                <span class="sip-name">{{ stockLookupResult.name }}</span>
+                <span class="sip-code">{{ stockLookupResult.code }}</span>
+                <span class="sip-industry" v-if="stockLookupResult.industry && isNaN(Number(stockLookupResult.industry))">{{ stockLookupResult.industry }}</span>
+              </div>
+              <div class="sip-right">
+                <span class="sip-price">{{ stockLookupResult.price?.toFixed(2) }}</span>
+                <span class="sip-change" :class="{ up: (stockLookupResult.change || 0) >= 0, down: (stockLookupResult.change || 0) < 0 }">
+                  {{ (stockLookupResult.change || 0) >= 0 ? '+' : '' }}{{ (stockLookupResult.change || 0).toFixed(2) }}%
+                </span>
+              </div>
+            </div>
+            <div class="sip-details">
+              <div class="sip-item" v-if="stockLookupResult.marketCap">
+                <span class="sip-item-label">总市值</span>
+                <span class="sip-item-value">{{ stockLookupResult.marketCap >= 10000 ? (stockLookupResult.marketCap / 10000).toFixed(2) + '万亿' : stockLookupResult.marketCap.toFixed(1) + '亿' }}</span>
+              </div>
+              <div class="sip-item" v-if="stockLookupResult.pe">
+                <span class="sip-item-label">PE(动)</span>
+                <span class="sip-item-value">{{ stockLookupResult.pe.toFixed(2) }}</span>
+              </div>
+              <div class="sip-item" v-if="stockLookupResult.pb">
+                <span class="sip-item-label">PB</span>
+                <span class="sip-item-value">{{ stockLookupResult.pb.toFixed(2) }}</span>
+              </div>
+              <div class="sip-item" v-if="stockLookupResult.totalShares">
+                <span class="sip-item-label">总股本</span>
+                <span class="sip-item-value">{{ stockLookupResult.totalShares >= 10000 ? (stockLookupResult.totalShares / 10000).toFixed(2) + '亿' : stockLookupResult.totalShares.toFixed(0) + '万' }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="action-row center" style="padding-top: 8px;">
+            <button class="ai-btn" :disabled="stockAnalyzing || usage.credits < 10 || !stockKeyword.trim()" @click="confirmStockAnalysis">
+              <svg v-if="!stockAnalyzing" viewBox="0 0 24 24" fill="none" class="btn-svg"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <div v-else class="spinner-xs white"></div>
+              {{ stockAnalyzing ? '多智能体分析中...' : '启动多智能体分析' }}
+            </button>
+          </div>
+          <div v-if="usage.userType === 'guest' && usage.credits < 10" class="upgrade-banner" @click="showLoginModal = true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M13 10V3L4 14h7v7l9-11h-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>积分不足，<b>登录后可享 50 积分</b></span>
+            <svg viewBox="0 0 24 24" fill="none"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+
+        <div v-if="stockErrorMsg" class="err-tip">
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          {{ stockErrorMsg }}
+        </div>
+
+        <!-- Agent Pipeline Visualization -->
+        <div v-if="stockAnalyzing || Object.keys(stockAgentReports).length > 0" class="card">
+          <div class="card-header">
+            <svg viewBox="0 0 24 24" fill="none" class="card-icon"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>{{ stockLookupResult?.name || stockKeyword }}<template v-if="stockLookupResult?.code">（{{ stockLookupResult.code }}）</template> 智能体分析流程</span>
+            <span v-if="stockFinalDecision" class="decision-badge" :class="stockFinalDecision.toLowerCase()">{{ stockFinalDecision }}</span>
+          </div>
+
+          <div class="pipeline-flow">
+            <!-- Phase 1: Analysts -->
+            <div class="pf-phase">
+              <div class="pf-phase-head">
+                <span class="pf-phase-icon pf-icon-analyst"></span>
+                <div class="pf-phase-title">
+                  <span class="pf-phase-name">分析师团队</span>
+                  <span class="pf-phase-desc">数据采集 & 分析</span>
+                </div>
+              </div>
+              <div class="pf-nodes">
+                <div v-for="name in ['market_analyst', 'social_media_analyst', 'news_analyst', 'fundamentals_analyst']" :key="name" class="pf-node" :class="stockAgentStatus[name]" @click="toggleAgentReport(name)">
+                  <div class="pf-node-inner">
+                    <div class="pf-status-dot"></div>
+                    <span class="pf-node-label">{{ stockAgentLabels[name] }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="pf-connector" :class="{ done: ['market_analyst','social_media_analyst','news_analyst','fundamentals_analyst'].every(n => stockAgentStatus[n]==='done') }"><div class="pf-connector-line"></div><div class="pf-connector-arrow"></div></div>
+
+            <!-- Phase 2: Research Debate -->
+            <div class="pf-phase">
+              <div class="pf-phase-head">
+                <span class="pf-phase-icon pf-icon-debate"></span>
+                <div class="pf-phase-title">
+                  <span class="pf-phase-name">研究辩论</span>
+                  <span class="pf-phase-desc">多空辩论 &bull; <span v-if="stockDebateRound > 0">第{{ stockDebateRound }}轮</span><span v-else>待开始</span></span>
+                </div>
+              </div>
+              <div class="pf-nodes">
+                <div v-for="name in ['bull_researcher', 'bear_researcher', 'research_manager']" :key="name" class="pf-node" :class="stockAgentStatus[name]" @click="toggleAgentReport(name)">
+                  <div class="pf-node-inner">
+                    <div class="pf-status-dot"></div>
+                    <span class="pf-node-label">{{ stockAgentLabels[name] }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="pf-connector" :class="{ done: ['bull_researcher','bear_researcher','research_manager'].every(n => stockAgentStatus[n]==='done') }"><div class="pf-connector-line"></div><div class="pf-connector-arrow"></div></div>
+
+            <!-- Phase 3: Trader -->
+            <div class="pf-phase">
+              <div class="pf-phase-head">
+                <span class="pf-phase-icon pf-icon-trade"></span>
+                <div class="pf-phase-title">
+                  <span class="pf-phase-name">交易计划</span>
+                  <span class="pf-phase-desc">制定执行方案</span>
+                </div>
+              </div>
+              <div class="pf-nodes">
+                <div class="pf-node" :class="stockAgentStatus.trader" @click="toggleAgentReport('trader')">
+                  <div class="pf-node-inner">
+                    <div class="pf-status-dot"></div>
+                    <span class="pf-node-label">交易员</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="pf-connector" :class="{ done: stockAgentStatus.trader==='done' }"><div class="pf-connector-line"></div><div class="pf-connector-arrow"></div></div>
+
+            <!-- Phase 4: Risk Debate -->
+            <div class="pf-phase">
+              <div class="pf-phase-head">
+                <span class="pf-phase-icon pf-icon-risk"></span>
+                <div class="pf-phase-title">
+                  <span class="pf-phase-name">风险评估</span>
+                  <span class="pf-phase-desc">三方辩论 &bull; <span v-if="stockRiskRound > 0">第{{ stockRiskRound }}轮</span><span v-else>待开始</span></span>
+                </div>
+              </div>
+              <div class="pf-nodes">
+                <div v-for="name in ['aggressive_debator', 'conservative_debator', 'neutral_debator', 'risk_manager']" :key="name" class="pf-node" :class="stockAgentStatus[name]" @click="toggleAgentReport(name)">
+                  <div class="pf-node-inner">
+                    <div class="pf-status-dot"></div>
+                    <span class="pf-node-label">{{ stockAgentLabels[name] }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Running agent content -->
+          <div v-if="stockRunningAgent && stockRunningContent" class="running-content">
+            <div class="running-header">
+              <div class="running-spinner"></div>
+              {{ stockAgentLabels[stockRunningAgent] || stockRunningAgent }} 正在分析
+            </div>
+            <div class="running-text">{{ stockRunningContent.slice(-500) }}<span class="cursor"></span></div>
+          </div>
+
+          <!-- Expanded agent report -->
+          <div v-if="stockExpandedAgent && stockAgentReports[stockExpandedAgent]" class="agent-report-expanded">
+            <div class="running-header">{{ stockAgentLabels[stockExpandedAgent] || stockExpandedAgent }} 的报告
+              <button class="pf-close-btn" @click="stockExpandedAgent = ''">&#x2715;</button>
+            </div>
+            <div class="md" v-html="renderMd(stockAgentReports[stockExpandedAgent])"></div>
+          </div>
+        </div>
+
+        <!-- Final Decision Card -->
+        <div v-if="stockFinalDecision && stockAgentReports.risk_manager" class="card decision-card" :class="stockFinalDecision.toLowerCase()">
+          <div class="decision-top">
+            <div class="decision-icon-wrap">
+              <span class="decision-icon-text">{{ stockFinalDecision === 'BUY' ? '&#x25B2;' : stockFinalDecision === 'SELL' ? '&#x25BC;' : '&#x25CF;' }}</span>
+            </div>
+            <div class="decision-info">
+              <div class="decision-title">最终决策: {{ stockLookupResult?.name || stockKeyword }}（{{ stockLookupResult?.code || stockKeyword }}）建议{{ stockFinalDecision === 'BUY' ? '买入' : stockFinalDecision === 'SELL' ? '卖出' : '持有' }}</div>
+              <div class="decision-sub">由风险经理综合多智能体分析得出</div>
+            </div>
+          </div>
+          <div class="decision-body">
+            <div class="md" v-html="renderMd(stockAgentReports.risk_manager)"></div>
+          </div>
+          <div class="decision-actions">
+            <button class="copy-btn" @click="doCopy(stockAgentReports.risk_manager)">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              复制完整报告
+            </button>
+          </div>
+        </div>
+      </template>
+
       <!-- Confirm Dialog -->
       <Teleport to="body">
         <div v-if="confirmDialog.show" class="modal-mask" @click.self="confirmDialog.show = false">
@@ -266,10 +474,10 @@
                 <svg viewBox="0 0 24 24" fill="none"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 {{ confirmDialog.periodLabel }}
               </div>
-              <div class="modal-warn">将消耗 1 次分析机会（剩余 {{ usage.limit - usage.used }} 次）</div>
-              <div v-if="usage.userType === 'guest'" class="modal-upgrade" @click="confirmDialog.show = false; $router.push('/login')">
+              <div class="modal-warn">将消耗 {{ confirmDialog.cost }} 积分（剩余 {{ usage.credits - confirmDialog.cost }} 积分）</div>
+              <div v-if="usage.userType === 'guest'" class="modal-upgrade" @click="confirmDialog.show = false; showLoginModal = true">
                 <svg viewBox="0 0 24 24" fill="none"><path d="M13 10V3L4 14h7v7l9-11h-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                登录后每日可享 <b>9 次</b> AI 分析
+                登录后可享 <b>50 积分</b>
               </div>
             </div>
             <div class="modal-actions">
@@ -280,6 +488,8 @@
         </div>
       </Teleport>
     </div>
+
+    <LoginModal :visible="showLoginModal" @close="onLoginModalClose" />
   </div>
 </template>
 
@@ -287,20 +497,25 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch, reactive } from 'vue'
 import * as echarts from 'echarts'
 import { searchFunds } from '@/api/fund'
-import { getAnalysisUsage, streamAnalysis, getNavHistory, lookupFunds } from '@/api/analysis'
+import { getAnalysisUsage, streamAnalysis, getNavHistory, lookupFunds, lookupStock, streamStockAnalysis } from '@/api/analysis'
+import type { StockLookupResult, StockSSEEvent } from '@/api/analysis'
+import LoginModal from '@/components/LoginModal.vue'
 import type { SearchResult } from '@/types'
 import type { FundNavHistory } from '@/api/analysis'
 
-interface Usage { allowed: boolean; used: number; limit: number; userType: 'guest' | 'registered' }
+interface Usage { allowed: boolean; credits: number; userType: 'guest' | 'registered' }
 
-const usage = ref<Usage>({ allowed: true, used: 0, limit: 3, userType: 'guest' })
-const activeTab = ref<'single' | 'compare'>('single')
+const usage = ref<Usage>({ allowed: true, credits: 0, userType: 'guest' })
+const usageLoaded = ref(false)
+const showLoginModal = ref(false)
+const activeTab = ref<'single' | 'compare' | 'stock'>('single')
 const periods = [
   { value: '1m', label: '近1月' },
   { value: '3m', label: '近3月' },
+  { value: '6m', label: '近6月' },
   { value: '1y', label: '近1年' }
 ]
-const periodLabels: Record<string, string> = { '1m': '近1个月', '3m': '近3个月', '1y': '近1年' }
+const periodLabels: Record<string, string> = { '1m': '近1个月', '3m': '近3个月', '6m': '近6个月', '1y': '近1年' }
 
 // --- Single ---
 const singleKeyword = ref('')
@@ -339,12 +554,41 @@ const batchInput = ref('')
 const batchLoading = ref(false)
 const batchErrors = ref<string[]>([])
 
+// --- Stock Analysis ---
+const stockKeyword = ref('')
+const stockLookupLoading = ref(false)
+const stockLookupResult = ref<StockLookupResult | null>(null)
+const stockAnalyzing = ref(false)
+const stockErrorMsg = ref('')
+const stockAgentStatus = ref<Record<string, 'pending' | 'running' | 'done' | 'error'>>({})
+const stockAgentReports = ref<Record<string, string>>({})
+const stockAgentLabels: Record<string, string> = {
+  market_analyst: '市场分析师',
+  social_media_analyst: '社媒分析师',
+  news_analyst: '新闻分析师',
+  fundamentals_analyst: '基本面分析',
+  bull_researcher: '看多研究员',
+  bear_researcher: '看空研究员',
+  research_manager: '研究主管',
+  trader: '交易员',
+  aggressive_debator: '激进分析师',
+  conservative_debator: '保守分析师',
+  neutral_debator: '中性分析师',
+  risk_manager: '风险经理',
+}
+const stockRunningAgent = ref('')
+const stockRunningContent = ref('')
+const stockExpandedAgent = ref('')
+const stockFinalDecision = ref('')
+const stockDebateRound = ref(0)
+const stockRiskRound = ref(0)
+
 const COLORS = ['#2563EB', '#DC2626', '#7C3AED', '#059669', '#D97706', '#0891B2']
 
 const CACHE_KEY = 'smart_analysis_cache'
 
 interface AnalysisCache {
-  activeTab: 'single' | 'compare'
+  activeTab: 'single' | 'compare' | 'stock'
   single: {
     fund: SearchResult | null
     period: string
@@ -358,6 +602,13 @@ interface AnalysisCache {
     period: string
     cmpResult: string
     chartData: Record<string, FundNavHistory> | null
+  }
+  stock: {
+    keyword: string
+    lookupResult: StockLookupResult | null
+    agentStatus: Record<string, 'pending' | 'running' | 'done' | 'error'>
+    agentReports: Record<string, string>
+    finalDecision: string
   }
 }
 
@@ -378,6 +629,13 @@ function saveCache() {
       cmpResult: cmpResult.value,
       chartData: chartData.value,
     },
+    stock: {
+      keyword: stockKeyword.value,
+      lookupResult: stockLookupResult.value,
+      agentStatus: stockAgentStatus.value,
+      agentReports: stockAgentReports.value,
+      finalDecision: stockFinalDecision.value,
+    },
   }
   try { localStorage.setItem(CACHE_KEY, JSON.stringify(cache)) } catch { /* */ }
 }
@@ -396,14 +654,21 @@ const confirmDialog = reactive({
   message: '',
   funds: [] as SearchResult[],
   periodLabel: '',
+  cost: 2,
   onConfirm: () => {}
 })
 
 let singleTimer: number | null = null
 let cmpTimer: number | null = null
 
+async function onLoginModalClose() {
+  showLoginModal.value = false
+  try { usage.value = await getAnalysisUsage() } catch { /* */ }
+}
+
 onMounted(async () => {
   try { usage.value = await getAnalysisUsage() } catch { /* */ }
+  usageLoaded.value = true
 
   const cache = loadCache()
   if (cache) {
@@ -419,6 +684,14 @@ onMounted(async () => {
     cmpResult.value = cache.compare.cmpResult
     chartData.value = cache.compare.chartData
 
+    if (cache.stock) {
+      stockKeyword.value = cache.stock.keyword
+      stockLookupResult.value = cache.stock.lookupResult
+      stockAgentStatus.value = cache.stock.agentStatus
+      stockAgentReports.value = cache.stock.agentReports
+      stockFinalDecision.value = cache.stock.finalDecision
+    }
+
     if (cache.single.fund && cache.single.chartData) {
       await nextTick()
       renderSingleChart()
@@ -432,7 +705,8 @@ onMounted(async () => {
 
 watch(
   [activeTab, singleFund, singlePeriod, analysisResult, singleChartData, singleLatestNav, singleYearReturn,
-   cmpFunds, cmpPeriod, cmpResult, chartData],
+   cmpFunds, cmpPeriod, cmpResult, chartData,
+   stockKeyword, stockLookupResult, stockAgentStatus, stockAgentReports, stockFinalDecision],
   () => { saveCache() },
   { deep: true }
 )
@@ -528,6 +802,8 @@ function getFilteredSingleData() {
   let cutoff: Date
   if (singlePeriod.value === '1m') {
     cutoff = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate())
+  } else if (singlePeriod.value === '6m') {
+    cutoff = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate())
   } else {
     cutoff = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate())
   }
@@ -544,13 +820,23 @@ function renderSingleChart() {
   const dates = data.map(d => d.date)
   const navs = data.map(d => d.nav)
   const growths = data.map(d => d.growth)
+  const baseNav = data[0].nav || 1
+  const cumReturns = navs.map(nav => +((nav / baseNav - 1) * 100).toFixed(2))
   const isMobile = window.innerWidth < 640
   const maxLabels = isMobile ? 4 : 8
   const sampleInterval = Math.max(1, Math.floor(dates.length / maxLabels))
 
   singleChartInstance.setOption({
     animation: false,
-    grid: { left: 52, right: 16, top: 12, bottom: isMobile ? 40 : 28 },
+    grid: { left: 52, right: 16, top: 28, bottom: isMobile ? 40 : 28 },
+    title: {
+      text: `累计 ${(() => { const v = cumReturns[cumReturns.length - 1] ?? 0; return `${v >= 0 ? '+' : ''}${v.toFixed(2)}%` })()}`,
+      right: 60, top: 4,
+      textStyle: {
+        fontSize: 10, fontWeight: 600,
+        color: (cumReturns[cumReturns.length - 1] ?? 0) >= 0 ? '#DC2626' : '#16A34A'
+      }
+    },
     tooltip: {
       trigger: 'axis',
       backgroundColor: 'rgba(255,255,255,0.96)',
@@ -561,10 +847,12 @@ function renderSingleChart() {
         const di = params[0]?.dataIndex ?? 0
         const date = dates[di] || ''
         const nav = navs[di]
+        const cr = cumReturns[di]
         const g = growths[di]
         return `<div style="font-size:11px;color:#9CA3AF;margin-bottom:6px">${date}</div>
           <div style="font-size:12px;line-height:2">净值 <b>${nav.toFixed(4)}</b></div>
-          <div style="font-size:12px;line-height:2">涨跌幅 <b style="color:${g >= 0 ? '#DC2626' : '#16A34A'}">${g >= 0 ? '+' : ''}${g.toFixed(2)}%</b></div>`
+          <div style="font-size:12px;line-height:2">累计涨幅 <b style="color:${cr >= 0 ? '#DC2626' : '#16A34A'}">${cr >= 0 ? '+' : ''}${cr.toFixed(2)}%</b></div>
+          <div style="font-size:12px;line-height:2">日涨跌 <b style="color:${g >= 0 ? '#DC2626' : '#16A34A'}">${g >= 0 ? '+' : ''}${g.toFixed(2)}%</b></div>`
       }
     },
     xAxis: {
@@ -583,7 +871,7 @@ function renderSingleChart() {
         type: 'value', position: 'left',
         axisLine: { show: false }, axisTick: { show: false },
         splitLine: { lineStyle: { color: '#F3F4F6', type: 'dashed' } },
-        axisLabel: { color: '#9CA3AF', fontSize: 10, formatter: (v: number) => v.toFixed(2) }
+        axisLabel: { color: '#9CA3AF', fontSize: 10, formatter: (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%` }
       },
       {
         type: 'value', position: 'right',
@@ -594,17 +882,18 @@ function renderSingleChart() {
     ],
     series: [
       {
-        name: '净值', type: 'line', smooth: true, symbol: 'none', yAxisIndex: 0,
-        lineStyle: { width: 1, color: '#2563EB' },
+        name: '累计涨幅', type: 'line', smooth: true, yAxisIndex: 0,
+        lineStyle: { width: 1.2, color: '#2563EB' },
         itemStyle: { color: '#2563EB' },
+        showSymbol: false,
         areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
           { offset: 0, color: '#2563EB20' },
           { offset: 1, color: '#2563EB03' }
         ]) },
-        data: navs
+        data: cumReturns
       },
       {
-        name: '涨跌幅', type: 'bar', yAxisIndex: 1, barWidth: data.length > 120 ? 1 : 2,
+        name: '日涨跌', type: 'bar', yAxisIndex: 1, barWidth: data.length > 120 ? 1 : 2,
         itemStyle: { color: (params: any) => params.value >= 0 ? '#DC2626' : '#16A34A' },
         data: growths
       }
@@ -700,6 +989,7 @@ function confirmSingleAnalysis() {
   confirmDialog.message = '将对以下基金进行 AI 智能分析'
   confirmDialog.funds = [singleFund.value]
   confirmDialog.periodLabel = periodLabels[singlePeriod.value]
+  confirmDialog.cost = 2
   confirmDialog.onConfirm = () => {
     confirmDialog.show = false
     doSingleAnalysis()
@@ -712,7 +1002,7 @@ async function doSingleAnalysis() {
   try {
     await streamAnalysis([singleFund.value.code], singlePeriod.value,
       c => { analysisResult.value += c },
-      (u, l) => { usage.value.used = u; usage.value.limit = l },
+      (c) => { usage.value.credits = c },
       e => { singleErrorMsg.value = e; analyzing.value = false },
       () => { analyzing.value = false }
     )
@@ -725,6 +1015,7 @@ function confirmCompareAnalysis() {
   confirmDialog.message = `将对以下 ${cmpFunds.value.length} 只基金进行对比分析`
   confirmDialog.funds = [...cmpFunds.value]
   confirmDialog.periodLabel = periodLabels[cmpPeriod.value]
+  confirmDialog.cost = 2
   confirmDialog.onConfirm = () => {
     confirmDialog.show = false
     doCompareAnalysis()
@@ -737,7 +1028,7 @@ async function doCompareAnalysis() {
   try {
     await streamAnalysis(cmpFunds.value.map(f => f.code), cmpPeriod.value,
       c => { cmpResult.value += c },
-      (u, l) => { usage.value.used = u; usage.value.limit = l },
+      (c) => { usage.value.credits = c },
       e => { cmpErrorMsg.value = e; comparing.value = false },
       () => { comparing.value = false }
     )
@@ -769,6 +1060,7 @@ function renderChart() {
     const info = cmpFunds.value.find(f => f.code === code)
     const name = info?.name || fund.name
     fund.data.forEach(d => allDates.add(d.date))
+    const baseNav = fund.data.length > 0 ? fund.data[0].nav : 1
     seriesList.push({
       name,
       type: 'line',
@@ -780,7 +1072,7 @@ function renderChart() {
         { offset: 0, color: COLORS[idx % COLORS.length] + '18' },
         { offset: 1, color: COLORS[idx % COLORS.length] + '03' }
       ]) },
-      data: fund.data.map(d => d.growth)
+      data: fund.data.map(d => baseNav > 0 ? +((d.nav / baseNav - 1) * 100).toFixed(2) : 0)
     })
     idx++
   }
@@ -856,6 +1148,140 @@ const resizeHandler = () => { singleChartInstance?.resize(); chartInstance?.resi
 window.addEventListener('resize', resizeHandler)
 onUnmounted(() => window.removeEventListener('resize', resizeHandler))
 
+// ---- stock analysis ----
+async function handleStockLookup() {
+  const code = stockKeyword.value.trim()
+  if (!/^\d{6}$/.test(code)) {
+    stockErrorMsg.value = '请输入6位股票代码（6位数字）'
+    return
+  }
+  stockLookupLoading.value = true
+  stockErrorMsg.value = ''
+  stockLookupResult.value = null
+  try {
+    const result = await lookupStock(code)
+    stockLookupResult.value = result
+    if (!result.found) {
+      stockErrorMsg.value = `未找到股票 ${code}，请确认代码是否正确`
+    }
+  } catch {
+    stockErrorMsg.value = '查询失败，请检查网络'
+  }
+  stockLookupLoading.value = false
+}
+
+function toggleAgentReport(name: string) {
+  if (stockExpandedAgent.value === name) {
+    stockExpandedAgent.value = ''
+  } else if (stockAgentReports.value[name]) {
+    stockExpandedAgent.value = name
+  }
+}
+
+async function confirmStockAnalysis() {
+  const code = stockKeyword.value.trim()
+  if (!/^\d{6}$/.test(code)) {
+    stockErrorMsg.value = '请输入6位股票代码'
+    return
+  }
+  // Must lookup first to confirm stock exists
+  if (!stockLookupResult.value || !stockLookupResult.value.found || stockLookupResult.value.code !== code) {
+    stockLookupLoading.value = true
+    try {
+      const result = await lookupStock(code)
+      stockLookupResult.value = result
+      if (!result.found) {
+        stockErrorMsg.value = `未找到股票 ${code}，请确认代码是否正确`
+        stockLookupLoading.value = false
+        return
+      }
+    } catch {
+      stockErrorMsg.value = '查询失败，请检查网络后重试'
+      stockLookupLoading.value = false
+      return
+    }
+    stockLookupLoading.value = false
+  }
+  confirmDialog.show = true
+  confirmDialog.message = '将启动多智能体对该股票进行全面分析'
+  confirmDialog.funds = [{ code, name: stockLookupResult.value.name || code, type: '股票', pinyin: '' }]
+  confirmDialog.periodLabel = '多智能体全流程'
+  confirmDialog.cost = 10
+  confirmDialog.onConfirm = () => {
+    confirmDialog.show = false
+    doStockAnalysis(code)
+  }
+}
+
+async function doStockAnalysis(code: string) {
+  stockAnalyzing.value = true
+  stockErrorMsg.value = ''
+  stockAgentStatus.value = {}
+  stockAgentReports.value = {}
+  stockRunningAgent.value = ''
+  stockRunningContent.value = ''
+  stockExpandedAgent.value = ''
+  stockFinalDecision.value = ''
+  stockDebateRound.value = 0
+  stockRiskRound.value = 0
+
+  try {
+    await streamStockAnalysis(code, {
+      onEvent: (event: StockSSEEvent) => {
+        if (event.type === 'agent_start' && event.agent) {
+          stockAgentStatus.value[event.agent] = 'running'
+          stockRunningAgent.value = event.agent
+          stockRunningContent.value = event.content || ''
+        } else if (event.type === 'agent_progress' && event.agent) {
+          stockRunningContent.value += (event.content || '')
+        } else if (event.type === 'agent_complete' && event.agent) {
+          stockAgentStatus.value[event.agent] = 'done'
+          if (event.report) {
+            stockAgentReports.value[event.agent] = event.report
+          }
+          if (stockRunningAgent.value === event.agent) {
+            stockRunningAgent.value = ''
+            stockRunningContent.value = ''
+          }
+        } else if (event.type === 'tool_call') {
+          // Tool calls can be shown if needed
+        } else if (event.type === 'tool_result') {
+          // Tool results can be shown if needed
+        } else if (event.type === 'debate_start') {
+          if (event.debateType === 'research') {
+            stockDebateRound.value = event.round || 0
+          } else if (event.debateType === 'risk') {
+            stockRiskRound.value = event.round || 0
+          }
+        } else if (event.type === 'debate_round') {
+          // Round complete
+        } else if (event.type === 'decision' && event.decision) {
+          stockFinalDecision.value = event.decision
+        }
+      },
+      onUsage: (credits) => {
+        usage.value.credits = credits
+      },
+      onError: (error) => {
+        stockErrorMsg.value = error
+        stockAnalyzing.value = false
+      },
+      onDone: () => {
+        stockAnalyzing.value = false
+        // Mark any still-running agents as done
+        for (const key of Object.keys(stockAgentStatus.value)) {
+          if (stockAgentStatus.value[key] === 'running') {
+            stockAgentStatus.value[key] = 'done'
+          }
+        }
+      }
+    })
+  } catch (e: any) {
+    stockErrorMsg.value = e?.message || '分析失败'
+    stockAnalyzing.value = false
+  }
+}
+
 // ---- copy ----
 async function doCopy(text: string) {
   try { await navigator.clipboard.writeText(text) } catch {
@@ -871,7 +1297,7 @@ async function doCopy(text: string) {
   background: rgba(255,255,255,0.92); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid rgba(0,0,0,0.06); padding: 12px 0; position: sticky; top: 0; z-index: 100;
 }
-.header-inner { max-width: 860px; margin: 0 auto; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; }
+.header-inner { max-width: 1200px; margin: 0 auto; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; }
 .brand { display: flex; align-items: center; gap: 10px; }
 .back-btn {
   width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
@@ -883,13 +1309,22 @@ async function doCopy(text: string) {
 .title { font-size: 17px; font-weight: 700; color: #0F172A; margin: 0; letter-spacing: -0.02em; }
 .usage-pill {
   display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 500;
-  background: #ECFDF5; color: #059669; border: 1px solid #A7F3D0;
+  background: #EFF6FF; color: #2563EB; border: 1px solid #93C5FD;
 }
 .usage-pill.warn { background: #FEF2F2; color: #DC2626; border-color: #FECACA; }
-.usage-dot { width: 6px; height: 6px; border-radius: 50%; background: #10B981; }
+.usage-dot { width: 6px; height: 6px; border-radius: 50%; background: #3B82F6; }
 .usage-pill.warn .usage-dot { background: #EF4444; }
+.usage-divider { width: 1px; height: 12px; background: #93C5FD; flex-shrink: 0; }
+.usage-pill.warn .usage-divider { background: #FECACA; }
+.usage-upgrade {
+  display: flex; align-items: center; gap: 3px;
+  cursor: pointer; color: #2563EB; font-weight: 600; white-space: nowrap;
+  transition: opacity 0.15s;
+}
+.usage-upgrade:hover { opacity: 0.75; }
+.usage-upgrade svg { width: 12px; height: 12px; flex-shrink: 0; }
 
-.container { max-width: 860px; margin: 0 auto; padding: 20px 20px 40px; }
+.container { max-width: 1200px; margin: 0 auto; padding: 20px 20px 40px; }
 
 .tabs-bar { display: flex; gap: 4px; margin-bottom: 16px; background: #F1F5F9; padding: 4px; border-radius: 10px; }
 .tab {
@@ -902,8 +1337,8 @@ async function doCopy(text: string) {
 .tab.active { background: white; color: #BE123C; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
 
 .card {
-  background: white; border-radius: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 0 0 1px rgba(0,0,0,0.03);
-  margin-bottom: 12px; overflow: hidden;
+  background: white; border-radius: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.08);
+  margin-bottom: 20px; overflow: hidden;
 }
 .card-header {
   display: flex; align-items: center; gap: 6px; padding: 14px 18px 0; font-size: 13px; font-weight: 600; color: #334155;
@@ -1157,6 +1592,232 @@ async function doCopy(text: string) {
   .period-btn { padding: 6px 0; font-size: 12px; }
   .batch-area { flex-direction: column; }
   .batch-btn { width: 100%; justify-content: center; padding: 10px; }
-  .ai-btn { max-width: 120px; width: 100%; }
+  .ai-btn { max-width: 180px; width: 100%; }
+  .pf-nodes { gap: 4px; }
+  .pf-node { min-width: 52px; }
+  .pf-node-inner { padding: 4px 2px 3px; }
+  .pf-node-label { font-size: 9px; }
+  .pf-phase-head { gap: 6px; }
+  .pf-phase-icon { width: 26px; height: 26px; }
+  .pf-phase-name { font-size: 12px; }
+  .stock-info-panel { margin: 8px 12px 0; }
+  .sip-row { padding: 10px 12px; gap: 4px; flex-wrap: wrap; }
+  .sip-left { gap: 6px; flex-wrap: wrap; }
+  .sip-name { font-size: 14px; }
+  .sip-price { font-size: 18px; }
+  .sip-change { font-size: 12px; }
+  .sip-details { padding: 0 12px 10px; padding-top: 8px; gap: 0; }
 }
+
+/* Stock Analysis */
+.stock-info-panel {
+  margin: 10px 18px 0; border-radius: 12px; overflow: hidden;
+  background: linear-gradient(135deg, #FFFAFA, #FFF1F1);
+  border: 1px solid #F5A0A0;
+}
+.sip-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 16px;
+}
+.sip-left { display: flex; align-items: center; gap: 8px; }
+.sip-name { font-size: 16px; font-weight: 700; color: #78350F; }
+.sip-code { font-size: 11px; color: #B45309; background: white; padding: 2px 8px; border-radius: 5px; font-weight: 500; }
+.sip-industry { font-size: 11px; color: #92400E; background: #FEF3C7; padding: 2px 8px; border-radius: 5px; }
+.sip-right { display: flex; align-items: baseline; gap: 8px; }
+.sip-price { font-size: 22px; font-weight: 700; color: #78350F; }
+.sip-change { font-size: 14px; font-weight: 600; }
+.sip-change.up { color: #DC2626; }
+.sip-change.down { color: #2563EB; }
+.sip-details {
+  display: flex; gap: 2px; padding: 0 16px 12px;
+  border-top: 1px solid rgba(245,160,160,0.25);
+  margin-top: 0; padding-top: 10px;
+}
+.sip-item {
+  flex: 1; text-align: center; padding: 0 8px;
+  border-right: 1px solid rgba(245,160,160,0.25);
+}
+.sip-item:last-child { border-right: none; }
+.sip-item-label { display: block; font-size: 10px; color: #64748B; margin-bottom: 2px; }
+.sip-item-value { display: block; font-size: 13px; font-weight: 600; color: #0F172A; }
+
+/* Pipeline Flow */
+.pipeline-flow { padding: 20px 18px 16px; }
+
+.pf-phase {
+  background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px;
+  padding: 12px 14px 14px; transition: border-color 0.3s;
+}
+.pf-phase:has(.pf-node.running) { border-color: #FECDD3; background: #FFFBFB; }
+
+.pf-phase-head {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+}
+.pf-phase-icon {
+  width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+}
+.pf-icon-analyst { background: linear-gradient(135deg, #DBEAFE, #BFDBFE); }
+.pf-icon-analyst::after { content: '\1F4CA'; font-size: 15px; }
+.pf-icon-debate { background: linear-gradient(135deg, #FEF3C7, #FDE68A); }
+.pf-icon-debate::after { content: '\2696'; font-size: 15px; }
+.pf-icon-trade { background: linear-gradient(135deg, #DBEAFE, #BFDBFE); }
+.pf-icon-trade::after { content: '\1F4B0'; font-size: 15px; }
+.pf-icon-risk { background: linear-gradient(135deg, #FEE2E2, #FECACA); }
+.pf-icon-risk::after { content: '\26A0'; font-size: 15px; }
+
+.pf-phase-title { flex: 1; }
+.pf-phase-name { display: block; font-size: 13px; font-weight: 700; color: #1E293B; }
+.pf-phase-desc { display: block; font-size: 10px; color: #94A3B8; margin-top: 1px; }
+.pf-phase-count {
+  width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center;
+  justify-content: center; font-size: 11px; font-weight: 700; color: #64748B;
+  background: white; border: 1px solid #E2E8F0;
+}
+
+.pf-nodes { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.pf-node {
+  flex: 1; min-width: 62px; cursor: pointer;
+}
+.pf-node-inner {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  padding: 6px 4px; border-radius: 6px;
+  border: 1px solid #CBD5E1;
+  background: white;
+  transition: all 0.25s; position: relative;
+}
+.pf-node-label { color: #334155; white-space: nowrap; }
+.pf-node:hover .pf-node-inner { border-color: #94A3B8; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+
+.pf-status-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: #D0D9E4;
+  transition: all 0.3s; position: relative;
+  animation: dotBreathe 2s ease-in-out infinite;
+}
+
+@keyframes dotBreathe {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+.pf-node-label { font-size: 10px; font-weight: 500; color: #64748B; text-align: center; line-height: 1.2; }
+
+/* Phase-specific node colors - removed, using unified style */
+
+/* Status: running */
+.pf-node.running .pf-node-inner { border-color: #FB7185; background: #FFF1F2; box-shadow: 0 2px 12px rgba(225,29,72,0.12); }
+.pf-node.running .pf-status-dot { background: #E11D48; animation: none; }
+.pf-node.running .pf-status-dot::after {
+  content: ''; position: absolute; inset: -3px; border-radius: 50%;
+  border: 2px solid #E11D48; animation: pfRing 1.5s ease-out infinite;
+}
+.pf-node.running .pf-node-label { color: #BE123C; font-weight: 700; }
+
+/* Status: done */
+.pf-node.done .pf-node-inner { }
+.pf-node.done .pf-status-dot { visibility: hidden; }
+.pf-node.done .pf-node-label { font-weight: 600; position: relative; }
+.pf-node.done .pf-node-label::after {
+  content: ''; display: inline-block; width: 14px; height: 14px; border-radius: 50%;
+  background: #22C55E; margin-left: 4px; vertical-align: middle;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.3);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
+  background-size: 10px; background-position: center; background-repeat: no-repeat;
+}
+
+/* Status: error */
+.pf-node.error .pf-node-inner { border-color: #FCA5A5; background: #FEF2F2; }
+.pf-node.error .pf-status-dot { background: #EF4444; animation: none; }
+
+@keyframes pfRing {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* Connector between phases */
+.pf-connector {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 4px 0; height: 28px;
+}
+.pf-connector-line {
+  width: 2px; flex: 1; background: linear-gradient(180deg, #E2E8F0, #CBD5E1);
+  transition: background 0.4s;
+}
+.pf-connector-arrow {
+  width: 0; height: 0;
+  border-left: 5px solid transparent; border-right: 5px solid transparent;
+  border-top: 6px solid #CBD5E1;
+  transition: border-color 0.4s;
+}
+.pf-connector.done .pf-connector-line {
+  background: linear-gradient(180deg, #34D399, #10B981);
+}
+.pf-connector.done .pf-connector-arrow {
+  border-top-color: #10B981;
+}
+
+/* Running content */
+.running-content {
+  margin: 20px 18px; padding: 16px 20px;
+  background: linear-gradient(135deg, #FFFAFA, #FFF1F1);
+  border: 1px solid #F5A0A0; border-radius: 10px;
+}
+.running-header {
+  font-size: 12px; font-weight: 600; color: #92400E; margin-bottom: 6px;
+  display: flex; align-items: center; gap: 6px;
+}
+.running-spinner {
+  width: 12px; height: 12px; border: 2px solid rgba(146,64,14,0.2);
+  border-top-color: #D97706; border-radius: 50%; animation: spin 0.7s linear infinite;
+}
+.running-text {
+  font-size: 12px; color: #78350F; line-height: 1.6;
+  max-height: 220px; overflow: hidden; white-space: pre-wrap;
+}
+
+/* Agent report expanded */
+.agent-report-expanded {
+  margin: 20px 18px; padding: 16px;
+  background: linear-gradient(135deg, #FFFAFA, #FFF1F1);
+  border: 1px solid #F5A0A0; border-radius: 12px;
+  max-height: 400px; overflow-y: auto; position: relative;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+.pf-close-btn {
+  float: right; background: #F1F5F9; border: none; border-radius: 4px;
+  width: 22px; height: 22px; cursor: pointer; color: #64748B;
+  font-size: 12px; display: flex; align-items: center; justify-content: center;
+}
+.pf-close-btn:hover { background: #E2E8F0; color: #334155; }
+
+.decision-badge {
+  margin-left: auto; padding: 2px 10px; border-radius: 4px;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.05em;
+}
+.decision-badge.buy { background: #DBEAFE; color: #1E40AF; }
+.decision-badge.sell { background: #FEE2E2; color: #991B1B; }
+.decision-badge.hold { background: #FEF3C7; color: #92400E; }
+
+.decision-card { border: 2px solid transparent; }
+.decision-card.buy { border-color: #3B82F6; }
+.decision-card.sell { border-color: #EF4444; }
+.decision-card.hold { border-color: #F59E0B; }
+.decision-top { display: flex; align-items: center; gap: 12px; padding: 16px 18px; }
+.decision-icon-wrap {
+  width: 48px; height: 48px; border-radius: 50%; display: flex;
+  align-items: center; justify-content: center; flex-shrink: 0;
+}
+.buy .decision-icon-wrap { background: #DBEAFE; }
+.sell .decision-icon-wrap { background: #FEE2E2; }
+.hold .decision-icon-wrap { background: #FEF3C7; }
+.decision-icon-text { font-size: 22px; }
+.buy .decision-icon-text { color: #2563EB; }
+.sell .decision-icon-text { color: #DC2626; }
+.hold .decision-icon-text { color: #D97706; }
+.decision-info { flex: 1; }
+.decision-title { font-size: 16px; font-weight: 700; color: #0F172A; }
+.decision-sub { font-size: 12px; color: #64748B; margin-top: 2px; }
+.decision-body { padding: 0 18px 16px; }
+.decision-actions { padding: 0 18px 14px; display: flex; justify-content: flex-end; }
 </style>

@@ -818,18 +818,25 @@ function drawChart() {
     }],
     tooltip: {
       trigger: 'axis',
-      backgroundColor: 'rgba(0,0,0,0.7)',
+      backgroundColor: 'transparent',
       borderColor: 'transparent',
-      textStyle: { color: '#fff', fontSize: 12 },
+      borderWidth: 0,
+      padding: [10, 14],
+      textStyle: { color: '#fff', fontSize: 13 },
       formatter: (params: any) => {
         const idx = params[0].dataIndex
         const d = data[idx]
         const accGrowth = growthData[idx]
-        return `${d.date}<br/>净值: ${d.nav.toFixed(4)}<br/>日涨跌: ${d.growth >= 0 ? '+' : ''}${d.growth}%<br/>累计: ${accGrowth >= 0 ? '+' : ''}${accGrowth.toFixed(2)}%`
+        const accColor = accGrowth >= 0 ? '#EF4444' : '#10B981'
+        const growthColor = d.growth >= 0 ? '#EF4444' : '#10B981'
+        return `<div style="font-size:10px;color:#9CA3AF;margin-bottom:4px">${d.date}</div>
+                <div style="font-size:12px">净值: ${d.nav.toFixed(4)}</div>
+                <div style="font-size:12px;color:${growthColor}">日涨跌: ${d.growth >= 0 ? '+' : ''}${d.growth}%</div>
+                <div style="font-size:12px;color:${accColor}">累计: ${accGrowth >= 0 ? '+' : ''}${accGrowth.toFixed(2)}%</div>`
       }
     }
   }
-  
+
   chartInstance.setOption(option)
   chartInstance.resize()
 }
@@ -1005,20 +1012,28 @@ function drawEstimateChart() {
     series,
     tooltip: {
       trigger: 'axis',
-      backgroundColor: 'rgba(0,0,0,0.7)',
+      backgroundColor: 'transparent',
       borderColor: 'transparent',
-      textStyle: { color: '#fff', fontSize: 12 },
+      borderWidth: 0,
+      padding: [10, 14],
+      textStyle: { color: '#fff', fontSize: 13 },
       formatter: (params: any) => {
         if (!params || params.length === 0) return ''
         const idx = params[0].dataIndex
         if (idx >= filteredData.length) return ''
-        
+
         const d = filteredData[idx]
-        let result = `${d.time}<br/>净值: ${d.value.toFixed(4)} (${d.percent >= 0 ? '+' : ''}${d.percent.toFixed(2)}%)`
-        
+        const percentColor = d.percent >= 0 ? '#EF4444' : '#10B981'
+        let result = `<div style="font-size:10px;color:#9CA3AF;margin-bottom:4px">${d.time}</div>
+                      <div style="font-size:12px">净值: ${d.value.toFixed(4)}</div>
+                      <div style="font-size:12px;color:${percentColor}">涨跌幅: ${d.percent >= 0 ? '+' : ''}${d.percent.toFixed(2)}%</div>`
+
         if (hasFinal && d.time === '16:00') {
           const navStr = finalNav.value != null ? finalNav.value.toFixed(4) : '—'
-          result = `16:00<br/>估值: ${lastEstimateValue.toFixed(4)} (${d.percent >= 0 ? '+' : ''}${d.percent.toFixed(2)}%)<br/>最终: ${navStr} (${finalGrowth.value! >= 0 ? '+' : ''}${finalGrowth.value!.toFixed(2)}%)`
+          const finalColor = finalGrowth.value! >= 0 ? '#EF4444' : '#10B981'
+          result = `<div style="font-size:10px;color:#9CA3AF;margin-bottom:4px">16:00</div>
+                    <div style="font-size:12px;color:${percentColor}">估值: ${lastEstimateValue.toFixed(4)} (${d.percent >= 0 ? '+' : ''}${d.percent.toFixed(2)}%)</div>
+                    <div style="font-size:12px;color:${finalColor}">最终: ${navStr} (${finalGrowth.value! >= 0 ? '+' : ''}${finalGrowth.value!.toFixed(2)}%)</div>`
         }
         return result
       }

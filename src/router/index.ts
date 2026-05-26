@@ -25,6 +25,11 @@ const router = createRouter({
       component: () => import('@/views/SmartAnalysisView.vue')
     },
     {
+      path: '/about',
+      name: 'about',
+      component: () => import('@/views/DisclaimerView.vue')
+    },
+    {
       path: '/admin/login',
       name: 'admin-login',
       component: () => import('@/views/admin/AdminLoginView.vue'),
@@ -79,6 +84,11 @@ const router = createRouter({
           path: 'suggestion-manage',
           name: 'admin-suggestion-manage',
           component: () => import('@/views/admin/SuggestionManageView.vue')
+        },
+        {
+          path: 'credit-manage',
+          name: 'admin-credit-manage',
+          component: () => import('@/views/admin/CreditManageView.vue')
         }
       ]
     }
