@@ -26,6 +26,7 @@ import visitRoutes from './routes/visit.js'
 import cacheRoutes from './routes/cache.js'
 import suggestionRoutes from './routes/suggestion.js'
 import analysisRoutes from './routes/analysis.js'
+import wechatRoutes from './routes/wechat.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -76,6 +77,7 @@ app.use('/api', visitRoutes)
 app.use('/api/cache', cacheRoutes)
 app.use('/api', suggestionRoutes)
 app.use('/api', analysisRoutes)
+app.use('/api/auth', wechatRoutes)
 
 app.use('/api/users', (req, res) => {
   try {

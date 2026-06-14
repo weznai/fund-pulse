@@ -12,6 +12,8 @@ npm run server       # Express backend only (port 3010, via tsx)
 npm run dev:full     # Both concurrently (use this for normal development)
 npm run build        # vue-tsc typecheck + vite build → server/dist/
 npm test             # Jest (--passWithNoCoverage)
+npm run miniapp:dev   # uni-app 微信小程序开发模式
+npm run miniapp:build # uni-app 微信小程序构建
 ```
 
 No separate lint or format command. `npm run build` runs `vue-tsc` which is the typecheck.
@@ -19,6 +21,8 @@ No separate lint or format command. `npm run build` runs `vue-tsc` which is the 
 ## Architecture
 
 **Frontend** (`src/`): Vue 3 + TypeScript + Vite + Pinia + Vue Router + ECharts. Path alias `@` → `src/`.
+
+**Mini Program** (`miniapp/`): uni-app (Vue 3) 微信小程序客户端。独立 package.json，复用后端 API。通过 `Authorization: Bearer <token>` header 认证。Path alias `@` → `miniapp/src/`。
 
 **Backend** (`server/`): Express + better-sqlite3, run via `tsx`. Three-layer structure:
 - `routes/` — HTTP handlers (also act as controllers)

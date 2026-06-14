@@ -143,6 +143,7 @@ export function initDatabase() {
     `ALTER TABLE users ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE user_funds ADD COLUMN total_cost REAL NOT NULL DEFAULT 0`,
     `ALTER TABLE fund_info ADD COLUMN data_source VARCHAR(20) DEFAULT 'standard'`,
+    `ALTER TABLE users ADD COLUMN wechat_openid TEXT DEFAULT NULL`,
   ]
   for (const sql of migrations) {
     try { db.exec(sql) } catch (e) { /* field exists */ }

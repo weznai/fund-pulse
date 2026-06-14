@@ -262,7 +262,7 @@
           <div class="card-header">
             <svg viewBox="0 0 24 24" fill="none" class="card-icon"><path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <span>股票分析</span>
-            <span class="card-hint">多智能体协同分析</span>
+            <span class="card-hint stock-hint">多智能体协同分析</span>
           </div>
           <div class="search-box">
             <svg class="s-icon" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -334,82 +334,98 @@
 
           <div class="pipeline-flow">
             <!-- Phase 1: Analysts -->
-            <div class="pf-phase">
+            <div class="pf-phase pf-phase-analyst" :class="{ active: ['market_analyst','social_media_analyst','news_analyst','fundamentals_analyst'].some(n => stockAgentStatus[n]==='running') }">
               <div class="pf-phase-head">
-                <span class="pf-phase-icon pf-icon-analyst"></span>
+                <span class="pf-phase-icon pf-icon-analyst">
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625C9.75 8.004 10.254 7.5 10.875 7.5h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" fill="currentColor"/></svg>
+                </span>
                 <div class="pf-phase-title">
                   <span class="pf-phase-name">分析师团队</span>
                   <span class="pf-phase-desc">数据采集 & 分析</span>
                 </div>
+                <span class="pf-phase-step">01</span>
               </div>
               <div class="pf-nodes">
                 <div v-for="name in ['market_analyst', 'social_media_analyst', 'news_analyst', 'fundamentals_analyst']" :key="name" class="pf-node" :class="stockAgentStatus[name]" @click="toggleAgentReport(name)">
                   <div class="pf-node-inner">
-                    <div class="pf-status-dot"></div>
+                    <div class="pf-node-avatar"></div>
                     <span class="pf-node-label">{{ stockAgentLabels[name] }}</span>
+                    <div class="pf-status-dot"></div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div class="pf-connector" :class="{ done: ['market_analyst','social_media_analyst','news_analyst','fundamentals_analyst'].every(n => stockAgentStatus[n]==='done') }"><div class="pf-connector-line"></div><div class="pf-connector-arrow"></div></div>
+            <div class="pf-connector" :class="{ done: ['market_analyst','social_media_analyst','news_analyst','fundamentals_analyst'].every(n => stockAgentStatus[n]==='done') }"><div class="pf-connector-line"></div><svg class="pf-connector-arrow" viewBox="0 0 24 24" fill="none"><path d="M12 5v14m0 0l6-6m-6 6l-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
 
             <!-- Phase 2: Research Debate -->
-            <div class="pf-phase">
+            <div class="pf-phase pf-phase-debate" :class="{ active: ['bull_researcher','bear_researcher','research_manager'].some(n => stockAgentStatus[n]==='running') }">
               <div class="pf-phase-head">
-                <span class="pf-phase-icon pf-icon-debate"></span>
+                <span class="pf-phase-icon pf-icon-debate">
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
                 <div class="pf-phase-title">
                   <span class="pf-phase-name">研究辩论</span>
                   <span class="pf-phase-desc">多空辩论 &bull; <span v-if="stockDebateRound > 0">第{{ stockDebateRound }}轮</span><span v-else>待开始</span></span>
                 </div>
+                <span class="pf-phase-step">02</span>
               </div>
               <div class="pf-nodes">
-                <div v-for="name in ['bull_researcher', 'bear_researcher', 'research_manager']" :key="name" class="pf-node" :class="stockAgentStatus[name]" @click="toggleAgentReport(name)">
+                <div v-for="name in ['bull_researcher', 'bear_researcher', 'research_manager']" :key="name" class="pf-node" :class="[stockAgentStatus[name], name === 'bull_researcher' ? 'pf-bull' : name === 'bear_researcher' ? 'pf-bear' : '']" @click="toggleAgentReport(name)">
                   <div class="pf-node-inner">
-                    <div class="pf-status-dot"></div>
+                    <div class="pf-node-avatar"></div>
                     <span class="pf-node-label">{{ stockAgentLabels[name] }}</span>
+                    <div class="pf-status-dot"></div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div class="pf-connector" :class="{ done: ['bull_researcher','bear_researcher','research_manager'].every(n => stockAgentStatus[n]==='done') }"><div class="pf-connector-line"></div><div class="pf-connector-arrow"></div></div>
+            <div class="pf-connector" :class="{ done: ['bull_researcher','bear_researcher','research_manager'].every(n => stockAgentStatus[n]==='done') }"><div class="pf-connector-line"></div><svg class="pf-connector-arrow" viewBox="0 0 24 24" fill="none"><path d="M12 5v14m0 0l6-6m-6 6l-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
 
             <!-- Phase 3: Trader -->
-            <div class="pf-phase">
+            <div class="pf-phase pf-phase-trade" :class="{ active: stockAgentStatus.trader==='running' }">
               <div class="pf-phase-head">
-                <span class="pf-phase-icon pf-icon-trade"></span>
+                <span class="pf-phase-icon pf-icon-trade">
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
                 <div class="pf-phase-title">
                   <span class="pf-phase-name">交易计划</span>
                   <span class="pf-phase-desc">制定执行方案</span>
                 </div>
+                <span class="pf-phase-step">03</span>
               </div>
               <div class="pf-nodes">
                 <div class="pf-node" :class="stockAgentStatus.trader" @click="toggleAgentReport('trader')">
                   <div class="pf-node-inner">
-                    <div class="pf-status-dot"></div>
+                    <div class="pf-node-avatar"></div>
                     <span class="pf-node-label">交易员</span>
+                    <div class="pf-status-dot"></div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div class="pf-connector" :class="{ done: stockAgentStatus.trader==='done' }"><div class="pf-connector-line"></div><div class="pf-connector-arrow"></div></div>
+            <div class="pf-connector" :class="{ done: stockAgentStatus.trader==='done' }"><div class="pf-connector-line"></div><svg class="pf-connector-arrow" viewBox="0 0 24 24" fill="none"><path d="M12 5v14m0 0l6-6m-6 6l-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
 
             <!-- Phase 4: Risk Debate -->
-            <div class="pf-phase">
+            <div class="pf-phase pf-phase-risk" :class="{ active: ['aggressive_debator','conservative_debator','neutral_debator','risk_manager'].some(n => stockAgentStatus[n]==='running') }">
               <div class="pf-phase-head">
-                <span class="pf-phase-icon pf-icon-risk"></span>
+                <span class="pf-phase-icon pf-icon-risk">
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
                 <div class="pf-phase-title">
                   <span class="pf-phase-name">风险评估</span>
                   <span class="pf-phase-desc">三方辩论 &bull; <span v-if="stockRiskRound > 0">第{{ stockRiskRound }}轮</span><span v-else>待开始</span></span>
                 </div>
+                <span class="pf-phase-step">04</span>
               </div>
               <div class="pf-nodes">
-                <div v-for="name in ['aggressive_debator', 'conservative_debator', 'neutral_debator', 'risk_manager']" :key="name" class="pf-node" :class="stockAgentStatus[name]" @click="toggleAgentReport(name)">
+                <div v-for="name in ['aggressive_debator', 'conservative_debator', 'neutral_debator', 'risk_manager']" :key="name" class="pf-node" :class="[stockAgentStatus[name], name === 'risk_manager' ? 'pf-final' : '']" @click="toggleAgentReport(name)">
                   <div class="pf-node-inner">
-                    <div class="pf-status-dot"></div>
+                    <div class="pf-node-avatar"></div>
                     <span class="pf-node-label">{{ stockAgentLabels[name] }}</span>
+                    <div class="pf-status-dot"></div>
                   </div>
                 </div>
               </div>
@@ -958,12 +974,14 @@ function renderMd(md: string): string {
     table += '</tbody></table>'
     return table
   })
+  h = h.replace(/^#### (.+)$/gm, '<h4>$1</h4>')
   h = h.replace(/^### (.+)$/gm, '<h3>$1</h3>')
   h = h.replace(/^## (.+)$/gm, '<h2>$1</h2>')
   h = h.replace(/^# (.+)$/gm, '<h1>$1</h1>')
   h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-  h = h.replace(/\*(.+?)\*/g, '<em>$1</em>')
+  h = h.replace(/^\* (.+)$/gm, '<li>$1</li>')
   h = h.replace(/^- (.+)$/gm, '<li>$1</li>')
+  h = h.replace(/(^|[^\*])\*(?!\s)(.+?)\*(?!\s)/g, '$1<em>$2</em>')
   h = h.replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
   h = h.replace(/(<li>.*<\/li>\n?)+/gs, m => `<ul>${m}</ul>`)
   h = h.replace(/\n{2,}/g, '</p><p>')
@@ -1345,6 +1363,7 @@ async function doCopy(text: string) {
 }
 .card-icon { width: 16px; height: 16px; color: #E11D48; flex-shrink: 0; }
 .card-hint { font-size: 11px; font-weight: 400; color: #94A3B8; margin-left: auto; }
+.stock-hint { color: #E11D48; font-weight: 600; }
 
 .search-box { position: relative; margin: 10px 18px 14px; display: flex; align-items: center; }
 .s-icon { position: absolute; left: 12px; width: 16px; height: 16px; color: #94A3B8; pointer-events: none; }
@@ -1500,6 +1519,16 @@ async function doCopy(text: string) {
 .ai-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
 .ai-btn .btn-svg { width: 14px; height: 14px; }
 
+.upgrade-banner {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  margin: 8px 18px 0; padding: 8px 14px; border-radius: 10px; cursor: pointer;
+  background: linear-gradient(135deg, #EFF6FF, #DBEAFE); border: 1px solid #93C5FD;
+  color: #2563EB; font-size: 12px; font-weight: 500; transition: all 0.15s;
+}
+.upgrade-banner:hover { box-shadow: 0 2px 8px rgba(37,99,235,0.15); }
+.upgrade-banner svg { width: 14px; height: 14px; flex-shrink: 0; }
+.upgrade-banner b { font-weight: 700; }
+
 .chart-wrap { height: 320px; padding: 8px 10px 10px; }
 
 .err-tip {
@@ -1533,6 +1562,7 @@ async function doCopy(text: string) {
 .md :deep(h1) { font-size: 16px; font-weight: 700; color: #1E293B; margin: 16px 0 8px; }
 .md :deep(h2) { font-size: 15px; font-weight: 700; color: #1E293B; margin: 14px 0 6px; }
 .md :deep(h3) { font-size: 14px; font-weight: 600; color: #334155; margin: 10px 0 4px; }
+.md :deep(h4) { font-size: 13px; font-weight: 600; color: #475569; margin: 8px 0 3px; }
 .md :deep(strong) { color: #0F172A; font-weight: 600; }
 .md :deep(ul) { margin: 6px 0; padding-left: 18px; }
 .md :deep(li) { margin: 3px 0; }
@@ -1575,6 +1605,14 @@ async function doCopy(text: string) {
 }
 .modal-period svg { width: 14px; height: 14px; color: #E11D48; }
 .modal-warn { font-size: 11px; color: #F59E0B; margin-top: 10px; }
+.modal-upgrade {
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  margin-top: 10px; padding: 8px 14px; border-radius: 8px; cursor: pointer;
+  background: #EFF6FF; border: 1px solid #93C5FD; color: #2563EB;
+  font-size: 12px; font-weight: 500; transition: all 0.15s;
+}
+.modal-upgrade:hover { background: #DBEAFE; }
+.modal-upgrade svg { width: 14px; height: 14px; flex-shrink: 0; }
 .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
 .modal-btn {
   flex: 1; padding: 10px 0; border: none; border-radius: 9px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s;
@@ -1594,145 +1632,158 @@ async function doCopy(text: string) {
   .batch-btn { width: 100%; justify-content: center; padding: 10px; }
   .ai-btn { max-width: 180px; width: 100%; }
   .pf-nodes { gap: 4px; }
-  .pf-node { min-width: 52px; }
-  .pf-node-inner { padding: 4px 2px 3px; }
+  .pf-node { min-width: 48px; }
+  .pf-node-inner { padding: 6px 2px 5px; }
+  .pf-node-avatar { width: 8px; height: 8px; }
   .pf-node-label { font-size: 9px; }
-  .pf-phase-head { gap: 6px; }
-  .pf-phase-icon { width: 26px; height: 26px; }
+  .pf-phase-head { gap: 8px; }
+  .pf-phase-icon { width: 30px; height: 30px; border-radius: 8px; }
+  .pf-phase-icon svg { width: 15px; height: 15px; }
   .pf-phase-name { font-size: 12px; }
+  .pf-phase-step { font-size: 10px; }
   .stock-info-panel { margin: 8px 12px 0; }
-  .sip-row { padding: 10px 12px; gap: 4px; flex-wrap: wrap; }
+  .sip-row { padding: 10px 14px; gap: 4px; flex-wrap: wrap; }
   .sip-left { gap: 6px; flex-wrap: wrap; }
   .sip-name { font-size: 14px; }
-  .sip-price { font-size: 18px; }
+  .sip-price { font-size: 20px; }
   .sip-change { font-size: 12px; }
-  .sip-details { padding: 0 12px 10px; padding-top: 8px; gap: 0; }
+  .sip-details { padding: 0 14px 10px; padding-top: 8px; gap: 0; }
+  .running-content { margin: 12px 12px 16px; padding: 14px 16px; }
+  .agent-report-expanded { margin: 0 12px 16px; padding: 14px 16px; }
 }
 
 /* Stock Analysis */
 .stock-info-panel {
   margin: 10px 18px 0; border-radius: 12px; overflow: hidden;
-  background: linear-gradient(135deg, #FFFAFA, #FFF1F1);
-  border: 1px solid #F5A0A0;
+  background: linear-gradient(135deg, #FFFBFB 0%, #FFF1F2 55%, #FFE4E6 100%);
+  border: 1px solid #FDA4AF;
+  box-shadow: 0 2px 12px rgba(225,29,72,0.06);
 }
 .sip-row {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 12px 16px;
+  padding: 14px 18px;
 }
 .sip-left { display: flex; align-items: center; gap: 8px; }
-.sip-name { font-size: 16px; font-weight: 700; color: #78350F; }
-.sip-code { font-size: 11px; color: #B45309; background: white; padding: 2px 8px; border-radius: 5px; font-weight: 500; }
-.sip-industry { font-size: 11px; color: #92400E; background: #FEF3C7; padding: 2px 8px; border-radius: 5px; }
+.sip-name { font-size: 16px; font-weight: 700; color: #9F1239; }
+.sip-code { font-size: 11px; color: #E11D48; background: white; padding: 2px 8px; border-radius: 5px; font-weight: 500; }
+.sip-industry { font-size: 11px; color: #9F1239; background: #FFe4E6; padding: 2px 8px; border-radius: 5px; }
 .sip-right { display: flex; align-items: baseline; gap: 8px; }
-.sip-price { font-size: 22px; font-weight: 700; color: #78350F; }
-.sip-change { font-size: 14px; font-weight: 600; }
+.sip-price { font-size: 24px; font-weight: 800; color: #9F1239; letter-spacing: -0.02em; }
+.sip-change { font-size: 14px; font-weight: 700; }
 .sip-change.up { color: #DC2626; }
 .sip-change.down { color: #2563EB; }
 .sip-details {
-  display: flex; gap: 2px; padding: 0 16px 12px;
-  border-top: 1px solid rgba(245,160,160,0.25);
-  margin-top: 0; padding-top: 10px;
+  display: flex; gap: 2px; padding: 0 18px 14px;
+  border-top: 1px solid rgba(251,113,133,0.15);
+  margin-top: 0; padding-top: 12px;
 }
 .sip-item {
   flex: 1; text-align: center; padding: 0 8px;
-  border-right: 1px solid rgba(245,160,160,0.25);
+  border-right: 1px solid rgba(251,113,133,0.15);
 }
 .sip-item:last-child { border-right: none; }
-.sip-item-label { display: block; font-size: 10px; color: #64748B; margin-bottom: 2px; }
-.sip-item-value { display: block; font-size: 13px; font-weight: 600; color: #0F172A; }
+.sip-item-label { display: block; font-size: 10px; color: #94A3B8; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.03em; }
+.sip-item-value { display: block; font-size: 14px; font-weight: 700; color: #0F172A; }
 
 /* Pipeline Flow */
 .pipeline-flow { padding: 20px 18px 16px; }
 
 .pf-phase {
-  background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px;
-  padding: 12px 14px 14px; transition: border-color 0.3s;
+  background: linear-gradient(135deg, #FAFBFC 0%, #F1F5F9 100%); border: 1px solid #CBD5E1; border-radius: 14px;
+  padding: 14px 16px 16px; transition: all 0.3s; position: relative; overflow: hidden;
 }
-.pf-phase:has(.pf-node.running) { border-color: #FECDD3; background: #FFFBFB; }
+.pf-phase::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--pf-accent, #CBD5E1); opacity: 0.6; transition: opacity 0.3s;
+}
+.pf-phase.active { border-color: var(--pf-accent, #FECDD3); background: linear-gradient(135deg, #FFFBFB, #FFF5F5); box-shadow: 0 2px 16px color-mix(in srgb, var(--pf-accent, #E11D48) 12%, transparent); }
+.pf-phase.active::before { opacity: 1; }
+
+.pf-phase-analyst { --pf-accent: #3B82F6; }
+.pf-phase-debate  { --pf-accent: #8B5CF6; }
+.pf-phase-trade   { --pf-accent: #10B981; }
+.pf-phase-risk    { --pf-accent: #F59E0B; }
 
 .pf-phase-head {
-  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
 }
 .pf-phase-icon {
-  width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+  width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 16px;
+  background: color-mix(in srgb, var(--pf-accent, #94A3B8) 15%, transparent);
+  color: var(--pf-accent, #64748B);
 }
-.pf-icon-analyst { background: linear-gradient(135deg, #DBEAFE, #BFDBFE); }
-.pf-icon-analyst::after { content: '\1F4CA'; font-size: 15px; }
-.pf-icon-debate { background: linear-gradient(135deg, #FEF3C7, #FDE68A); }
-.pf-icon-debate::after { content: '\2696'; font-size: 15px; }
-.pf-icon-trade { background: linear-gradient(135deg, #DBEAFE, #BFDBFE); }
-.pf-icon-trade::after { content: '\1F4B0'; font-size: 15px; }
-.pf-icon-risk { background: linear-gradient(135deg, #FEE2E2, #FECACA); }
-.pf-icon-risk::after { content: '\26A0'; font-size: 15px; }
+.pf-phase-icon svg { width: 18px; height: 18px; }
 
 .pf-phase-title { flex: 1; }
 .pf-phase-name { display: block; font-size: 13px; font-weight: 700; color: #1E293B; }
-.pf-phase-desc { display: block; font-size: 10px; color: #94A3B8; margin-top: 1px; }
-.pf-phase-count {
-  width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center;
-  justify-content: center; font-size: 11px; font-weight: 700; color: #64748B;
-  background: white; border: 1px solid #E2E8F0;
+.pf-phase-desc { display: block; font-size: 10px; color: #94A3B8; margin-top: 2px; }
+.pf-phase-step {
+  font-size: 11px; font-weight: 800; color: var(--pf-accent, #94A3B8);
+  opacity: 0.35; letter-spacing: 0.05em; font-family: 'SF Mono', 'Fira Code', monospace;
 }
 
-.pf-nodes { display: flex; gap: 6px; flex-wrap: wrap; }
+.pf-nodes { display: flex; gap: 10px; flex-wrap: wrap; }
 
 .pf-node {
   flex: 1; min-width: 62px; cursor: pointer;
 }
 .pf-node-inner {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-  padding: 6px 4px; border-radius: 6px;
-  border: 1px solid #CBD5E1;
-  background: white;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+  padding: 10px 4px 8px; border-radius: 10px;
+  border: 1px solid #94A3B8;
+  background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
   transition: all 0.25s; position: relative;
 }
-.pf-node-label { color: #334155; white-space: nowrap; }
-.pf-node:hover .pf-node-inner { border-color: #94A3B8; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.pf-node:hover .pf-node-inner { border-color: color-mix(in srgb, var(--pf-accent, #94A3B8) 45%, #CBD5E1); box-shadow: 0 4px 14px color-mix(in srgb, var(--pf-accent, #94A3B8) 14%, transparent); transform: translateY(-1px); }
 
-.pf-status-dot {
-  width: 8px; height: 8px; border-radius: 50%; background: #D0D9E4;
-  transition: all 0.3s; position: relative;
-  animation: dotBreathe 2s ease-in-out infinite;
-}
-
-@keyframes dotBreathe {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 1; }
+.pf-node-avatar {
+  width: 10px; height: 10px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700;
+  color: var(--pf-accent, #64748B);
+  background: color-mix(in srgb, var(--pf-accent, #94A3B8) 15%, #F8FAFC);
+  transition: all 0.25s;
 }
 .pf-node-label { font-size: 10px; font-weight: 500; color: #64748B; text-align: center; line-height: 1.2; }
 
-/* Phase-specific node colors - removed, using unified style */
+.pf-status-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: #D0D9E4;
+  transition: all 0.3s; position: absolute; top: 8px; right: 8px;
+}
+
+/* Bull/Bear special colors */
+.pf-bull .pf-node-avatar { background: #DBEAFE; color: #1E40AF; }
+.pf-bear .pf-node-avatar { background: #FEE2E2; color: #991B1B; }
+.pf-final .pf-node-avatar { background: linear-gradient(135deg, #FEF3C7, #FDE68A); color: #92400E; }
 
 /* Status: running */
-.pf-node.running .pf-node-inner { border-color: #FB7185; background: #FFF1F2; box-shadow: 0 2px 12px rgba(225,29,72,0.12); }
-.pf-node.running .pf-status-dot { background: #E11D48; animation: none; }
-.pf-node.running .pf-status-dot::after {
-  content: ''; position: absolute; inset: -3px; border-radius: 50%;
-  border: 2px solid #E11D48; animation: pfRing 1.5s ease-out infinite;
-}
+.pf-node.running .pf-node-inner { border-color: #E11D48; background: linear-gradient(135deg, #FFFBFB, #FFF5F5); box-shadow: 0 2px 16px rgba(225,29,72,0.1); }
+.pf-node.running .pf-node-avatar { background: linear-gradient(135deg, #E11D48, #F43F5E); color: white; animation: pfAvatarPulse 1.5s ease-in-out infinite; }
+.pf-node.running .pf-status-dot { display: none; }
 .pf-node.running .pf-node-label { color: #BE123C; font-weight: 700; }
 
 /* Status: done */
-.pf-node.done .pf-node-inner { }
-.pf-node.done .pf-status-dot { visibility: hidden; }
-.pf-node.done .pf-node-label { font-weight: 600; position: relative; }
-.pf-node.done .pf-node-label::after {
-  content: ''; display: inline-block; width: 14px; height: 14px; border-radius: 50%;
-  background: #22C55E; margin-left: 4px; vertical-align: middle;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.3);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
-  background-size: 10px; background-position: center; background-repeat: no-repeat;
+.pf-node.done .pf-node-inner { border-color: #F59E0B; background: linear-gradient(135deg, #FFFBEB, #FEF3C7); box-shadow: 0 2px 12px rgba(245,158,11,0.1); }
+.pf-node.done .pf-node-avatar {
+  width: 14px; height: 14px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E") no-repeat center / 9px, linear-gradient(135deg, #22C55E, #16A34A);
+  color: transparent;
 }
+.pf-node.done .pf-status-dot { display: none; }
+.pf-node.done .pf-node-label { font-weight: 600; color: #92400E; }
 
 /* Status: error */
-.pf-node.error .pf-node-inner { border-color: #FCA5A5; background: #FEF2F2; }
-.pf-node.error .pf-status-dot { background: #EF4444; animation: none; }
+.pf-node.error .pf-node-inner { border-color: #EF4444; background: #FEF2F2; }
+.pf-node.error .pf-node-avatar { background: #FEE2E2; color: #DC2626; }
+.pf-node.error .pf-status-dot { background: #EF4444; }
 
-@keyframes pfRing {
-  0% { transform: scale(1); opacity: 0.8; }
-  100% { transform: scale(2.2); opacity: 0; }
+@keyframes pfPulse {
+  0% { box-shadow: 0 0 0 0 rgba(225,29,72,0.5); }
+  100% { box-shadow: 0 0 0 6px rgba(225,29,72,0); }
+}
+@keyframes pfAvatarPulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(225,29,72,0.4); }
+  50% { transform: scale(1.4); box-shadow: 0 0 0 4px rgba(225,29,72,0); }
 }
 
 /* Connector between phases */
@@ -1741,83 +1792,102 @@ async function doCopy(text: string) {
   padding: 4px 0; height: 28px;
 }
 .pf-connector-line {
-  width: 2px; flex: 1; background: linear-gradient(180deg, #E2E8F0, #CBD5E1);
-  transition: background 0.4s;
+  width: 2px; height: 14px; background: #CBD5E1; border-radius: 1px;
+  transition: all 0.4s; position: relative; overflow: hidden;
 }
 .pf-connector-arrow {
-  width: 0; height: 0;
-  border-left: 5px solid transparent; border-right: 5px solid transparent;
-  border-top: 6px solid #CBD5E1;
-  transition: border-color 0.4s;
+  width: 18px; height: 18px; color: #94A3B8; margin-top: -4px;
+  transition: all 0.4s;
 }
 .pf-connector.done .pf-connector-line {
   background: linear-gradient(180deg, #34D399, #10B981);
 }
 .pf-connector.done .pf-connector-arrow {
-  border-top-color: #10B981;
+  color: #10B981;
+}
+.pf-connector.done .pf-connector-line::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(180deg, transparent, rgba(255,255,255,0.5), transparent);
+  animation: connectorFlow 1.5s linear infinite;
+}
+@keyframes connectorFlow {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
 }
 
 /* Running content */
 .running-content {
-  margin: 20px 18px; padding: 16px 20px;
-  background: linear-gradient(135deg, #FFFAFA, #FFF1F1);
-  border: 1px solid #F5A0A0; border-radius: 10px;
+  margin: 16px 18px 20px; padding: 18px 22px;
+  background: linear-gradient(135deg, #FFFBFB 0%, #FFF5F5 55%, #FFF1F2 100%);
+  border: 1px solid #FDA4AF; border-radius: 14px;
+  position: relative; overflow: hidden;
+}
+.running-content::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: linear-gradient(180deg, #E11D48, #F43F5E);
 }
 .running-header {
-  font-size: 12px; font-weight: 600; color: #92400E; margin-bottom: 6px;
+  font-size: 12px; font-weight: 700; color: #9F1239; margin-bottom: 8px;
   display: flex; align-items: center; gap: 6px;
 }
 .running-spinner {
-  width: 12px; height: 12px; border: 2px solid rgba(146,64,14,0.2);
-  border-top-color: #D97706; border-radius: 50%; animation: spin 0.7s linear infinite;
+  width: 12px; height: 12px; border: 2px solid rgba(225,29,72,0.15);
+  border-top-color: #E11D48; border-radius: 50%; animation: spin 0.7s linear infinite;
 }
 .running-text {
-  font-size: 12px; color: #78350F; line-height: 1.6;
+  font-size: 12px; color: #64748B; line-height: 1.7;
   max-height: 220px; overflow: hidden; white-space: pre-wrap;
 }
 
 /* Agent report expanded */
 .agent-report-expanded {
-  margin: 20px 18px; padding: 16px;
-  background: linear-gradient(135deg, #FFFAFA, #FFF1F1);
-  border: 1px solid #F5A0A0; border-radius: 12px;
+  margin: 0 18px 20px; padding: 18px 22px;
+  background: linear-gradient(180deg, #FFFFFF 0%, #FFFCFD 100%);
+  border: 1px solid #FDA4AF; border-radius: 14px;
   max-height: 400px; overflow-y: auto; position: relative;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
 }
 .pf-close-btn {
-  float: right; background: #F1F5F9; border: none; border-radius: 4px;
-  width: 22px; height: 22px; cursor: pointer; color: #64748B;
+  float: right; background: #F1F5F9; border: none; border-radius: 6px;
+  width: 24px; height: 24px; cursor: pointer; color: #64748B;
   font-size: 12px; display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
 }
 .pf-close-btn:hover { background: #E2E8F0; color: #334155; }
 
 .decision-badge {
-  margin-left: auto; padding: 2px 10px; border-radius: 4px;
-  font-size: 12px; font-weight: 700; letter-spacing: 0.05em;
+  margin-left: auto; padding: 3px 12px; border-radius: 6px;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.05em;
 }
 .decision-badge.buy { background: #DBEAFE; color: #1E40AF; }
 .decision-badge.sell { background: #FEE2E2; color: #991B1B; }
 .decision-badge.hold { background: #FEF3C7; color: #92400E; }
 
-.decision-card { border: 2px solid transparent; }
-.decision-card.buy { border-color: #3B82F6; }
-.decision-card.sell { border-color: #EF4444; }
-.decision-card.hold { border-color: #F59E0B; }
-.decision-top { display: flex; align-items: center; gap: 12px; padding: 16px 18px; }
+.decision-card { border: 2px solid #E11D48; overflow: hidden; background: linear-gradient(135deg, #FFFBFB, #FFF1F2); }
+.decision-card.buy { border-color: #E11D48; }
+.decision-card.sell { border-color: #E11D48; }
+.decision-card.hold { border-color: #E11D48; }
+.decision-top {
+  display: flex; align-items: center; gap: 14px; padding: 18px 20px;
+  background: linear-gradient(135deg, rgba(255,241,242,0.6), transparent);
+}
+.decision-card.buy .decision-top { background: linear-gradient(135deg, #FFF1F2, rgba(254,205,211,0.3)); }
+.decision-card.sell .decision-top { background: linear-gradient(135deg, #FFF1F2, rgba(254,205,211,0.3)); }
+.decision-card.hold .decision-top { background: linear-gradient(135deg, #FFF1F2, rgba(254,205,211,0.3)); }
 .decision-icon-wrap {
-  width: 48px; height: 48px; border-radius: 50%; display: flex;
+  width: 52px; height: 52px; border-radius: 14px; display: flex;
   align-items: center; justify-content: center; flex-shrink: 0;
 }
-.buy .decision-icon-wrap { background: #DBEAFE; }
-.sell .decision-icon-wrap { background: #FEE2E2; }
-.hold .decision-icon-wrap { background: #FEF3C7; }
-.decision-icon-text { font-size: 22px; }
+.buy .decision-icon-wrap { background: linear-gradient(135deg, #DBEAFE, #BFDBFE); }
+.sell .decision-icon-wrap { background: linear-gradient(135deg, #FEE2E2, #FECACA); }
+.hold .decision-icon-wrap { background: linear-gradient(135deg, #FEF3C7, #FDE68A); }
+.decision-icon-text { font-size: 24px; }
 .buy .decision-icon-text { color: #2563EB; }
 .sell .decision-icon-text { color: #DC2626; }
 .hold .decision-icon-text { color: #D97706; }
 .decision-info { flex: 1; }
-.decision-title { font-size: 16px; font-weight: 700; color: #0F172A; }
-.decision-sub { font-size: 12px; color: #64748B; margin-top: 2px; }
-.decision-body { padding: 0 18px 16px; }
-.decision-actions { padding: 0 18px 14px; display: flex; justify-content: flex-end; }
+.decision-title { font-size: 16px; font-weight: 800; color: #0F172A; letter-spacing: -0.01em; }
+.decision-sub { font-size: 12px; color: #64748B; margin-top: 3px; }
+.decision-body { padding: 0 20px 18px; }
+.decision-actions { padding: 0 20px 16px; display: flex; justify-content: flex-end; }
 </style>

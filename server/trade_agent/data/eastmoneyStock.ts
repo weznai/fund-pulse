@@ -1,4 +1,5 @@
 import axios from 'axios'
+import iconv from 'iconv-lite'
 import { logger } from '../../logger.js'
 import type {
   StockKlinePoint, StockInfo, StockFundamentals,
@@ -49,6 +50,17 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 let lastRequestTime = 0
 const MIN_REQUEST_INTERVAL = 300  // ms
 
+// Track EastMoney outage to skip retries when service is down
+let eastmoneyDownSince = 0
+const EASTMONEY_COOLDOWN = 60000  // 1 min — skip EastMoney after consecutive failures
+
+function markEastMoneyDown() { eastmoneyDownSince = Date.now() }
+function isEastMoneyLikelyDown(): boolean {
+  if (eastmoneyDownSince === 0) return false
+  if (Date.now() - eastmoneyDownSince > EASTMONEY_COOLDOWN) { eastmoneyDownSince = 0; return false }
+  return true
+}
+
 async function rateLimitedDelay(): Promise<void> {
   const now = Date.now()
   const elapsed = now - lastRequestTime
@@ -59,17 +71,17 @@ async function rateLimitedDelay(): Promise<void> {
   lastRequestTime = Date.now()
 }
 
-/** Retry an axios request on 5xx errors, with rate limiting */
-async function axiosWithRetry(fn: () => Promise<any>, retries = 3, delayMs = 800): Promise<any> {
+/** Retry an axios request on 5xx / 403 / 429 errors, with rate limiting */
+async function axiosWithRetry(fn: () => Promise<any>, retries = 3, delayMs = 600): Promise<any> {
   for (let i = 0; i <= retries; i++) {
     await rateLimitedDelay()
     try {
       return await fn()
     } catch (e: any) {
       const status = e?.response?.status
-      const isRetryable = (status >= 500 && status < 600) || e?.code === 'ECONNABORTED'
+      const isRetryable = (status >= 500 && status < 600) || status === 403 || status === 429 || e?.code === 'ECONNABORTED' || e?.code === 'ETIMEDOUT'
       if (isRetryable && i < retries) {
-        const wait = delayMs * (i + 1)
+        const wait = delayMs * (i + 1) + Math.floor(Math.random() * 500)
         logger.log(`[eastmoneyStock] axiosWithRetry attempt${i + 1} failed (${status || e?.code}), retrying in ${wait}ms...`)
         await sleep(wait)
         continue
@@ -86,6 +98,14 @@ function normalizeCode(code: string): { secid: string; market: number } {
   else if (c.startsWith('0') || c.startsWith('3')) market = 0
   else if (c.startsWith('4') || c.startsWith('8')) market = 0
   return { secid: `${market}.${c}`, market }
+}
+
+/** Convert code to Sina symbol prefix (sh/sz/bj). */
+function toSinaSymbol(code: string): string {
+  const c = code.replace(/\s/g, '')
+  if (c.startsWith('6')) return `sh${c}`
+  if (c.startsWith('4') || c.startsWith('8')) return `bj${c}`
+  return `sz${c}`
 }
 
 function formatDate(date: Date): string {
@@ -143,6 +163,12 @@ export async function getStockKline(code: string, days: number = 120): Promise<S
   startDate.setDate(startDate.getDate() - days - 30)
   const startStr = formatDate(startDate)
 
+  // If EastMoney is known to be down, skip straight to Sina
+  if (isEastMoneyLikelyDown()) {
+    logger.log(`[eastmoneyStock] getStockKline skipping EastMoney (service down) → Sina for ${code}`)
+    return fetchKlineFromSina(code, days)
+  }
+
   const tryKline = async (sid: string): Promise<StockKlinePoint[]> => {
     const resp = await axiosWithRetry(() => axios.get('https://push2his.eastmoney.com/api/qt/stock/kline/get', {
       params: {
@@ -175,27 +201,144 @@ export async function getStockKline(code: string, days: number = 120): Promise<S
     }).slice(-days)
   }
 
+  // Attempt 1: push2his with guessed secid
   try {
     const result = await tryKline(secid)
     if (result.length > 0) return result
-
-    logger.log(`[eastmoneyStock] getStockKline empty for secid=${secid}, trying fallback`)
-    const resolved = await resolveSecid(code)
-    if (resolved && resolved !== secid) {
-      return await tryKline(resolved)
-    }
-    return []
   } catch (e: any) {
-    logger.error(`[eastmoneyStock] getStockKline error: ${e?.message || e}`)
-    return []
+    logger.log(`[eastmoneyStock] getStockKline attempt1 secid=${secid} failed: ${e?.message}`)
+    markEastMoneyDown()
   }
+
+  // Attempt 2: resolve secid, retry with resolved secid
+  logger.log(`[eastmoneyStock] getStockKline empty/failed for secid=${secid}, trying fallback`)
+  await sleep(300)
+  const resolved = await resolveSecid(code)
+  if (resolved && resolved !== secid) {
+    try {
+      const result = await tryKline(resolved)
+      if (result.length > 0) return result
+    } catch (e: any) {
+      logger.log(`[eastmoneyStock] getStockKline attempt2 secid=${resolved} failed: ${e?.message}`)
+    }
+  }
+
+  // Attempt 3: retry original secid once more (EastMoney 502s are intermittent)
+  await sleep(500)
+  try {
+    const result = await tryKline(secid)
+    if (result.length > 0) {
+      logger.log(`[eastmoneyStock] getStockKline succeeded on retry for secid=${secid}`)
+      return result
+    }
+  } catch (e: any) {
+    logger.log(`[eastmoneyStock] getStockKline attempt3 secid=${secid} failed: ${e?.message}`)
+  }
+
+  // Attempt 4: Sina Finance fallback (independent data source, works when EastMoney is down)
+  return fetchKlineFromSina(code, days)
+}
+
+/** Fetch K-line data from Sina Finance (independent data source). */
+async function fetchKlineFromSina(code: string, days: number): Promise<StockKlinePoint[]> {
+  logger.log(`[eastmoneyStock] getStockKline trying Sina Finance for ${code}`)
+  try {
+    const symbol = toSinaSymbol(code)
+    const resp = await axiosWithRetry(() => axios.get('https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData', {
+      params: { symbol, scale: 240, ma: 'no', datalen: days },
+      headers: { 'User-Agent': randomUA(), 'Referer': 'https://finance.sina.com.cn/' },
+      timeout: 10000,
+    }))
+    const items = resp.data
+    if (Array.isArray(items) && items.length > 0) {
+      const parsed = items.map((it: any) => ({
+        date: it.day?.slice(0, 10) || '',
+        open: parseFloat(it.open) || 0,
+        close: parseFloat(it.close) || 0,
+        high: parseFloat(it.high) || 0,
+        low: parseFloat(it.low) || 0,
+        volume: parseFloat(it.volume) || 0,
+        amount: 0,
+        change: 0,
+        turnover: 0,
+      }))
+      for (let i = parsed.length - 1; i > 0; i--) {
+        const prev = parsed[i - 1].close
+        parsed[i].change = prev > 0 ? +((parsed[i].close - prev) / prev * 100).toFixed(2) : 0
+      }
+      if (parsed.length > 0) parsed[0].change = 0
+      logger.log(`[eastmoneyStock] getStockKline Sina got ${parsed.length} points for ${code}`)
+      return parsed.slice(-days)
+    }
+  } catch (e: any) {
+    logger.log(`[eastmoneyStock] getStockKline Sina failed: ${e?.message}`)
+  }
+  return []
 }
 
 // ===== Stock Info =====
 
+/** Resolve secid and classification via eastmoney suggest API. */
+async function resolveSecidWithMeta(code: string): Promise<{ secid: string; classify: string } | null> {
+  try {
+    await rateLimitedDelay()
+    const resp = await axios.get('https://searchapi.eastmoney.com/api/suggest/get', {
+      params: { input: code, type: '14', token: 'D43BF722C8E33BDC906FB84D85E326E8', count: 5 },
+      headers: buildHeaders('https://www.eastmoney.com/'),
+      timeout: 8000,
+    })
+    const items = resp.data?.QuotationCodeTable?.Data
+    if (!Array.isArray(items) || items.length === 0) return null
+    const exact = items.find((it: any) => it.Code === code) || items[0]
+    return { secid: `${exact.MktNum}.${code}`, classify: exact.Classify || '' }
+  } catch {
+    return null
+  }
+}
+
+/** Fetch basic stock info from push2his (historical kline, reliable 24/7). */
+async function fetchStockInfoFromPush2his(sid: string, code: string): Promise<StockInfo | null> {
+  const recentDate = new Date()
+  recentDate.setDate(recentDate.getDate() - 10)
+  const beg = formatDate(recentDate)
+  const resp = await axiosWithRetry(() => axios.get('https://push2his.eastmoney.com/api/qt/stock/kline/get', {
+    params: {
+      secid: sid,
+      fields1: 'f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12,f13',
+      fields2: 'f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61',
+      klt: '101', fqt: '1',
+      beg, end: '20500101', lmt: 5,
+    },
+    headers: HEADERS_QUOTE(),
+    timeout: 10000,
+  }))
+  const klines = resp.data?.data?.klines
+  const name = resp.data?.data?.name
+  if (!Array.isArray(klines) || klines.length === 0) return null
+  const parts = klines[klines.length - 1].split(',')
+  return {
+    code,
+    name: name || '',
+    industry: '',
+    price: parseFloat(parts[2]) || 0,
+    change: parseFloat(parts[8]) || 0,
+    marketCap: 0,
+    pe: 0,
+    pb: 0,
+    totalShares: 0,
+    floatShares: 0,
+  }
+}
+
 export async function getStockInfo(code: string): Promise<StockInfo | null> {
   const { secid } = normalizeCode(code)
   const FIELDS = 'f43,f57,f58,f59,f84,f116,f117,f162,f167,f170,f171,f173,f177,f187,f190,f192'
+
+  // If EastMoney is known to be down, skip straight to Sina
+  if (isEastMoneyLikelyDown()) {
+    logger.log(`[eastmoneyStock] getStockInfo skipping EastMoney (service down) → Sina for ${code}`)
+    return fetchStockInfoFromSina(code)
+  }
 
   const fetchPush2 = async (sid: string) => {
     const resp = await axiosWithRetry(() => axios.get('https://push2.eastmoney.com/api/qt/stock/get', {
@@ -206,37 +349,79 @@ export async function getStockInfo(code: string): Promise<StockInfo | null> {
     return parsePush2Data(resp.data?.data)
   }
 
-  // Attempt 1: push2 with guessed secid
+  // Attempt 1: push2 real-time quote (richest data: PE, PB, marketCap, etc.)
   try {
     const info = await fetchPush2(secid)
-    logger.log(`[eastmoneyStock] getStockInfo attempt1 secid=${secid} result=${info ? `${info.code}/${info.name}` : 'null'}`)
-    if (info && info.code === code) return info
+    logger.log(`[eastmoneyStock] getStockInfo push2 secid=${secid} result=${info ? `${info.code}/${info.name}` : 'null'}`)
+    if (info && info.code === code && info.name) return info
   } catch (e: any) {
-    logger.log(`[eastmoneyStock] getStockInfo push2 attempt1 failed: ${e?.message}`)
+    logger.log(`[eastmoneyStock] getStockInfo push2 secid=${secid} failed: ${e?.message}`)
+    markEastMoneyDown()
   }
 
-  // Attempt 1.5: try opposite market (e.g. 6-starting code might be SZ)
-  const oppositeSecid = secid.startsWith('1.') ? `0.${code}` : `1.${code}`
+  // Attempt 2: push2his historical kline (reliable 24/7 — push2 may be blocked off-hours)
+  // This is tried early to avoid cascading failures when push2 is unavailable.
+  logger.log(`[eastmoneyStock] getStockInfo trying push2his (reliable fallback) for ${code}`)
+  let push2hisInfo: StockInfo | null = null
   try {
-    const info = await fetchPush2(oppositeSecid)
-    if (info && info.code === code) return info
+    push2hisInfo = await fetchStockInfoFromPush2his(secid, code)
+    if (push2hisInfo && push2hisInfo.name) {
+      // Enrich with push2 data (PE, PB, marketCap) if available
+      try {
+        const push2Info = await fetchPush2(secid)
+        if (push2Info && push2Info.code === code) {
+          return {
+            ...push2hisInfo,
+            pe: push2Info.pe,
+            pb: push2Info.pb,
+            marketCap: push2Info.marketCap,
+            totalShares: push2Info.totalShares,
+            floatShares: push2Info.floatShares,
+            industry: push2Info.industry || push2hisInfo.industry,
+          }
+        }
+      } catch { /* push2 enrichment failed, use basic info from push2his */ }
+      logger.log(`[eastmoneyStock] getStockInfo using push2his fallback for ${code}: ${push2hisInfo.name}`)
+      return push2hisInfo
+    }
   } catch (e: any) {
-    logger.log(`[eastmoneyStock] getStockInfo push2 attempt1.5 (opposite market) failed: ${e?.message}`)
+    logger.log(`[eastmoneyStock] getStockInfo push2his secid=${secid} failed: ${e?.message}`)
   }
 
-  // Attempt 2: push2 with resolved secid (via search)
+  // Attempt 3: resolve secid via suggest API, check for fund codes, retry push2/push2his
   logger.log(`[eastmoneyStock] getStockInfo resolving secid for ${code}`)
-  const resolvedSecid = await resolveSecid(code)
-  if (resolvedSecid) {
-    try {
-      const info = await fetchPush2(resolvedSecid)
-      if (info && info.code === code) return info
-    } catch (e: any) {
-      logger.log(`[eastmoneyStock] getStockInfo push2 attempt2 failed: ${e?.message}`)
+  const meta = await resolveSecidWithMeta(code)
+  if (meta) {
+    if (meta.classify === 'OTCFUND' || meta.classify === 'ETF' || meta.classify === 'LOF') {
+      logger.log(`[eastmoneyStock] getStockInfo ${code} is ${meta.classify}, not a stock — rejecting`)
+      return null
+    }
+    if (meta.secid !== secid) {
+      try {
+        const info = await fetchPush2(meta.secid)
+        if (info && info.code === code && info.name) return info
+      } catch (e: any) {
+        logger.log(`[eastmoneyStock] getStockInfo push2 resolved=${meta.secid} failed: ${e?.message}`)
+      }
+      try {
+        const info = await fetchStockInfoFromPush2his(meta.secid, code)
+        if (info && info.name) return info
+      } catch (e: any) {
+        logger.log(`[eastmoneyStock] getStockInfo push2his resolved=${meta.secid} failed: ${e?.message}`)
+      }
     }
   }
 
-  // Attempt 3: clist API on push2 (same domain, different endpoint)
+  // Attempt 4: push2 with opposite market
+  const oppositeSecid = secid.startsWith('1.') ? `0.${code}` : `1.${code}`
+  try {
+    const info = await fetchPush2(oppositeSecid)
+    if (info && info.code === code && info.name) return info
+  } catch (e: any) {
+    logger.log(`[eastmoneyStock] getStockInfo push2 opposite=${oppositeSecid} failed: ${e?.message}`)
+  }
+
+  // Attempt 5: clist API
   logger.log(`[eastmoneyStock] getStockInfo trying stock list for ${code}`)
   try {
     const mkt = code.startsWith('6') ? 'm:1+t:23,m:1+t:80' : code.startsWith('0') || code.startsWith('3') ? 'm:0+t:21,m:0+t:13' : 'm:0+t:81'
@@ -274,45 +459,51 @@ export async function getStockInfo(code: string): Promise<StockInfo | null> {
     }
   } catch (e: any) {
     logger.error(`[eastmoneyStock] getStockInfo stock list failed: ${e?.message}`)
+    markEastMoneyDown()
   }
 
-  // Attempt 4: push2his (different domain, independent service)
-  logger.log(`[eastmoneyStock] getStockInfo trying push2his for ${code}`)
-  try {
-    const sid = resolvedSecid || secid
-    const resp = await axiosWithRetry(() => axios.get('https://push2his.eastmoney.com/api/qt/stock/kline/get', {
-      params: {
-        secid: sid,
-        fields1: 'f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12,f13',
-        fields2: 'f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61',
-        klt: '101', fqt: '1',
-        beg: '0', end: '20500101', lmt: 1,
-      },
-      headers: HEADERS_QUOTE(),
-      timeout: 10000,
-    }))
+  // Attempt 6: Sina Finance real-time quote (independent source, works when EastMoney is down)
+  return fetchStockInfoFromSina(code)
+}
 
-    const klines = resp.data?.data?.klines
-    const name = resp.data?.data?.name
-    if (Array.isArray(klines) && klines.length > 0) {
-      const parts = klines[klines.length - 1].split(',')
-      return {
-        code,
-        name: name || '',
-        industry: '',
-        price: parseFloat(parts[2]) || 0,
-        change: parseFloat(parts[8]) || 0,
-        marketCap: 0,
-        pe: 0,
-        pb: 0,
-        totalShares: 0,
-        floatShares: 0,
+/** Fetch stock info from Sina Finance (independent data source). */
+async function fetchStockInfoFromSina(code: string): Promise<StockInfo | null> {
+  logger.log(`[eastmoneyStock] getStockInfo trying Sina Finance for ${code}`)
+  try {
+    const symbol = toSinaSymbol(code)
+    const resp = await axiosWithRetry(() => axios.get(`https://hq.sinajs.cn/list=${symbol}`, {
+      headers: { 'User-Agent': randomUA(), 'Referer': 'https://finance.sina.com.cn/' },
+      timeout: 10000,
+      responseType: 'arraybuffer',
+    }))
+    const text = iconv.decode(Buffer.from(resp.data), 'gbk')
+    const match = text.match(/="([^"]*)"/)
+    if (match) {
+      const fields = match[1].split(',')
+      if (fields.length >= 4) {
+        const name = fields[0]
+        const price = parseFloat(fields[3]) || 0
+        const prevClose = parseFloat(fields[2]) || 0
+        if (name && price > 0) {
+          logger.log(`[eastmoneyStock] getStockInfo Sina: ${name}(${code}) price=${price}`)
+          return {
+            code,
+            name,
+            industry: '',
+            price,
+            change: prevClose > 0 ? +((price - prevClose) / prevClose * 100).toFixed(2) : 0,
+            marketCap: 0,
+            pe: 0,
+            pb: 0,
+            totalShares: 0,
+            floatShares: 0,
+          }
+        }
       }
     }
   } catch (e: any) {
-    logger.error(`[eastmoneyStock] getStockInfo push2his failed: ${e?.message}`)
+    logger.log(`[eastmoneyStock] getStockInfo Sina failed: ${e?.message}`)
   }
-
   return null
 }
 

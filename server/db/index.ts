@@ -15,7 +15,7 @@ export type { Holding, HoldingProfitHistory, UserFund, SaveHoldingResult, Transa
 export { saveOtp, verifyOtp, cleanExpiredOtps } from './auth.js'
 export type { EmailOtp } from './auth.js'
 
-export { isUsernameExists, isEmailExists, getUserByUsername, getUserByEmail, getUserByUsernameOrEmail, createUser, verifyUserEmail, updateUserLastActive, updateUserPassword, isUserLabelExists, updateUserLabel, setUserDisabled, getUserById, fixUsersDataIntegrity, getAllUsers, switchUser } from './user.js'
+export { isUsernameExists, isEmailExists, getUserByUsername, getUserByEmail, getUserByUsernameOrEmail, createUser, verifyUserEmail, updateUserLastActive, updateUserPassword, isUserLabelExists, updateUserLabel, setUserDisabled, getUserById, fixUsersDataIntegrity, getAllUsers, switchUser, getUserByOpenId, createWechatUser, bindWechatOpenId } from './user.js'
 export type { RegisterUser } from './user.js'
 
 export { ensureVisitLogsTable, logVisit, getVisitStats, getDailyVisitStats, migrateStatsToDatabase, cleanExpiredVisitLogs, deleteVisitLogsByIps, deleteVisitLogsByUserIds, getVisitLogs, getIpStats } from './visitLog.js'

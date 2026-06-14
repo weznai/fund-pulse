@@ -6,7 +6,7 @@ import { logger } from '../logger.js'
 const SESSION_SECRET = process.env.SESSION_SECRET || 'fund-pulse-session-secret-key'
 const COOKIE_MAX_AGE = 365 * 24 * 60 * 60 * 1000
 
-function signToken(payload: string): string {
+export function signToken(payload: string): string {
   const hmac = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('hex')
   return `${payload}.${hmac}`
 }
@@ -47,6 +47,18 @@ export function getClientUserId(req: Request): { userId: UserId; isNew: boolean 
     const sessionId = verifyToken(rawSessionId)
     if (sessionId) {
       const userId = getUserIdFromClientId(sessionId)
+      if (userId) {
+        return { userId, isNew: false }
+      }
+    }
+  }
+
+  const authHeader = req.headers['authorization'] as string | undefined
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7)
+    const payload = verifyToken(token)
+    if (payload) {
+      const userId = getUserIdFromClientId(payload)
       if (userId) {
         return { userId, isNew: false }
       }

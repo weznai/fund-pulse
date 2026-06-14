@@ -1,0 +1,97 @@
+{
+  "pages": [
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationBarTitleText": "Fund Pulse",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/holdings/index",
+      "style": {
+        "navigationBarTitleText": "持仓管理"
+      }
+    },
+    {
+      "path": "pages/analysis/index",
+      "style": {
+        "navigationBarTitleText": "智能分析"
+      }
+    },
+    {
+      "path": "pages/mine/index",
+      "style": {
+        "navigationBarTitleText": "我的"
+      }
+    },
+    {
+      "path": "pages/index/search",
+      "style": {
+        "navigationBarTitleText": "搜索基金"
+      }
+    },
+    {
+      "path": "pages/index/detail",
+      "style": {
+        "navigationBarTitleText": "基金详情"
+      }
+    },
+    {
+      "path": "pages/holdings/edit",
+      "style": {
+        "navigationBarTitleText": "编辑持仓"
+      }
+    },
+    {
+      "path": "pages/mine/about",
+      "style": {
+        "navigationBarTitleText": "关于"
+      }
+    },
+    {
+      "path": "pages/mine/suggestions",
+      "style": {
+        "navigationBarTitleText": "建议反馈"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "Fund Pulse",
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "backgroundColor": "#F9FAFB"
+  },
+  "tabBar": {
+    "color": "#6B7280",
+    "selectedColor": "#4F46E5",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "基金",
+        "iconPath": "static/tab-fund.png",
+        "selectedIconPath": "static/tab-fund-active.png"
+      },
+      {
+        "pagePath": "pages/holdings/index",
+        "text": "持仓",
+        "iconPath": "static/tab-holdings.png",
+        "selectedIconPath": "static/tab-holdings-active.png"
+      },
+      {
+        "pagePath": "pages/analysis/index",
+        "text": "分析",
+        "iconPath": "static/tab-analysis.png",
+        "selectedIconPath": "static/tab-analysis-active.png"
+      },
+      {
+        "pagePath": "pages/mine/index",
+        "text": "我的",
+        "iconPath": "static/tab-mine.png",
+        "selectedIconPath": "static/tab-mine-active.png"
+      }
+    ]
+  }
+}

@@ -137,12 +137,15 @@
 
       <!-- 自选基金 -->
       <div class="favorites-section" v-if="!loading && favoriteFunds.length > 0">
-        <div class="section-header">
+        <div class="section-header clickable" @click="showFavorites = !showFavorites">
           <h3>自选基金</h3>
-          <span class="fund-count">共 {{ favoriteFunds.length }} 只基金</span>
+          <div class="section-header-right">
+            <span class="fund-count">共 {{ favoriteFunds.length }} 只基金</span>
+            <span class="toggle-icon" :class="{ expanded: showFavorites }">▶</span>
+          </div>
         </div>
 
-        <div class="favorites-list">
+        <div class="favorites-list" v-show="showFavorites">
           <div class="favorite-item" v-for="fund in favoriteFunds" :key="fund.fundCode">
             <span class="fund-code">{{ fund.fundCode }}</span>
           </div>
@@ -167,6 +170,7 @@ const favoriteFunds = ref<any[]>([])
 const loading = ref(true)
 const settling = ref<string | null>(null)
 const refreshing = ref<string | null>(null)
+const showFavorites = ref(false)
 
 function getOperateDate(holding: any): string {
   return holding.settleDate || new Date().toISOString().slice(0, 10)
@@ -358,6 +362,31 @@ async function refreshFund(holding: any) {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+}
+
+.section-header.clickable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.section-header.clickable:hover {
+  opacity: 0.8;
+}
+
+.section-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toggle-icon {
+  font-size: 10px;
+  color: #9CA3AF;
+  transition: transform 0.2s ease;
+}
+
+.toggle-icon.expanded {
+  transform: rotate(90deg);
 }
 
 .section-header h3 {

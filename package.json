@@ -9,7 +9,9 @@
     "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
     "build": "vue-tsc && vite build",
     "preview": "vite preview",
-    "test": "jest --passWithNoCoverage"
+    "test": "jest --passWithNoCoverage",
+    "miniapp:dev": "cd miniapp && npm run dev:mp-weixin",
+    "miniapp:build": "cd miniapp && npm run build:mp-weixin"
   },
   "dependencies": {
     "@types/nodemailer": "^7.0.11",

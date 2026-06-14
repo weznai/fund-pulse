@@ -225,6 +225,64 @@ export function getAllUsers(): Array<{ id: string; type: string; email: string |
   return stmt.all() as any[]
 }
 
+export function getUserByOpenId(openid: string): RegisterUser | null {
+  const stmt = db.prepare(`
+    SELECT id, username, email, password, type, label, email_verified, disabled, created_at, last_active
+    FROM users WHERE wechat_openid = ?
+  `)
+  const result = stmt.get(openid) as any
+  if (result) {
+    return {
+      id: result.id,
+      username: result.username,
+      email: result.email,
+      password: result.password,
+      type: result.type,
+      label: result.label || undefined,
+      emailVerified: Boolean(result.email_verified),
+      disabled: Boolean(result.disabled),
+      createdAt: result.created_at,
+      lastActive: result.last_active
+    }
+  }
+  return null
+}
+
+export function createWechatUser(openid: string, nickname?: string): RegisterUser {
+  const now = Date.now()
+  const username = 'wx_' + openid.substring(0, 12)
+  const id = username
+  const email = `${username}@wechat.local`
+
+  const stmt = db.prepare(`
+    INSERT INTO users (id, username, email, password, type, label, email_verified, wechat_openid, created_at, last_active)
+    VALUES (?, ?, ?, '', 'wechat', ?, 1, ?, ?, ?)
+  `)
+
+  stmt.run(id, username, email, nickname || username, openid, now, now)
+
+  logger.log(`👤 创建微信用户: ${username} (openid: ${openid.substring(0, 8)}...)`)
+
+  return {
+    id,
+    username,
+    email,
+    password: '',
+    type: 'wechat',
+    label: nickname || username,
+    emailVerified: true,
+    disabled: false,
+    createdAt: now,
+    lastActive: now
+  }
+}
+
+export function bindWechatOpenId(userId: string, openid: string): boolean {
+  const stmt = db.prepare('UPDATE users SET wechat_openid = ? WHERE id = ?')
+  const result = stmt.run(openid, userId)
+  return result.changes > 0
+}
+
 export function switchUser(userId: string): boolean {
   const stmt = db.prepare('SELECT id, username, type, label FROM users WHERE id = ? OR username = ? OR email = ?')
   const user = stmt.get(userId, userId, userId) as { id: string; username: string; type: string; label: string } | undefined

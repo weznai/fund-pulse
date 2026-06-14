@@ -53,3 +53,8 @@ dev/
 
 # Agent
 skills-lock.json
+
+# Mini program
+miniapp/node_modules
+miniapp/dist
+miniapp/unpackage
