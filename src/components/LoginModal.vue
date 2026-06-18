@@ -206,6 +206,13 @@
           </div>
         </div>
 
+        <div v-if="isRegisterMode && !showOtpInput" class="agreement-section">
+          <label class="agreement-label">
+            <input type="checkbox" class="agreement-checkbox" v-model="agreed" :disabled="authStore.loading" />
+            <span class="agreement-text">我已阅读并同意<a href="/agreement" target="_blank" rel="noopener" class="agreement-link">《用户协议》</a>和<a href="/agreement?tab=privacy" target="_blank" rel="noopener" class="agreement-link">《隐私政策》</a></span>
+          </label>
+        </div>
+
         <div v-if="errorMessage" class="message error">
           <svg viewBox="0 0 24 24" fill="none">
             <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
@@ -270,6 +277,7 @@ const forgotOtpSent = ref(false)
 const forgotSkipVerify = ref(false)
 const newPassword = ref('')
 const confirmPassword = ref('')
+const agreed = ref(false)
 
 const usernameStatus = ref<'idle' | 'checking' | 'available' | 'taken'>('idle')
 const emailStatus = ref<'idle' | 'checking' | 'available' | 'taken'>('idle')
@@ -292,7 +300,7 @@ const showOtpInput = computed(() => isRegisterMode.value && otpSent.value)
 const canSubmit = computed(() => {
   if (isRegisterMode.value) {
     if (!otpSent.value) {
-      return isUsernameValid.value && usernameStatus.value === 'available' && isEmailValid.value && emailStatus.value === 'available' && isPasswordValid.value
+      return isUsernameValid.value && usernameStatus.value === 'available' && isEmailValid.value && emailStatus.value === 'available' && isPasswordValid.value && agreed.value
     }
     return isOtpComplete.value
   }
@@ -544,6 +552,7 @@ function resetState() {
   otpSent.value = false
   forgotOtpSent.value = false
   forgotSkipVerify.value = false
+  agreed.value = false
   showPassword.value = false
   resetValidation()
   if (countdownTimer) {
@@ -640,6 +649,12 @@ watch(() => props.visible, (val) => {
 .message svg { width: 16px; height: 16px; flex-shrink: 0; }
 .message.error { background: #FEF2F2; border: 1px solid #FEE2E2; color: #DC2626; }
 .message.success{ background: #F0FDF4; border: 1px solid #BBF7D0; color: #16A34A; }
+.agreement-section { margin-bottom: 16px; }
+.agreement-label { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; user-select: none; }
+.agreement-checkbox { width: 16px; height: 16px; margin-top: 2px; cursor: pointer; accent-color: #4F46E5; flex-shrink: 0; }
+.agreement-text { font-size: 12.5px; color: #6B7280; line-height: 1.6; }
+.agreement-link { color: #4F46E5; text-decoration: none; }
+.agreement-link:hover { text-decoration: underline; }
 .modal-footer { display: flex; gap: 12px; padding: 16px 20px; border-top: 1px solid #E5E7EB; justify-content: center; }
 .modal-btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; min-width: 80px; }
 .modal-btn.cancel{ background: #F3F4F6; color: #6B7280; }

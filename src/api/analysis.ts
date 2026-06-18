@@ -132,6 +132,8 @@ export interface StockSSEEvent {
   decision?: string
   credits?: number
   error?: string
+  reportUrl?: string
+  reportId?: number
 }
 
 export async function getStockAgents(): Promise<StockAgentInfo[]> {

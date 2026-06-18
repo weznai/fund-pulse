@@ -31,6 +31,11 @@ import { validateAdminToken, handleAdminLogin } from '../middleware/auth.js'
 import { getAnalysisUsageList, updateUserCredits } from '../db/analysisUsage.js'
 import { manualSettlement } from '../scheduled/settlement.js'
 import { refreshFundToday } from '../scheduled/estimate.js'
+import {
+  getReportList, deleteReport, deleteReportsBatch, deleteExpiredReports,
+  getReportStats, getReportById
+} from '../db/report.js'
+import { deleteReportFile, cleanupEmptyDirs } from '../services/reportService.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -1065,6 +1070,83 @@ router.put('/model/scenes/:scene', validateAdminToken, (req: Request, res: Respo
   } catch (error) {
     logger.error('更新场景映射失败:', error)
     res.status(500).json({ error: '更新场景映射失败' })
+  }
+})
+
+// ---- Report Management ----
+router.get('/reports', validateAdminToken, (req: Request, res: Response) => {
+  try {
+    const page = parseIntSafe(req.query.page, 1, 1)
+    const pageSize = parseIntSafe(req.query.pageSize, 20, 1, 100)
+    const keyword = parseString(req.query.keyword as string)
+    const decision = parseString(req.query.decision as string)
+    const startDate = parseString(req.query.startDate as string)
+    const endDate = parseString(req.query.endDate as string)
+
+    const result = getReportList({ page, pageSize, keyword, decision, startDate, endDate })
+    res.json(result)
+  } catch (error) {
+    logger.error('获取报告列表失败:', error)
+    res.status(500).json({ error: '获取报告列表失败' })
+  }
+})
+
+router.get('/reports/stats', validateAdminToken, (_req: Request, res: Response) => {
+  try {
+    const stats = getReportStats()
+    res.json(stats)
+  } catch (error) {
+    logger.error('获取报告统计失败:', error)
+    res.status(500).json({ error: '获取报告统计失败' })
+  }
+})
+
+router.delete('/reports/:id', validateAdminToken, (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id)
+    if (isNaN(id)) return res.status(400).json({ error: '无效的ID' })
+
+    const report = deleteReport(id)
+    if (!report) return res.status(404).json({ error: '报告不存在' })
+
+    deleteReportFile(report.file_path)
+    res.json({ success: true })
+  } catch (error) {
+    logger.error('删除报告失败:', error)
+    res.status(500).json({ error: '删除报告失败' })
+  }
+})
+
+router.post('/reports/batch-delete', validateAdminToken, (req: Request, res: Response) => {
+  try {
+    const { ids } = req.body as { ids: number[] }
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: '缺少报告ID列表' })
+    }
+
+    const result = deleteReportsBatch(ids)
+    for (const report of result.reports) {
+      deleteReportFile(report.file_path)
+    }
+    cleanupEmptyDirs()
+    res.json({ success: true, deleted: result.deleted, total: ids.length })
+  } catch (error) {
+    logger.error('批量删除报告失败:', error)
+    res.status(500).json({ error: '批量删除报告失败' })
+  }
+})
+
+router.post('/reports/cleanup', validateAdminToken, (_req: Request, res: Response) => {
+  try {
+    const result = deleteExpiredReports()
+    for (const report of result.reports) {
+      deleteReportFile(report.file_path)
+    }
+    cleanupEmptyDirs()
+    res.json({ success: true, deleted: result.deleted })
+  } catch (error) {
+    logger.error('清理过期报告失败:', error)
+    res.status(500).json({ error: '清理过期报告失败' })
   }
 })
 

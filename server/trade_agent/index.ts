@@ -2,6 +2,9 @@ import { logger } from '../logger.js'
 import type { AgentName, Decision, StockAnalysisContext, SSEEvent } from './types.js'
 import { AGENT_CONFIGS, AGENT_ORDER } from './types.js'
 import { getStockInfo } from './data/eastmoneyStock.js'
+import { generateStockReport } from '../services/reportService.js'
+import { getCurrentUserId } from '../db/connection.js'
+import { getLatestRiskReport } from '../db/report.js'
 
 // Agent imports
 import * as marketAnalyst from './agents/marketAnalyst.js'
@@ -252,8 +255,18 @@ export async function runStockAnalysis(
     // ====== Phase 5: Risk Manager (Final Decision) ======
     let finalDecision: Decision = 'HOLD'
     sendEvent('agent_start', { agent: 'risk_manager', phase: 'decision', content: '风险经理做出最终决策...' })
+
+    // Load previous analysis for this stock as reference
+    let previousAnalysis: { decision: string; riskReport: string; createdAt: string } | null = null
     try {
-      const result = await riskManager.execute(ctx, sendEvent, riskDebateHistory)
+      previousAnalysis = getLatestRiskReport(stockCode)
+      if (previousAnalysis) {
+        logger.log(`[stockAnalysis] 已加载上次分析参考: ${stockCode} 决策=${previousAnalysis.decision} 时间=${previousAnalysis.createdAt}`)
+      }
+    } catch { /* ignore */ }
+
+    try {
+      const result = await riskManager.execute(ctx, sendEvent, riskDebateHistory, previousAnalysis)
       ctx.agentReports.risk_manager = result.report
       finalDecision = result.decision
       sendEvent('agent_complete', { agent: 'risk_manager', report: result.report })
@@ -263,8 +276,29 @@ export async function runStockAnalysis(
       sendEvent('agent_complete', { agent: 'risk_manager', report: ctx.agentReports.risk_manager })
     }
 
+    // ====== Generate HTML Report ======
+    let reportUrl: string | undefined
+    let reportId: number | undefined
+    if (ctx.stockInfo && ctx.agentReports.risk_manager) {
+      try {
+        const userId = getCurrentUserId()
+        const result = generateStockReport({
+          ctx,
+          finalDecision,
+          userId: userId.id,
+          username: userId.label || userId.id,
+        })
+        if (result) {
+          reportUrl = result.url
+          reportId = result.reportId
+        }
+      } catch (e: any) {
+        logger.error(`[stockAnalysis] 生成HTML报告失败: ${e?.message}`)
+      }
+    }
+
     // Done
-    sendEvent('done', {})
+    sendEvent('done', { reportUrl, reportId })
     res.end()
   } catch (error: any) {
     logger.error(`[stockAnalysis] Fatal error: ${error?.message || error}`)

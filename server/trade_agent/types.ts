@@ -190,6 +190,8 @@ export interface SSEEvent {
   decision?: Decision
   credits?: number
   error?: string
+  reportUrl?: string
+  reportId?: number
 }
 
 // ===== Analysis Context =====

@@ -33,6 +33,9 @@ stats.json
 *.db-wal
 !db/*.sql
 
+# Reports (generated HTML)
+server/reports/
+
 # Temp files
 db/temp/
 

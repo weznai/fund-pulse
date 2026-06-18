@@ -45,6 +45,20 @@ export type { NavHistoryRecord } from './navHistory.js'
 export { ensureAnalysisUsageTable, getAnalysisUsage, incrementAnalysisUsage } from './analysisUsage.js'
 export type { AnalysisUsageRecord } from './analysisUsage.js'
 
+export {
+  ensureReportsTable,
+  createReport,
+  getReportById,
+  getReportList,
+  getExpiredReports,
+  deleteReport,
+  deleteReportsBatch,
+  deleteExpiredReports,
+  getReportStats,
+  getLatestRiskReport
+} from './report.js'
+export type { StockReportRecord, ReportListQuery } from './report.js'
+
 export { ensureOperationLogTable, addOperationLog, getOperationLogList } from './operationLog.js'
 export type { OperationLog, OperationLogListResult, OperationLogQuery } from './operationLog.js'
 

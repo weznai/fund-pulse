@@ -357,7 +357,8 @@ const menuItems = [
     },
     children: [
       { path: '/admin/operation-logs', title: '操作流水' },
-      { path: '/admin/credit-manage', title: '积分管理' }
+      { path: '/admin/credit-manage', title: '积分管理' },
+      { path: '/admin/report-manage', title: '报告管理' }
     ]
   },
   {

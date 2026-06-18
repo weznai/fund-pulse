@@ -7,7 +7,8 @@ export const agentName: AgentName = 'risk_manager'
 export async function execute(
   ctx: StockAnalysisContext,
   sendEvent: (type: string, data: any) => void,
-  riskDebateHistory: string[]
+  riskDebateHistory: string[],
+  previousAnalysis?: { decision: string; riskReport: string; createdAt: string } | null
 ): Promise<{ report: string; decision: Decision }> {
   const info = ctx.stockInfo
   const stockLabel = info ? `${info.name}(${info.code})` : ctx.stockCode
@@ -18,6 +19,10 @@ export async function execute(
   const debateSummary = riskDebateHistory.length > 0
     ? `## 风险辩论记录\n${riskDebateHistory.join('\n---\n')}`
     : '无风险辩论记录'
+
+  const previousRef = previousAnalysis && previousAnalysis.riskReport
+    ? `\n## 上次分析参考（${previousAnalysis.createdAt}，上次决策：${previousAnalysis.decision}）\n${previousAnalysis.riskReport.slice(0, 800)}\n\n请结合上次分析结果，评估本次分析与上次的差异原因（如基本面变化、市场情绪转变等），但以本次最新数据为准做出决策。`
+    : ''
 
   const fullResponse = await callLLM(
     [
@@ -46,6 +51,7 @@ ${researchReport.slice(0, 800)}
 ${traderReport.slice(0, 800)}
 
 ${debateSummary}
+${previousRef}
 
 请给出最终风险评估和投资决策。`,
       },

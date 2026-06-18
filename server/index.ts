@@ -7,6 +7,7 @@ import { logger } from './logger.js'
 import { initDatabase, closeDatabase, fixUsersDataIntegrity, ensureVisitLogsTable, getAllUsers } from './db.js'
 import { startScheduledSettlement } from './scheduled/settlement.js'
 import { startScheduledEstimateWithUserFunds, startIndexEstimate } from './scheduled/estimate.js'
+import { startReportCleanup, stopReportCleanup } from './scheduled/reportCleanup.js'
 import { initHolidaysTable } from './db/holiday.js'
 import { setupHolidayRoutes, setupPublicHolidayRoutes } from './services/holidayService.js'
 import { validateAdminToken } from './middleware/auth.js'
@@ -16,6 +17,7 @@ import { userContext } from './db.js'
 import { ensureOperationLogTable } from './db/operationLog.js'
 import { ensureModelConfigTable } from './db/modelConfig.js'
 import { seedDefaultData } from './model_config.js'
+import { ensureReportsTable } from './db/report.js'
 
 import fundRoutes from './routes/fund.js'
 import authRoutes from './routes/auth.js'
@@ -42,6 +44,7 @@ fixUsersDataIntegrity()
 ensureVisitLogsTable()
 ensureOperationLogTable()
 ensureModelConfigTable()
+ensureReportsTable()
 seedDefaultData()
 
 app.get('/api/health', (_req, res) => {
@@ -92,6 +95,7 @@ app.use('/api/users', (req, res) => {
 app.post('/api/migrate/from-local', migrateFromLocalHandler)
 
 app.use(express.static(path.join(__dirname, 'dist')))
+app.use('/reports', express.static(path.join(__dirname, 'reports')))
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'))
@@ -104,16 +108,19 @@ app.listen(PORT, '0.0.0.0', () => {
 
   startScheduledEstimateWithUserFunds()
   startIndexEstimate()
+  startReportCleanup()
 })
 
 process.on('SIGINT', () => {
   logger.log('\n收到 SIGINT 信号，正在关闭服务器...')
+  stopReportCleanup()
   closeDatabase()
   process.exit(0)
 })
 
 process.on('SIGTERM', () => {
   logger.log('\n收到 SIGTERM 信号，正在关闭服务器...')
+  stopReportCleanup()
   closeDatabase()
   process.exit(0)
 })

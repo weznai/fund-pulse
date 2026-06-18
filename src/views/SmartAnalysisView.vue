@@ -266,7 +266,7 @@
           </div>
           <div class="search-box">
             <svg class="s-icon" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            <input v-model="stockKeyword" placeholder="输入6位股票代码，如 600519..." @keydown.enter="handleStockLookup" class="s-input" maxlength="6" />
+            <input v-model="stockKeyword" placeholder="输入6位股票代码，如 600519..." @keydown.enter="handleStockLookup" class="s-input stock-input" maxlength="6" />
             <button v-if="stockKeyword" @click="stockKeyword=''; stockLookupResult=null; stockErrorMsg=''; stockLookupLoading=false" class="s-clear">
               <svg viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             </button>
@@ -471,6 +471,23 @@
             </button>
           </div>
         </div>
+
+        <!-- Report Link -->
+        <div v-if="stockReportUrl" class="card report-link-card">
+          <div class="report-link-content">
+            <div class="report-link-info">
+              <svg viewBox="0 0 24 24" fill="none" class="report-link-icon"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <div>
+                <div class="report-link-title">分析报告已生成</div>
+                <div class="report-link-sub">独立的HTML报告，可在浏览器中直接打开查看（7天后自动删除）</div>
+              </div>
+            </div>
+            <a :href="stockReportUrl" target="_blank" class="report-link-btn">
+              打开报告
+              <svg viewBox="0 0 24 24" fill="none"><path d="M14 5l7 7m0 0l-7 7m7-7H3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+          </div>
+        </div>
       </template>
 
       <!-- Confirm Dialog -->
@@ -598,6 +615,8 @@ const stockExpandedAgent = ref('')
 const stockFinalDecision = ref('')
 const stockDebateRound = ref(0)
 const stockRiskRound = ref(0)
+const stockReportUrl = ref('')
+const stockReportId = ref<number | null>(null)
 
 const COLORS = ['#2563EB', '#DC2626', '#7C3AED', '#059669', '#D97706', '#0891B2']
 
@@ -621,10 +640,11 @@ interface AnalysisCache {
   }
   stock: {
     keyword: string
-    lookupResult: StockLookupResult | null
     agentStatus: Record<string, 'pending' | 'running' | 'done' | 'error'>
     agentReports: Record<string, string>
     finalDecision: string
+    reportUrl: string
+    reportId: number | null
   }
 }
 
@@ -647,10 +667,11 @@ function saveCache() {
     },
     stock: {
       keyword: stockKeyword.value,
-      lookupResult: stockLookupResult.value,
       agentStatus: stockAgentStatus.value,
       agentReports: stockAgentReports.value,
       finalDecision: stockFinalDecision.value,
+      reportUrl: stockReportUrl.value,
+      reportId: stockReportId.value,
     },
   }
   try { localStorage.setItem(CACHE_KEY, JSON.stringify(cache)) } catch { /* */ }
@@ -702,10 +723,19 @@ onMounted(async () => {
 
     if (cache.stock) {
       stockKeyword.value = cache.stock.keyword
-      stockLookupResult.value = cache.stock.lookupResult
       stockAgentStatus.value = cache.stock.agentStatus
       stockAgentReports.value = cache.stock.agentReports
       stockFinalDecision.value = cache.stock.finalDecision
+      stockReportUrl.value = cache.stock.reportUrl || ''
+      stockReportId.value = cache.stock.reportId || null
+
+      // 股价为实时行情，绝不使用缓存中的旧价：挂载时若有缓存的代码则自动重新查询最新价
+      const cachedStockCode = (cache.stock.keyword || '').trim()
+      if (/^\d{6}$/.test(cachedStockCode)) {
+        lookupStock(cachedStockCode).then(result => {
+          if (result.found) stockLookupResult.value = result
+        }).catch(() => { /* 静默失败，用户手动查询时会再次提示 */ })
+      }
     }
 
     if (cache.single.fund && cache.single.chartData) {
@@ -722,7 +752,7 @@ onMounted(async () => {
 watch(
   [activeTab, singleFund, singlePeriod, analysisResult, singleChartData, singleLatestNav, singleYearReturn,
    cmpFunds, cmpPeriod, cmpResult, chartData,
-   stockKeyword, stockLookupResult, stockAgentStatus, stockAgentReports, stockFinalDecision],
+   stockKeyword, stockAgentStatus, stockAgentReports, stockFinalDecision, stockReportUrl, stockReportId],
   () => { saveCache() },
   { deep: true }
 )
@@ -1202,24 +1232,22 @@ async function confirmStockAnalysis() {
     stockErrorMsg.value = '请输入6位股票代码'
     return
   }
-  // Must lookup first to confirm stock exists
-  if (!stockLookupResult.value || !stockLookupResult.value.found || stockLookupResult.value.code !== code) {
-    stockLookupLoading.value = true
-    try {
-      const result = await lookupStock(code)
-      stockLookupResult.value = result
-      if (!result.found) {
-        stockErrorMsg.value = `未找到股票 ${code}，请确认代码是否正确`
-        stockLookupLoading.value = false
-        return
-      }
-    } catch {
-      stockErrorMsg.value = '查询失败，请检查网络后重试'
+  // 触发分析前必须重新查询最新行情（不信任缓存或页面停留期间的旧价）
+  stockLookupLoading.value = true
+  try {
+    const result = await lookupStock(code)
+    stockLookupResult.value = result
+    if (!result.found) {
+      stockErrorMsg.value = `未找到股票 ${code}，请确认代码是否正确`
       stockLookupLoading.value = false
       return
     }
+  } catch {
+    stockErrorMsg.value = '查询失败，请检查网络后重试'
     stockLookupLoading.value = false
+    return
   }
+  stockLookupLoading.value = false
   confirmDialog.show = true
   confirmDialog.message = '将启动多智能体对该股票进行全面分析'
   confirmDialog.funds = [{ code, name: stockLookupResult.value.name || code, type: '股票', pinyin: '' }]
@@ -1242,6 +1270,8 @@ async function doStockAnalysis(code: string) {
   stockFinalDecision.value = ''
   stockDebateRound.value = 0
   stockRiskRound.value = 0
+  stockReportUrl.value = ''
+  stockReportId.value = null
 
   try {
     await streamStockAnalysis(code, {
@@ -1275,6 +1305,13 @@ async function doStockAnalysis(code: string) {
           // Round complete
         } else if (event.type === 'decision' && event.decision) {
           stockFinalDecision.value = event.decision
+        } else if (event.type === 'done') {
+          if (event.reportUrl) {
+            stockReportUrl.value = event.reportUrl
+          }
+          if (event.reportId) {
+            stockReportId.value = event.reportId
+          }
         }
       },
       onUsage: (credits) => {
@@ -1373,6 +1410,7 @@ async function doCopy(text: string) {
 }
 .s-input:focus { border-color: #FB7185; background: white; box-shadow: 0 0 0 3px rgba(225,29,72,0.1); }
 .s-input::placeholder { color: #94A3B8; }
+.stock-input { font-weight: 700; letter-spacing: 0.5px; }
 .s-clear {
   position: absolute; right: 8px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
   background: none; border: none; cursor: pointer; color: #94A3B8; border-radius: 5px;
@@ -1509,15 +1547,17 @@ async function doCopy(text: string) {
 
 .chart-footer { display: flex; justify-content: center; padding: 4px 18px 14px; }
 .ai-btn {
-  display: inline-flex; align-items: center; gap: 5px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
   padding: 7px 16px; border: none; border-radius: 18px;
   background: linear-gradient(135deg, #BE123C, #F43F5E); color: white;
   font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s;
   box-shadow: 0 2px 8px rgba(225,29,72,0.2);
+  white-space: nowrap;
 }
 .ai-btn:hover:not(:disabled) { box-shadow: 0 4px 14px rgba(225,29,72,0.3); transform: translateY(-1px); }
 .ai-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
 .ai-btn .btn-svg { width: 14px; height: 14px; }
+.ai-btn .spinner-xs { width: 12px; height: 12px; border-width: 1.5px; }
 
 .upgrade-banner {
   display: flex; align-items: center; justify-content: center; gap: 6px;
@@ -1665,7 +1705,7 @@ async function doCopy(text: string) {
 }
 .sip-left { display: flex; align-items: center; gap: 8px; }
 .sip-name { font-size: 16px; font-weight: 700; color: #9F1239; }
-.sip-code { font-size: 11px; color: #E11D48; background: white; padding: 2px 8px; border-radius: 5px; font-weight: 500; }
+.sip-code { font-size: 11px; color: #E11D48; background: white; padding: 2px 8px; border-radius: 5px; font-weight: 700; }
 .sip-industry { font-size: 11px; color: #9F1239; background: #FFe4E6; padding: 2px 8px; border-radius: 5px; }
 .sip-right { display: flex; align-items: baseline; gap: 8px; }
 .sip-price { font-size: 24px; font-weight: 800; color: #9F1239; letter-spacing: -0.02em; }
@@ -1836,7 +1876,7 @@ async function doCopy(text: string) {
 }
 .running-text {
   font-size: 12px; color: #64748B; line-height: 1.7;
-  max-height: 220px; overflow: hidden; white-space: pre-wrap;
+  height: 220px; overflow: hidden; white-space: pre-wrap;
 }
 
 /* Agent report expanded */
@@ -1863,7 +1903,7 @@ async function doCopy(text: string) {
 .decision-badge.sell { background: #FEE2E2; color: #991B1B; }
 .decision-badge.hold { background: #FEF3C7; color: #92400E; }
 
-.decision-card { border: 2px solid #E11D48; overflow: hidden; background: linear-gradient(135deg, #FFFBFB, #FFF1F2); }
+.decision-card { border: 2px solid #E11D48; overflow: hidden; background: white; }
 .decision-card.buy { border-color: #E11D48; }
 .decision-card.sell { border-color: #E11D48; }
 .decision-card.hold { border-color: #E11D48; }
@@ -1890,4 +1930,20 @@ async function doCopy(text: string) {
 .decision-sub { font-size: 12px; color: #64748B; margin-top: 3px; }
 .decision-body { padding: 0 20px 18px; }
 .decision-actions { padding: 0 20px 16px; display: flex; justify-content: flex-end; }
+
+.report-link-card { border: 1px solid #BFDBFE; background: linear-gradient(135deg, #EFF6FF, #F0F9FF); }
+.report-link-content { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; gap: 12px; flex-wrap: wrap; }
+.report-link-info { display: flex; align-items: center; gap: 12px; }
+.report-link-icon { width: 32px; height: 32px; color: #2563EB; flex-shrink: 0; background: #DBEAFE; border-radius: 8px; padding: 4px; }
+.report-link-title { font-size: 14px; font-weight: 700; color: #1E40AF; }
+.report-link-sub { font-size: 11px; color: #64748B; margin-top: 2px; }
+.report-link-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 18px; border-radius: 10px; text-decoration: none;
+  background: linear-gradient(135deg, #2563EB, #3B82F6); color: white;
+  font-size: 13px; font-weight: 600; transition: all 0.2s; white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(37,99,235,0.2);
+}
+.report-link-btn:hover { box-shadow: 0 4px 14px rgba(37,99,235,0.3); transform: translateY(-1px); }
+.report-link-btn svg { width: 14px; height: 14px; }
 </style>

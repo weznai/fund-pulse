@@ -61,6 +61,21 @@ function isEastMoneyLikelyDown(): boolean {
   return true
 }
 
+/** Check if an axios error is a server-side outage (5xx). */
+function isServerOutage(e: any): boolean {
+  const status = e?.response?.status
+  return typeof status === 'number' && status >= 500 && status < 600
+}
+
+/** Validate that a code looks like a real A-share / B-share stock code. */
+function isValidStockCode(code: string): boolean {
+  const c = code.replace(/\s/g, '')
+  // A-share: SH 60xxxx/68xxxx, SZ 00xxxx/30xxxx, BJ 4xxxxx/8xxxxx/920xxx
+  // B-share: SH 900xxx, SZ 200xxx
+  if (!/^\d{6}$/.test(c)) return false
+  return /^(60|68|00|30|43|83|87|92|900|200)/.test(c)
+}
+
 async function rateLimitedDelay(): Promise<void> {
   const now = Date.now()
   const elapsed = now - lastRequestTime
@@ -180,7 +195,7 @@ export async function getStockKline(code: string, days: number = 120): Promise<S
       },
       headers: HEADERS_QUOTE(),
       timeout: 10000,
-    }))
+    }), 1)
 
     const klines = resp.data?.data?.klines
     if (!klines || !Array.isArray(klines)) return []
@@ -207,7 +222,12 @@ export async function getStockKline(code: string, days: number = 120): Promise<S
     if (result.length > 0) return result
   } catch (e: any) {
     logger.log(`[eastmoneyStock] getStockKline attempt1 secid=${secid} failed: ${e?.message}`)
-    markEastMoneyDown()
+    if (isServerOutage(e)) {
+      markEastMoneyDown()
+      // Service-wide outage — skip remaining EastMoney attempts, go to Sina
+      logger.log(`[eastmoneyStock] getStockKline EastMoney outage → Sina for ${code}`)
+      return fetchKlineFromSina(code, days)
+    }
   }
 
   // Attempt 2: resolve secid, retry with resolved secid
@@ -220,6 +240,7 @@ export async function getStockKline(code: string, days: number = 120): Promise<S
       if (result.length > 0) return result
     } catch (e: any) {
       logger.log(`[eastmoneyStock] getStockKline attempt2 secid=${resolved} failed: ${e?.message}`)
+      if (isServerOutage(e)) { markEastMoneyDown(); return fetchKlineFromSina(code, days) }
     }
   }
 
@@ -233,6 +254,7 @@ export async function getStockKline(code: string, days: number = 120): Promise<S
     }
   } catch (e: any) {
     logger.log(`[eastmoneyStock] getStockKline attempt3 secid=${secid} failed: ${e?.message}`)
+    if (isServerOutage(e)) { markEastMoneyDown(); return fetchKlineFromSina(code, days) }
   }
 
   // Attempt 4: Sina Finance fallback (independent data source, works when EastMoney is down)
@@ -311,7 +333,7 @@ async function fetchStockInfoFromPush2his(sid: string, code: string): Promise<St
     },
     headers: HEADERS_QUOTE(),
     timeout: 10000,
-  }))
+  }), 1)
   const klines = resp.data?.data?.klines
   const name = resp.data?.data?.name
   if (!Array.isArray(klines) || klines.length === 0) return null
@@ -331,13 +353,19 @@ async function fetchStockInfoFromPush2his(sid: string, code: string): Promise<St
 }
 
 export async function getStockInfo(code: string): Promise<StockInfo | null> {
+  // Reject invalid stock codes early (e.g. bonds, funds, indices)
+  if (!isValidStockCode(code)) {
+    logger.log(`[eastmoneyStock] getStockInfo rejecting invalid stock code: ${code}`)
+    return null
+  }
+
   const { secid } = normalizeCode(code)
   const FIELDS = 'f43,f57,f58,f59,f84,f116,f117,f162,f167,f170,f171,f173,f177,f187,f190,f192'
 
-  // If EastMoney is known to be down, skip straight to Sina
+  // If EastMoney is known to be down, skip straight to Tencent/Sina
   if (isEastMoneyLikelyDown()) {
-    logger.log(`[eastmoneyStock] getStockInfo skipping EastMoney (service down) → Sina for ${code}`)
-    return fetchStockInfoFromSina(code)
+    logger.log(`[eastmoneyStock] getStockInfo skipping EastMoney (service down) → Tencent for ${code}`)
+    return fetchStockInfoFallback(code)
   }
 
   const fetchPush2 = async (sid: string) => {
@@ -345,7 +373,7 @@ export async function getStockInfo(code: string): Promise<StockInfo | null> {
       params: { secid: sid, fields: FIELDS },
       headers: HEADERS_QUOTE(),
       timeout: 10000,
-    }))
+    }), 1)
     return parsePush2Data(resp.data?.data)
   }
 
@@ -356,7 +384,12 @@ export async function getStockInfo(code: string): Promise<StockInfo | null> {
     if (info && info.code === code && info.name) return info
   } catch (e: any) {
     logger.log(`[eastmoneyStock] getStockInfo push2 secid=${secid} failed: ${e?.message}`)
-    markEastMoneyDown()
+    if (isServerOutage(e)) {
+      markEastMoneyDown()
+      // Service-wide outage (e.g. 502) — all EastMoney endpoints will fail, skip to Tencent/Sina
+      logger.log(`[eastmoneyStock] getStockInfo EastMoney outage (${e?.response?.status}) → Tencent for ${code}`)
+      return fetchStockInfoFallback(code)
+    }
   }
 
   // Attempt 2: push2his historical kline (reliable 24/7 — push2 may be blocked off-hours)
@@ -386,6 +419,12 @@ export async function getStockInfo(code: string): Promise<StockInfo | null> {
     }
   } catch (e: any) {
     logger.log(`[eastmoneyStock] getStockInfo push2his secid=${secid} failed: ${e?.message}`)
+    if (isServerOutage(e)) {
+      markEastMoneyDown()
+      // Both push2 and push2his returned server errors — entire service is down
+      logger.log(`[eastmoneyStock] getStockInfo EastMoney outage on push2his → Tencent for ${code}`)
+      return fetchStockInfoFallback(code)
+    }
   }
 
   // Attempt 3: resolve secid via suggest API, check for fund codes, retry push2/push2his
@@ -419,6 +458,7 @@ export async function getStockInfo(code: string): Promise<StockInfo | null> {
     if (info && info.code === code && info.name) return info
   } catch (e: any) {
     logger.log(`[eastmoneyStock] getStockInfo push2 opposite=${oppositeSecid} failed: ${e?.message}`)
+    if (isServerOutage(e)) { markEastMoneyDown(); return fetchStockInfoFallback(code) }
   }
 
   // Attempt 5: clist API
@@ -437,7 +477,7 @@ export async function getStockInfo(code: string): Promise<StockInfo | null> {
       },
       headers: HEADERS_QUOTE(),
       timeout: 10000,
-    }))
+    }), 1)
 
     const items = resp.data?.data?.diff
     if (Array.isArray(items) && items.length > 0) {
@@ -459,10 +499,75 @@ export async function getStockInfo(code: string): Promise<StockInfo | null> {
     }
   } catch (e: any) {
     logger.error(`[eastmoneyStock] getStockInfo stock list failed: ${e?.message}`)
-    markEastMoneyDown()
+    if (isServerOutage(e)) { markEastMoneyDown(); return fetchStockInfoFallback(code) }
   }
 
-  // Attempt 6: Sina Finance real-time quote (independent source, works when EastMoney is down)
+  // Attempt 6: Tencent → Sina (independent sources, works when EastMoney is down)
+  return fetchStockInfoFallback(code)
+}
+
+/** Fetch stock info from Tencent Finance (independent data source, low anti-crawler). */
+async function fetchStockInfoFromTencent(code: string): Promise<StockInfo | null> {
+  logger.log(`[eastmoneyStock] getStockInfo trying Tencent for ${code}`)
+  try {
+    const symbol = toSinaSymbol(code) // same sh/sz/bj prefix as Sina
+    const resp = await axiosWithRetry(() => axios.get(`https://qt.gtimg.cn/q=${symbol}`, {
+      headers: { 'User-Agent': randomUA(), 'Referer': 'https://gu.qq.com/' },
+      timeout: 10000,
+      responseType: 'arraybuffer',
+    }), 1)
+    const text = iconv.decode(Buffer.from(resp.data), 'gbk')
+    const match = text.match(/v_\w+="([^"]*)"/)
+    if (!match) return null
+    const fields = match[1].split('~')
+    if (fields.length < 35) return null
+
+    const name = fields[1]
+    const price = parseFloat(fields[3]) || 0
+    const prevClose = parseFloat(fields[4]) || 0
+    if (!name || price <= 0) return null
+
+    const safeFloat = (i: number): number => {
+      if (i < 0 || i >= fields.length) return 0
+      const v = parseFloat(fields[i])
+      return isNaN(v) ? 0 : v
+    }
+
+    // qt.gtimg.cn field mapping (split by '~'):
+    // [1]=name  [3]=price  [4]=prevClose  [31]=change%  [32]=high  [33]=low
+    // [37]=PE(TTM)  [42]=totalMktCap(亿)  [43]=PB
+    const pe = safeFloat(37)
+    const pb = safeFloat(43)
+    const marketCap = safeFloat(42) // 亿元
+    // Derive total shares from market cap and price: 总股本(万) = 市值(亿)*10000 / 价格(元)
+    const totalShares = marketCap > 0 && price > 0 ? +(marketCap * 10000 / price).toFixed(0) : 0
+
+    logger.log(
+      `[eastmoneyStock] Tencent: ${name}(${code}) price=${price} pe=${pe} pb=${pb} mktCap=${marketCap}亿 fieldsLen=${fields.length}`
+    )
+
+    return {
+      code,
+      name,
+      industry: '',
+      price,
+      change: prevClose > 0 ? +((price - prevClose) / prevClose * 100).toFixed(2) : 0,
+      marketCap,
+      pe,
+      pb,
+      totalShares,
+      floatShares: 0,
+    }
+  } catch (e: any) {
+    logger.log(`[eastmoneyStock] Tencent failed: ${e?.message}`)
+  }
+  return null
+}
+
+/** Try Tencent first (has PE/PB/marketCap), then Sina as absolute last resort. */
+async function fetchStockInfoFallback(code: string): Promise<StockInfo | null> {
+  const tencentInfo = await fetchStockInfoFromTencent(code)
+  if (tencentInfo) return tencentInfo
   return fetchStockInfoFromSina(code)
 }
 
@@ -518,7 +623,7 @@ export async function getStockFundamentals(code: string): Promise<StockFundament
       params: { secid, fields: FIELDS },
       headers: HEADERS_QUOTE(),
       timeout: 10000,
-    }))
+    }), 1)
 
     if (!resp.data?.data?.f57) {
       const resolved = await resolveSecid(code)
@@ -528,7 +633,7 @@ export async function getStockFundamentals(code: string): Promise<StockFundament
           params: { secid, fields: FIELDS },
           headers: HEADERS_QUOTE(),
           timeout: 10000,
-        }))
+        }), 1)
       }
     }
 

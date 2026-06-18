@@ -30,6 +30,11 @@ const router = createRouter({
       component: () => import('@/views/DisclaimerView.vue')
     },
     {
+      path: '/agreement',
+      name: 'agreement',
+      component: () => import('@/views/AgreementView.vue')
+    },
+    {
       path: '/admin/login',
       name: 'admin-login',
       component: () => import('@/views/admin/AdminLoginView.vue'),
@@ -89,6 +94,11 @@ const router = createRouter({
           path: 'credit-manage',
           name: 'admin-credit-manage',
           component: () => import('@/views/admin/CreditManageView.vue')
+        },
+        {
+          path: 'report-manage',
+          name: 'admin-report-manage',
+          component: () => import('@/views/admin/ReportManageView.vue')
         }
       ]
     }
