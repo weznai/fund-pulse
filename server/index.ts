@@ -7,7 +7,6 @@ import { logger } from './logger.js'
 import { initDatabase, closeDatabase, fixUsersDataIntegrity, ensureVisitLogsTable, getAllUsers } from './db.js'
 import { startScheduledSettlement } from './scheduled/settlement.js'
 import { startScheduledEstimateWithUserFunds, startIndexEstimate } from './scheduled/estimate.js'
-import { startReportCleanup, stopReportCleanup } from './scheduled/reportCleanup.js'
 import { initHolidaysTable } from './db/holiday.js'
 import { setupHolidayRoutes, setupPublicHolidayRoutes } from './services/holidayService.js'
 import { validateAdminToken } from './middleware/auth.js'
@@ -29,6 +28,7 @@ import cacheRoutes from './routes/cache.js'
 import suggestionRoutes from './routes/suggestion.js'
 import analysisRoutes from './routes/analysis.js'
 import wechatRoutes from './routes/wechat.js'
+import systemUpdateRoutes from './routes/systemUpdate.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -81,6 +81,7 @@ app.use('/api/cache', cacheRoutes)
 app.use('/api', suggestionRoutes)
 app.use('/api', analysisRoutes)
 app.use('/api/auth', wechatRoutes)
+app.use('/api/admin/system', systemUpdateRoutes)
 
 app.use('/api/users', (req, res) => {
   try {
@@ -108,19 +109,16 @@ app.listen(PORT, '0.0.0.0', () => {
 
   startScheduledEstimateWithUserFunds()
   startIndexEstimate()
-  startReportCleanup()
 })
 
 process.on('SIGINT', () => {
   logger.log('\n收到 SIGINT 信号，正在关闭服务器...')
-  stopReportCleanup()
   closeDatabase()
   process.exit(0)
 })
 
 process.on('SIGTERM', () => {
   logger.log('\n收到 SIGTERM 信号，正在关闭服务器...')
-  stopReportCleanup()
   closeDatabase()
   process.exit(0)
 })

@@ -99,6 +99,11 @@ const router = createRouter({
           path: 'report-manage',
           name: 'admin-report-manage',
           component: () => import('@/views/admin/ReportManageView.vue')
+        },
+        {
+          path: 'system-update',
+          name: 'admin-system-update',
+          component: () => import('@/views/admin/SystemUpdateView.vue')
         }
       ]
     }

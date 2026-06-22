@@ -61,3 +61,7 @@ skills-lock.json
 miniapp/node_modules
 miniapp/dist
 miniapp/unpackage
+
+# System update config & packages
+update-config.json
+deploy/
