@@ -85,7 +85,7 @@ const DEFAULT_UPDATE_CONFIG: UpdateConfig = {
   github_token: '',
   download_dir: 'deploy',
   deploy_excludes: [],
-  package_keep: 5,
+  package_keep: 3,
   project_root: '',
   app_port: APP_PORT,
   proxy: '',
@@ -886,7 +886,7 @@ async function runUpdateTask(cfg: UpdateConfig, mode: UpdateMode): Promise<void>
           addLog(`已清理临时文件: ${tmpZip}`)
         } catch { /* ignore */ }
       }
-      const keep = parseInt(String(cfg.package_keep || 5))
+      const keep = parseInt(String(cfg.package_keep || 3))
       addLog(`保留最近 ${keep} 个代码包，开始清理旧包...`)
       prunePackages(packagesDir, keep)
       const dt = ((Date.now() - tStage) / 1000).toFixed(1)

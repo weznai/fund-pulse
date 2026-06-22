@@ -228,10 +228,11 @@
 
       <!-- 环境信息 -->
       <div class="section-card env-info-card">
-        <div class="section-header">
+        <div class="section-header clickable" @click="envExpanded = !envExpanded">
           <h3>环境信息</h3>
+          <span class="toggle-icon" :class="{ expanded: envExpanded }">▶</span>
         </div>
-        <div class="env-grid">
+        <div class="env-grid" v-show="envExpanded">
           <div class="env-item">
             <span class="env-label">操作系统</span>
             <span class="env-value">{{ shellInfo.os_label || '-' }}</span>
@@ -257,7 +258,7 @@
             <span class="env-value">{{ packagesInfo.count || 0 }}</span>
           </div>
         </div>
-        <p class="env-hint" v-if="shellInfo.hint">{{ shellInfo.hint }}</p>
+        <p class="env-hint" v-if="shellInfo.hint" v-show="envExpanded">{{ shellInfo.hint }}</p>
       </div>
     </div>
   </div>
@@ -317,7 +318,7 @@ const config = reactive({
   github_token: '',
   download_dir: 'deploy',
   deploy_excludes: [] as string[],
-  package_keep: 5,
+  package_keep: 3,
   project_root: '',
   app_port: 3010,
   proxy: '',
@@ -331,6 +332,7 @@ const config = reactive({
 })
 
 const configExpanded = ref(false)
+const envExpanded = ref(false)
 
 const deployExcludesText = ref('')
 const savingConfig = ref(false)
