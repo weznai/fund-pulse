@@ -33,7 +33,7 @@ No separate lint or format command. `npm run build` runs `vue-tsc` which is the 
 
 **Database**: SQLite (`db/fund-data.db`), WAL journal mode. Schema seed in `db/fund-data.sql`, migrations in `db/migrations/`. Connection via `server/db/connection.ts`.
 
-**Production**: Vite builds to `server/dist/`. Express serves those static files and falls back to `index.html` for SPA routing.
+**Production**: Vite builds to `server/dist/`. Express serves those static files and falls back to `index.html` for SPA routing. 进程管理用 **PM2**（`ecosystem.config.cjs`，fork 模式，通过 `node --import tsx` 直接跑 TS 后端）。启动 `pm2 start ecosystem.config.cjs`；管理后台"系统更新"的重启/关闭走 PM2 —— `systemUpdateService.ts` 的 `spawnPm2Command` 派生 detached 进程执行 `pm2 restart/stop <name>`，执行前用 `pm2AvailableSync()` 预检，未安装 PM2 会抛清晰错误。应用名可经 `update-config.json` 的 `pm2_app_name` 配置（默认 `fund-pulse`）。Linux 开机自启：`pm2 startup && pm2 save`。开发环境（Windows 等）无需 PM2，照常 `npm run dev:full`。
 
 ## Key conventions
 

@@ -107,14 +107,17 @@
 
       <!-- 配置表单 -->
       <div class="section-card">
-        <div class="section-header">
+        <div class="section-header clickable" @click="configExpanded = !configExpanded">
           <h3>更新配置</h3>
-          <button class="btn btn-sm btn-primary" @click="saveConfig" :disabled="savingConfig">
-            {{ savingConfig ? '保存中...' : '保存配置' }}
-          </button>
+          <div class="section-header-right">
+            <button class="btn btn-sm btn-primary" @click.stop="saveConfig" :disabled="savingConfig">
+              {{ savingConfig ? '保存中...' : '保存配置' }}
+            </button>
+            <span class="toggle-icon" :class="{ expanded: configExpanded }">▶</span>
+          </div>
         </div>
 
-        <div class="config-form">
+        <div class="config-form" v-show="configExpanded">
           <!-- GitHub 配置 -->
           <div class="config-group">
             <h4 class="config-group-title">GitHub 下载</h4>
@@ -326,6 +329,8 @@ const config = reactive({
   restart_command: '',
   restart_script: '',
 })
+
+const configExpanded = ref(false)
 
 const deployExcludesText = ref('')
 const savingConfig = ref(false)
@@ -601,6 +606,32 @@ onUnmounted(() => {
   height: 18px;
   background: linear-gradient(180deg, #1e3a5f 0%, #3b82f6 100%);
   border-radius: 2px;
+}
+
+.section-header.clickable {
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.2s;
+}
+
+.section-header.clickable:hover {
+  opacity: 0.8;
+}
+
+.section-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toggle-icon {
+  font-size: 10px;
+  color: #9CA3AF;
+  transition: transform 0.2s ease;
+}
+
+.toggle-icon.expanded {
+  transform: rotate(90deg);
 }
 
 /* 执行控制区 */

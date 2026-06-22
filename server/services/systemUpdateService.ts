@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import net from 'net'
-import { spawn, exec } from 'child_process'
+import { spawn, exec, execSync } from 'child_process'
 import { fileURLToPath } from 'url'
 import axios from 'axios'
 import { pipeline } from 'stream/promises'
@@ -75,6 +75,7 @@ export interface UpdateConfig {
   install_enabled: boolean
   restart_command: string
   restart_script: string
+  pm2_app_name: string
 }
 
 const DEFAULT_UPDATE_CONFIG: UpdateConfig = {
@@ -95,6 +96,7 @@ const DEFAULT_UPDATE_CONFIG: UpdateConfig = {
   install_enabled: true,
   restart_command: '',
   restart_script: '',
+  pm2_app_name: 'fund-pulse',
 }
 
 const DEFAULT_DEPLOY_EXCLUDES = [
@@ -719,172 +721,43 @@ async function runCommand(cmd: string, cwd: string, timeout: number): Promise<vo
   })
 }
 
-function spawnRestart(restartCmd: string, scriptPath: string | null, projectRoot: string, appPort: number): void {
+function pm2AvailableSync(): boolean {
   const osType = detectOs()
-  const cmdToRun = (scriptPath || '').trim() || (restartCmd || '').trim()
-  if (!cmdToRun) throw new Error('未配置启动命令或启动脚本')
-
-  const root = projectRoot || PROJECT_ROOT
-  if (!fs.existsSync(root)) throw new Error(`项目根目录不存在: ${root}`)
-
-  addLog(`========== 开始重启 ==========`)
-  addLog(`启动指令: ${cmdToRun}`)
-  addLog(`工作目录: ${root}`)
-  addLog(`应用端口: ${appPort}`)
-  addLog(`操作系统: ${osType}`)
-  fs.mkdirSync(LOG_DIR, { recursive: true })
-  const restartLog = path.join(LOG_DIR, 'restart.log')
-  const serverOutLog = path.join(LOG_DIR, 'server.log')
-  addLog(`重启日志: ${restartLog}`)
-  addLog(`服务输出日志: ${serverOutLog}`)
-  addLog(`辅助脚本将执行: 等2s → 杀端口监听 → 等端口释放 → 启动新进程`)
-
-  if (osType === 'windows') {
-    const bat = [
-      '@echo off',
-      'chcp 65001 >nul',
-      `cd /d "${root}"`,
-      `echo [%date% %time%] [restart] ================ restart start ================ >> "${restartLog}"`,
-      `echo [%date% %time%] [restart] cwd: %CD%  port: ${appPort}  cmd: ${cmdToRun} >> "${restartLog}"`,
-      `echo [%date% %time%] [restart] step 1/4: wait 2s for response >> "${restartLog}"`,
-      'timeout /t 2 /nobreak >nul',
-      `echo [%date% %time%] [restart] step 2/4: killing listeners on port ${appPort} >> "${restartLog}"`,
-      `for /f "tokens=5" %%a in ('netstat -aon ^| findstr :${appPort} ^| findstr LISTENING') do (`,
-      `  echo [%date% %time%] [restart]   taskkill /F /PID %%a >> "${restartLog}"`,
-      '  taskkill /F /PID %%a >nul 2>&1',
-      ')',
-      `echo [%date% %time%] [restart] step 3/4: waiting port free (up to 15s) >> "${restartLog}"`,
-      'set /a W=0',
-      ':waitloop',
-      `netstat -aon | findstr :${appPort} | findstr LISTENING >nul 2>&1`,
-      'if errorlevel 1 ( goto portfree )',
-      'if %W% LSS 15 (',
-      '  set /a W+=1',
-      '  timeout /t 1 /nobreak >nul',
-      '  goto waitloop',
-      ')',
-      `echo [%date% %time%] [restart]   WARNING: port still in use after %W%s >> "${restartLog}"`,
-      'goto startapp',
-      ':portfree',
-      `echo [%date% %time%] [restart]   port free after %W%s >> "${restartLog}"`,
-      ':startapp',
-      `echo [%date% %time%] [restart] step 4/4: starting: ${cmdToRun} >> "${restartLog}"`,
-      `${cmdToRun} >> "${serverOutLog}" 2>&1`,
-    ].join('\r\n') + '\r\n'
-
-    const helperPath = path.join(LOG_DIR, '_restart_helper.bat')
-    fs.writeFileSync(helperPath, bat, 'utf-8')
-    addLog(`已生成重启辅助脚本: ${helperPath} (${bat.length} bytes)`)
-
-    spawn('cmd.exe', ['/c', helperPath], {
-      cwd: root,
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: true,
-    }).unref()
-    addLog(`已派生 cmd.exe 辅助进程 (detached)`)
-  } else {
-    const sh = [
-      '#!/bin/bash',
-      `PORT=${appPort}`,
-      `ROOT="${root}"`,
-      `CMD="${cmdToRun}"`,
-      `RLOG="${restartLog}"`,
-      `SLOG="${serverOutLog}"`,
-      'log(){ echo "[$(date \'+%F %T\')] [restart-helper] $1" >> "$RLOG"; }',
-      'log "================ 重启开始 ================"',
-      'log "工作目录: $ROOT  端口: $PORT  命令: $CMD"',
-      'log "------ [1/4] 检查端口 $PORT 当前占用 ------"',
-      'OLD_PIDS=$(lsof -ti:$PORT 2>/dev/null | sort -u)',
-      'if [ -n "$OLD_PIDS" ]; then',
-      '  for pid in $OLD_PIDS; do log "  监听 PID=$pid"; done',
-      'else',
-      '  log "  端口 $PORT 无监听进程"',
-      'fi',
-      'log "------ [2/4] 关闭旧进程 ------"',
-      'if [ -z "$OLD_PIDS" ]; then log "  无需关闭"; else',
-      '  for pid in $OLD_PIDS; do kill -9 $pid 2>/dev/null && log "  已终止 $pid" || log "  失败 $pid"; done',
-      'fi',
-      'log "------ [3/4] 等待端口释放 (最多 15s) ------"',
-      'W=0',
-      'while [ $W -lt 15 ]; do',
-      '  sleep 1; W=$((W+1))',
-      '  lsof -i:$PORT >/dev/null 2>&1 || break',
-      'done',
-      'log "  端口已释放 (${W}s)"',
-      'log "------ [4/4] 启动新进程 ------"',
-      'cd "$ROOT"',
-      'nohup $CMD >> "$SLOG" 2>&1 &',
-      'log "  已派生 PID=$!"',
-      'log "================ 重启结束 ================"',
-    ].join('\n') + '\n'
-
-    const helperPath = path.join(LOG_DIR, '_restart_helper.sh')
-    fs.writeFileSync(helperPath, sh, 'utf-8')
-    fs.chmodSync(helperPath, 0o755)
-    addLog(`已生成重启辅助脚本: ${helperPath} (${sh.length} bytes, +x)`)
-    spawn('bash', [helperPath], {
-      cwd: root,
-      detached: true,
-      stdio: 'ignore',
-    }).unref()
-    addLog(`已派生 bash 辅助进程 (detached, new session)`)
+  const probe = osType === 'windows' ? 'where pm2' : 'command -v pm2'
+  try {
+    execSync(probe, { stdio: 'ignore', windowsHide: true })
+    return true
+  } catch {
+    return false
   }
-  addLog(`========== 重启结束 ==========`)
-  addLog(`已派生重启辅助进程，详细日志见: ${restartLog}`)
-  addLog(`应用将在约 2 秒后被关闭，端口释放后自动启动新进程`)
 }
 
-function spawnStop(appPort: number): void {
+function spawnPm2Command(action: 'restart' | 'stop', appName: string, projectRoot: string): void {
   const osType = detectOs()
-  addLog(`========== 开始关闭 ==========`)
-  addLog(`目标端口: ${appPort}`)
+  const cmd = `pm2 ${action} ${appName} --update-env`
+  addLog(`========== PM2 ${action} ==========`)
+  addLog(`命令: ${cmd}`)
+  addLog(`工作目录: ${projectRoot}`)
   addLog(`操作系统: ${osType}`)
-  const restartLog = path.join(LOG_DIR, 'restart.log')
   fs.mkdirSync(LOG_DIR, { recursive: true })
-  addLog(`关闭日志: ${restartLog}`)
-  addLog(`辅助脚本将执行: 等2s → 杀端口监听进程（不重启）`)
+  const ctrlLog = path.join(LOG_DIR, 'pm2-control.log')
+  addLog(`控制日志: ${ctrlLog}`)
 
-  if (osType === 'windows') {
-    const bat = [
-      '@echo off',
-      'chcp 65001 >nul',
-      `echo [%date% %time%] [stop] closing app on port ${appPort}... >> "${restartLog}"`,
-      'timeout /t 2 /nobreak >nul',
-      `for /f "tokens=5" %%a in ('netstat -aon ^| findstr :${appPort} ^| findstr LISTENING') do (`,
-      `  echo [%date% %time%] [stop]   taskkill /F /PID %%a >> "${restartLog}"`,
-      '  taskkill /F /PID %%a >nul 2>&1',
-      ')',
-      `echo [%date% %time%] [stop] ================ stop end ================ >> "${restartLog}"`,
-    ].join('\r\n') + '\r\n'
+  const shell = osType === 'windows' ? (process.env.ComSpec || 'cmd.exe') : '/bin/bash'
+  const delayed = osType === 'windows'
+    ? `timeout /t 1 /nobreak >nul && ${cmd}`
+    : `sleep 1 && ${cmd}`
+  const args = osType === 'windows' ? ['/c', delayed] : ['-c', delayed]
 
-    const helperPath = path.join(LOG_DIR, '_stop_helper.bat')
-    fs.writeFileSync(helperPath, bat, 'utf-8')
-    spawn('cmd.exe', ['/c', helperPath], {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: true,
-    }).unref()
-  } else {
-    const sh = [
-      '#!/bin/bash',
-      'sleep 2',
-      `echo "[$(date \"+%F %T\")] [stop-helper] closing app on port ${appPort}..." >> "${restartLog}"`,
-      `for pid in $(lsof -ti:${appPort} 2>/dev/null | sort -u); do`,
-      `  echo "[$(date \"+%F %T\")] [stop-helper] killing PID=$pid" >> "${restartLog}"`,
-      `  kill -9 $pid 2>/dev/null`,
-      `done`,
-    ].join('\n') + '\n'
-
-    const helperPath = path.join(LOG_DIR, '_stop_helper.sh')
-    fs.writeFileSync(helperPath, sh, 'utf-8')
-    fs.chmodSync(helperPath, 0o755)
-    spawn('bash', [helperPath], {
-      detached: true,
-      stdio: 'ignore',
-    }).unref()
-  }
-  addLog(`关闭指令已派发，应用将在约 2 秒后停止（日志: ${restartLog}）`)
+  const fd = fs.openSync(ctrlLog, 'a')
+  spawn(shell, args, {
+    cwd: projectRoot,
+    detached: true,
+    stdio: ['ignore', fd, fd],
+    windowsHide: true,
+  }).unref()
+  addLog(`已派生 detached 进程执行: ${delayed}`)
+  addLog(`应用将在约 1 秒后被 PM2 ${action === 'restart' ? '重启' : '停止'}`)
 }
 
 function setStage(stage: Stage, progress = ''): void {
@@ -957,7 +830,8 @@ async function runUpdateTask(cfg: UpdateConfig, mode: UpdateMode): Promise<void>
     addLog(`  编译构建: ${cfg.build_enabled ? '✓ 启用' : '✗ 禁用'}`)
     addLog(`  编译命令: ${cfg.build_command || '(默认)'}`)
     addLog(`  编译超时: ${cfg.build_timeout}s`)
-    addLog(`  启动命令: ${cfg.restart_command || '(默认: npm run server)'}`)
+    addLog(`  PM2 应用名: ${cfg.pm2_app_name || 'fund-pulse'}`)
+    addLog(`  进程管理: PM2 (pm2 ${cfg.pm2_app_name || 'fund-pulse'})`)
     addLog(`  代码包保留数: ${cfg.package_keep}`)
     addLog(`  部署排除规则: ${cfg.deploy_excludes?.length || 0} 条 (用户自定义)`)
     addLog(`  系统默认排除规则: ${DEFAULT_DEPLOY_EXCLUDES.length} 条`)
@@ -1088,23 +962,16 @@ async function runUpdateTask(cfg: UpdateConfig, mode: UpdateMode): Promise<void>
 
     if (doRestart) {
       const tStage = Date.now()
-      setStage('restarting', '关闭老应用并重启...')
+      setStage('restarting', '通过 PM2 重启应用...')
       addLog(`############################################################`)
       addLog(`#  [阶段 5] 重启应用`)
       addLog(`############################################################`)
-      const restartCmd = (cfg.restart_command || '').trim()
-      const restartScript = (cfg.restart_script || '').trim()
-      let cmd = restartCmd
-      if (!cmd && !restartScript) {
-        const shellInfo = getDefaultShellInfo()
-        cmd = shellInfo.default_restart
-        addLog(`启动命令使用默认: ${cmd}`)
-      } else {
-        addLog(`启动命令(配置): ${cmd}`)
+      const appName = (cfg.pm2_app_name || 'fund-pulse').trim()
+      if (!pm2AvailableSync()) {
+        throw new Error('未检测到 PM2，无法重启。请先安装: npm i -g pm2，并用 pm2 start ecosystem.config.cjs 启动服务')
       }
-      addLog(`启动脚本(配置): ${restartScript || '(无)'}`)
-      addLog(`即将派生独立辅助进程执行重启...`)
-      spawnRestart(cmd, restartScript || null, projectRoot, appPort)
+      addLog(`PM2 应用名: ${appName}`)
+      spawnPm2Command('restart', appName, projectRoot)
       const dt = ((Date.now() - tStage) / 1000).toFixed(1)
       stageTimings.push({ stage: '重启', duration: parseFloat(dt) })
       addLog(`[阶段 5] 重启指令已派发，耗时 ${dt}s`)
@@ -1116,11 +983,15 @@ async function runUpdateTask(cfg: UpdateConfig, mode: UpdateMode): Promise<void>
 
     if (doStop) {
       const tStage = Date.now()
-      setStage('stopping', '关闭应用...')
+      setStage('stopping', '通过 PM2 停止应用...')
       addLog(`############################################################`)
       addLog(`#  [阶段 5] 关闭应用`)
       addLog(`############################################################`)
-      spawnStop(appPort)
+      const appName = (cfg.pm2_app_name || 'fund-pulse').trim()
+      if (!pm2AvailableSync()) {
+        throw new Error('未检测到 PM2，无法停止。请先安装: npm i -g pm2')
+      }
+      spawnPm2Command('stop', appName, projectRoot)
       const dt = ((Date.now() - tStage) / 1000).toFixed(1)
       stageTimings.push({ stage: '关闭', duration: parseFloat(dt) })
       addLog(`[阶段 5] 关闭指令已派发，耗时 ${dt}s`)
