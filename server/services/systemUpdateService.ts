@@ -643,16 +643,10 @@ export function getPackagesInfo(cfg?: UpdateConfig, projectRoot?: string) {
 async function runCommand(cmd: string, cwd: string, timeout: number): Promise<void> {
   const osType = detectOs()
   const t0 = Date.now()
-  addLog(`========== 执行命令 ==========`)
-  addLog(`  命令: ${cmd}`)
-  addLog(`  工作目录: ${cwd || '(继承)'}`)
-  addLog(`  超时: ${timeout}s`)
-  addLog(`  操作系统: ${osType}`)
-  addLog(`  Shell: ${osType === 'windows' ? (process.env.ComSpec || 'cmd.exe') : '/bin/bash'}`)
+  addLog(`执行命令: ${cmd}${cwd ? ' (in ' + cwd + ')' : ''}`)
 
   const shell = osType === 'windows' ? process.env.ComSpec || 'cmd.exe' : '/bin/bash'
   const shellArgs = osType === 'windows' ? ['/c', cmd] : ['-c', cmd]
-  addLog(`  PID: (spawning...)`)
 
   return new Promise<void>((resolve, reject) => {
     const proc = spawn(shell, shellArgs, {
@@ -664,7 +658,6 @@ async function runCommand(cmd: string, cwd: string, timeout: number): Promise<vo
 
     addLog(`  PID: ${proc.pid}`)
     let stdout = ''
-    let lineCount = 0
     const handleData = (data: Buffer) => {
       stdout += data.toString('utf-8')
       const lines = stdout.split('\n')
@@ -673,7 +666,6 @@ async function runCommand(cmd: string, cwd: string, timeout: number): Promise<vo
         const trimmed = ln.replace(/\r$/, '').trim()
         if (trimmed) {
           addLog(`  | ${trimmed}`)
-          lineCount++
         }
       }
     }
@@ -683,7 +675,6 @@ async function runCommand(cmd: string, cwd: string, timeout: number): Promise<vo
     const timer = setTimeout(() => {
       proc.kill('SIGKILL')
       addLog(`  ✗ 命令超时被强制终止 (${timeout}s)`, 'ERROR')
-      addLog(`========== 命令结束(超时) ==========`, 'ERROR')
       reject(new Error(`命令超时 (${timeout}s): ${cmd}`))
     }, timeout * 1000)
 
@@ -692,17 +683,12 @@ async function runCommand(cmd: string, cwd: string, timeout: number): Promise<vo
       const dt = ((Date.now() - t0) / 1000).toFixed(1)
       if (stdout.trim()) {
         addLog(`  | ${stdout.trim()}`)
-        lineCount++
       }
-      addLog(`  退出码: ${code}`)
-      addLog(`  输出: ${lineCount} 行`)
-      addLog(`  耗时: ${dt}s`)
       if (code === 0) {
-        addLog(`  ✓ 命令执行成功`)
+        addLog(`  ✓ 完成 (${dt}s)`)
       } else {
-        addLog(`  ✗ 命令执行失败 (退出码 ${code})`, 'ERROR')
+        addLog(`  ✗ 失败 退出码 ${code} (${dt}s)`, 'ERROR')
       }
-      addLog(`========== 命令结束 ==========`)
       if (code !== 0) {
         reject(new Error(`命令退出码 ${code}: ${cmd}`))
       } else {
@@ -713,9 +699,7 @@ async function runCommand(cmd: string, cwd: string, timeout: number): Promise<vo
     proc.on('error', (err) => {
       clearTimeout(timer)
       const dt = ((Date.now() - t0) / 1000).toFixed(1)
-      addLog(`  ✗ 命令执行出错: ${err.message}`, 'ERROR')
-      addLog(`  耗时: ${dt}s`, 'ERROR')
-      addLog(`========== 命令结束(错误) ==========`, 'ERROR')
+      addLog(`  ✗ 命令出错: ${err.message} (${dt}s)`, 'ERROR')
       reject(new Error(`命令执行出错: ${err.message}`))
     })
   })
@@ -802,41 +786,10 @@ async function runUpdateTask(cfg: UpdateConfig, mode: UpdateMode): Promise<void>
     const appPort = parseInt(String(cfg.app_port || APP_PORT))
     if (!fs.existsSync(projectRoot)) throw new Error(`项目根目录不存在: ${projectRoot}`)
 
-    addLog(`############################################################`)
-    addLog(`#                                                          #`)
-    addLog(`#              ===== 系统更新开始 =====                    #`)
-    addLog(`#                                                          #`)
-    addLog(`############################################################`)
-    addLog(`---------- 基本信息 ----------`)
-    addLog(`  更新模式: ${mode}`)
-    addLog(`  操作系统: ${osType} (${os.platform()} ${os.release()})`)
-    addLog(`  CPU 架构: ${process.arch}`)
-    addLog(`  CPU 核心数: ${os.cpus().length}`)
-    addLog(`  总内存: ${formatSize(os.totalmem())}`)
-    addLog(`  空闲内存: ${formatSize(os.freemem())}`)
-    addLog(`  Node.js: ${process.version}`)
-    addLog(`  项目根目录: ${projectRoot}`)
-    addLog(`  应用端口: ${appPort}`)
-    addLog(`  系统临时目录: ${os.tmpdir()}`)
-    addLog(`  当前工作目录: ${process.cwd()}`)
-    addLog(`  配置文件: ${UPDATE_CONFIG_PATH}`)
-    addLog(`---------- 配置摘要 ----------`)
-    addLog(`  GitHub 下载: ${cfg.github_enabled ? '✓ 启用' : '✗ 禁用'}`)
-    addLog(`  GitHub 地址: ${cfg.github_url || '(空)'}`)
-    addLog(`  GitHub 分支: ${cfg.github_branch}`)
-    addLog(`  GitHub Token: ${cfg.github_token ? maskToken(cfg.github_token) : '(无)'}`)
-    addLog(`  HTTP 代理: ${cfg.proxy || '(无)'}`)
-    addLog(`  安装依赖: ${cfg.install_enabled ? '✓ 启用' : '✗ 禁用'}`)
-    addLog(`  编译构建: ${cfg.build_enabled ? '✓ 启用' : '✗ 禁用'}`)
-    addLog(`  编译命令: ${cfg.build_command || '(默认)'}`)
-    addLog(`  编译超时: ${cfg.build_timeout}s`)
-    addLog(`  PM2 应用名: ${cfg.pm2_app_name || 'fund-pulse'}`)
-    addLog(`  进程管理: PM2 (pm2 ${cfg.pm2_app_name || 'fund-pulse'})`)
-    addLog(`  代码包保留数: ${cfg.package_keep}`)
-    addLog(`  部署排除规则: ${cfg.deploy_excludes?.length || 0} 条 (用户自定义)`)
-    addLog(`  系统默认排除规则: ${DEFAULT_DEPLOY_EXCLUDES.length} 条`)
-    addLog(`  下载目录: ${cfg.download_dir || '(默认 deploy)'}`)
-    addLog(`---------- 执行计划 ----------`)
+    addLog(`===== 系统更新开始 (模式: ${mode}) =====`)
+    addLog(`环境: ${osType} (${os.platform()} ${os.release()}) | Node ${process.version} | 端口 ${appPort}`)
+    addLog(`项目根目录: ${projectRoot}`)
+    addLog(`配置: GitHub ${cfg.github_enabled ? '✓' : '✗'} ${cfg.github_url || ''} @${cfg.github_branch} | 安装 ${cfg.install_enabled ? '✓' : '✗'} | 构建 ${cfg.build_enabled ? '✓' : '✗'} | PM2 ${cfg.pm2_app_name || 'fund-pulse'} | 保留 ${cfg.package_keep} 包${cfg.proxy ? ' | 代理 ' + cfg.proxy : ''}`)
 
     const doDownload = mode === 'download' || (mode === 'full' && cfg.github_enabled)
     const doDeploy = mode === 'deploy' || (mode === 'full' && cfg.github_enabled)
@@ -858,9 +811,7 @@ async function runUpdateTask(cfg: UpdateConfig, mode: UpdateMode): Promise<void>
     if (doDownload) {
       const tStage = Date.now()
       setStage('downloading', '从 GitHub 下载代码...')
-      addLog(`############################################################`)
-      addLog(`#  [阶段 1] 下载代码`)
-      addLog(`############################################################`)
+      addLog(`--- [阶段 1] 下载代码 ---`)
       const ghUrl = (cfg.github_url || '').trim()
       if (!ghUrl) throw new Error('GitHub 地址为空')
       const branch = (cfg.github_branch || 'main').trim() || 'main'
@@ -901,9 +852,7 @@ async function runUpdateTask(cfg: UpdateConfig, mode: UpdateMode): Promise<void>
     if (doDeploy) {
       const tStage = Date.now()
       setStage('deploying', '部署代码到项目目录...')
-      addLog(`############################################################`)
-      addLog(`#  [阶段 2] 部署代码`)
-      addLog(`############################################################`)
+      addLog(`--- [阶段 2] 部署代码 ---`)
       const packagesDir = packagesDirFromCfg(cfg, projectRoot)
       const deploySrc = latestPackageDir(packagesDir)
       if (!deploySrc) throw new Error('没有已下载的代码包，请先执行下载')
@@ -923,9 +872,7 @@ async function runUpdateTask(cfg: UpdateConfig, mode: UpdateMode): Promise<void>
     if (doInstall) {
       const tStage = Date.now()
       setStage('installing', '安装依赖 (npm install)...')
-      addLog(`############################################################`)
-      addLog(`#  [阶段 3] 安装依赖`)
-      addLog(`############################################################`)
+      addLog(`--- [阶段 3] 安装依赖 ---`)
       addLog(`执行 npm install...`)
       await runCommand('npm install', projectRoot, 300)
       const dt = ((Date.now() - tStage) / 1000).toFixed(1)
@@ -940,9 +887,7 @@ async function runUpdateTask(cfg: UpdateConfig, mode: UpdateMode): Promise<void>
     if (doBuild) {
       const tStage = Date.now()
       setStage('building', '执行编译 / 构建命令...')
-      addLog(`############################################################`)
-      addLog(`#  [阶段 4] 编译构建`)
-      addLog(`############################################################`)
+      addLog(`--- [阶段 4] 编译构建 ---`)
       const shellInfo = getDefaultShellInfo()
       const buildCmd = (cfg.build_command || '').trim() || shellInfo.default_build
       if (!buildCmd) throw new Error('编译命令为空且无默认值')
@@ -963,9 +908,7 @@ async function runUpdateTask(cfg: UpdateConfig, mode: UpdateMode): Promise<void>
     if (doRestart) {
       const tStage = Date.now()
       setStage('restarting', '通过 PM2 重启应用...')
-      addLog(`############################################################`)
-      addLog(`#  [阶段 5] 重启应用`)
-      addLog(`############################################################`)
+      addLog(`--- [阶段 5] 重启应用 ---`)
       const appName = (cfg.pm2_app_name || 'fund-pulse').trim()
       if (!pm2AvailableSync()) {
         throw new Error('未检测到 PM2，无法重启。请先安装: npm i -g pm2，并用 pm2 start ecosystem.config.cjs 启动服务')
@@ -984,9 +927,7 @@ async function runUpdateTask(cfg: UpdateConfig, mode: UpdateMode): Promise<void>
     if (doStop) {
       const tStage = Date.now()
       setStage('stopping', '通过 PM2 停止应用...')
-      addLog(`############################################################`)
-      addLog(`#  [阶段 5] 关闭应用`)
-      addLog(`############################################################`)
+      addLog(`--- [阶段 5] 关闭应用 ---`)
       const appName = (cfg.pm2_app_name || 'fund-pulse').trim()
       if (!pm2AvailableSync()) {
         throw new Error('未检测到 PM2，无法停止。请先安装: npm i -g pm2')
@@ -1003,40 +944,23 @@ async function runUpdateTask(cfg: UpdateConfig, mode: UpdateMode): Promise<void>
 
     setStage('done', '更新完成')
     const totalDt = ((Date.now() - tTotal) / 1000).toFixed(1)
-    addLog(`############################################################`)
-    addLog(`#              ===== 更新完成 =====`)
-    addLog(`############################################################`)
-    addLog(`---------- 耗时汇总 ----------`)
-    for (const t of stageTimings) {
-      addLog(`  ${t.stage}: ${t.duration}s`)
-    }
-    addLog(`  ────────────────────`)
-    addLog(`  总耗时: ${totalDt}s`)
-    addLog(`  开始时间: ${updateState.startedAt}`)
-    addLog(`  完成时间: ${now()}`)
-    addLog(`############################################################`)
+    addLog(`===== 更新完成 | 总耗时 ${totalDt}s =====`)
+    const stages = stageTimings.map(t => `${t.stage} ${t.duration}s`).join(' | ')
+    if (stages) addLog(stages)
     updateState.finishedAt = now()
     updateState.running = false
   } catch (e) {
     const totalDt = ((Date.now() - tTotal) / 1000).toFixed(1)
     const errMsg = e instanceof Error ? e.message : String(e)
     const errStack = e instanceof Error ? e.stack : ''
-    addLog(`############################################################`, 'ERROR')
-    addLog(`#              ===== 更新失败 =====`, 'ERROR')
-    addLog(`############################################################`, 'ERROR')
-    addLog(`错误信息: ${errMsg}`, 'ERROR')
+    addLog(`===== 更新失败 | 已耗时 ${totalDt}s =====`, 'ERROR')
+    addLog(`错误: ${errMsg}`, 'ERROR')
     if (errStack) {
-      addLog(`错误堆栈:`, 'ERROR')
-      errStack.split('\n').slice(0, 10).forEach(line => addLog(`  ${line}`, 'ERROR'))
+      errStack.split('\n').slice(0, 5).forEach(line => addLog(`  ${line}`, 'ERROR'))
     }
-    addLog(`失败时已耗时: ${totalDt}s`, 'ERROR')
     if (stageTimings.length > 0) {
-      addLog(`已完成阶段:`, 'ERROR')
-      for (const t of stageTimings) {
-        addLog(`  ${t.stage}: ${t.duration}s`, 'ERROR')
-      }
+      addLog(`已完成: ${stageTimings.map(t => `${t.stage} ${t.duration}s`).join(' | ')}`, 'ERROR')
     }
-    addLog(`############################################################`, 'ERROR')
     updateState.stage = 'error'
     updateState.stageText = STAGE_TEXT.error
     updateState.progress = `失败: ${errMsg}`
