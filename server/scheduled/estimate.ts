@@ -3,7 +3,7 @@
  * 功能：
  * - 9:25-16:00: 采集分时估值数据
  * - 18:00-23:30: 采集非QDII基金最终涨幅值（从历史净值接口）
- * - 20:00-23:30: 采集QDII基金最终涨幅值（QDII净值延迟发布）
+ * - 19:30-23:30: 采集QDII基金最终涨幅值（QDII净值延迟发布）
  * - 获取到最终净值后调用 settlement.ts 触发结算
  */
 
@@ -81,7 +81,7 @@ function isInQDIIFinalTime(): boolean {
   const now = new Date()
   const hour = now.getHours()
   const currentTime = hour * 60 + now.getMinutes()
-  return currentTime >= 20 * 60 && currentTime <= 23 * 60 + 59
+  return currentTime >= 19 * 60 + 30 && currentTime <= 23 * 60 + 59
 }
 
 function getRecordTimePoint(hasOpenPoint: boolean): string | null {
@@ -372,7 +372,7 @@ async function fetchFinalData(codes: string[]): Promise<void> {
     const isQDII = isQDIIFund(code)
     const estOnly = isEstimateOnlyFund(code)
     if (isQDII && !estOnly && !qdiiFinalTimeReady) {
-      logger.log(`🌍 ${code} QDII基金，20:00后才开始获取最终净值 (当前${new Date().toLocaleTimeString()})`)
+      logger.log(`🌍 ${code} QDII基金，19:30后才开始获取最终净值 (当前${new Date().toLocaleTimeString()})`)
       continue
     }
 
