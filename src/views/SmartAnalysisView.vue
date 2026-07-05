@@ -49,13 +49,27 @@
           </div>
           <div class="search-box">
             <svg class="s-icon" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            <input v-model="singleKeyword" placeholder="输入基金代码或名称搜索..." @input="handleSingleSearch" @keydown.enter="handleSingleLookup" class="s-input" />
+            <input v-model="singleKeyword" placeholder="输入基金代码或名称搜索..." @input="handleSingleSearch" @keydown.enter="handleSingleLookup" @focus="singleInputFocused = true" @blur="singleInputFocused = false" class="s-input" />
             <button v-if="singleKeyword && !singleLookupLoading" class="s-lookup-btn" @click="handleSingleLookup" title="精确查询">
               <svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
             <button v-if="singleKeyword" @click="singleKeyword=''; singleResults=[]; singleErrorMsg=''" class="s-clear">
               <svg viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             </button>
+          </div>
+          <div v-if="singleInputFocused && !singleKeyword.trim() && fundHistory.length > 0" class="dropdown history-dropdown">
+            <div class="dd-head">
+              <span>最近查询</span>
+              <button class="dd-clear" @mousedown.prevent="clearFundHistory">清除</button>
+            </div>
+            <div v-for="item in fundHistory" :key="item.code" class="dd-item" @mousedown.prevent="pickSingleHistory(item)">
+              <div class="dd-info">
+                <span class="dd-name">{{ item.name }}</span>
+                <span class="dd-code">{{ item.code }}</span>
+                <span class="dd-type" v-if="item.type">{{ item.type }}</span>
+              </div>
+              <span class="dd-action">选择</span>
+            </div>
           </div>
           <div v-if="singleSearching || singleLookupLoading" class="search-hint"><div class="spinner-xs"></div> 搜索中...</div>
           <div v-else-if="singleResults.length > 0" class="dropdown">
@@ -155,10 +169,24 @@
 
           <div v-if="cmpInputMode === 'search'" class="search-box">
             <svg class="s-icon" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            <input v-model="cmpKeyword" placeholder="搜索基金代码或名称..." @input="handleCmpSearch" class="s-input" />
+            <input v-model="cmpKeyword" placeholder="搜索基金代码或名称..." @input="handleCmpSearch" @focus="cmpInputFocused = true" @blur="cmpInputFocused = false" class="s-input" />
             <button v-if="cmpKeyword" @click="cmpKeyword=''; cmpResults=[]" class="s-clear">
               <svg viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             </button>
+          </div>
+          <div v-if="cmpInputFocused && !cmpKeyword.trim() && fundHistory.length > 0" class="dropdown history-dropdown">
+            <div class="dd-head">
+              <span>最近查询</span>
+              <button class="dd-clear" @mousedown.prevent="clearFundHistory">清除</button>
+            </div>
+            <div v-for="item in fundHistory" :key="item.code" class="dd-item" @mousedown.prevent="pickCmpHistory(item)">
+              <div class="dd-info">
+                <span class="dd-name">{{ item.name }}</span>
+                <span class="dd-code">{{ item.code }}</span>
+                <span class="dd-type" v-if="item.type">{{ item.type }}</span>
+              </div>
+              <span class="dd-action">{{ isCmpAdded(item.code) ? '已添加' : '+ 添加' }}</span>
+            </div>
           </div>
           <div v-else class="batch-area">
             <textarea v-model="batchInput" class="batch-input" placeholder="输入基金代码，支持空格、逗号或换行分隔&#10;例如：000001 000002 000003&#10;或每行一个代码" rows="3"></textarea>
@@ -266,12 +294,25 @@
           </div>
           <div class="search-box">
             <svg class="s-icon" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            <input v-model="stockKeyword" placeholder="输入6位股票代码，如 600519..." @keydown.enter="handleStockLookup" class="s-input stock-input" maxlength="6" />
+            <input v-model="stockKeyword" placeholder="输入6位股票代码，如 600519..." @keydown.enter="handleStockLookup" @focus="stockInputFocused = true" @blur="stockInputFocused = false" class="s-input stock-input" maxlength="6" />
             <button v-if="stockKeyword" @click="stockKeyword=''; stockLookupResult=null; stockErrorMsg=''; stockLookupLoading=false" class="s-clear">
               <svg viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             </button>
           </div>
           <div v-if="stockLookupLoading" class="search-hint"><div class="spinner-xs"></div> 查询中...</div>
+          <div v-if="stockHistoryVisible.length > 0" class="dropdown history-dropdown">
+            <div class="dd-head">
+              <span>最近查询</span>
+              <button class="dd-clear" @mousedown.prevent="clearStockHistory">清除</button>
+            </div>
+            <div v-for="item in stockHistoryVisible" :key="item.code" class="dd-item" @mousedown.prevent="pickStockHistory(item)">
+              <div class="dd-info">
+                <span class="dd-name">{{ item.name }}</span>
+                <span class="dd-code">{{ item.code }}</span>
+              </div>
+              <span class="dd-action">查询</span>
+            </div>
+          </div>
           <div v-if="stockLookupResult && stockLookupResult.found" class="stock-info-panel">
             <div class="sip-row">
               <div class="sip-left">
@@ -303,6 +344,31 @@
                 <span class="sip-item-label">总股本</span>
                 <span class="sip-item-value">{{ stockLookupResult.totalShares >= 10000 ? (stockLookupResult.totalShares / 10000).toFixed(2) + '亿' : stockLookupResult.totalShares.toFixed(0) + '万' }}</span>
               </div>
+              <button class="sip-help-trigger" :class="{ active: showPEPBHint }" @click="showPEPBHint = !showPEPBHint" title="PE/PB 估值参考" aria-label="PE/PB 估值参考说明">
+                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v5M12 7.5h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+            <div v-if="showPEPBHint" class="sip-help-backdrop" @click="showPEPBHint = false"></div>
+            <div v-if="showPEPBHint" class="sip-help-popover">
+              <div class="sphp-head">
+                <span>估值指标参考</span>
+                <button class="sphp-close" @click="showPEPBHint = false">&#x2715;</button>
+              </div>
+              <div class="sphp-section">
+                <div class="sphp-title">PE 市盈率（股价 ÷ 每股收益）</div>
+                <div class="sphp-row"><span class="sphp-range">&lt; 15</span><span class="sphp-desc">低估 / 增速慢（银行、地产）</span></div>
+                <div class="sphp-row"><span class="sphp-range">15 – 25</span><span class="sphp-desc">合理区间</span></div>
+                <div class="sphp-row"><span class="sphp-range">25 – 40</span><span class="sphp-desc">高成长（科技、医药）</span></div>
+                <div class="sphp-row"><span class="sphp-range">&gt; 50</span><span class="sphp-desc">泡沫风险，谨慎</span></div>
+              </div>
+              <div class="sphp-section">
+                <div class="sphp-title">PB 市净率（股价 ÷ 每股净资产）</div>
+                <div class="sphp-row"><span class="sphp-range">&lt; 1</span><span class="sphp-desc">破净，可能低估</span></div>
+                <div class="sphp-row"><span class="sphp-range">1 – 2</span><span class="sphp-desc">合理（重资产）</span></div>
+                <div class="sphp-row"><span class="sphp-range">2 – 5</span><span class="sphp-desc">轻资产 / 品牌溢价</span></div>
+                <div class="sphp-row"><span class="sphp-range">&gt; 8</span><span class="sphp-desc">估值偏高</span></div>
+              </div>
+              <div class="sphp-tip">需结合行业、增速、ROE 综合判断；PEG &lt; 1 偏低估。仅供参考，不构成投资建议。</div>
             </div>
           </div>
           <div class="action-row center" style="padding-top: 8px;">
@@ -617,6 +683,74 @@ const stockDebateRound = ref(0)
 const stockRiskRound = ref(0)
 const stockReportUrl = ref('')
 const stockReportId = ref<number | null>(null)
+const showPEPBHint = ref(false)
+
+// --- Stock search history (最近10个) ---
+const STOCK_HISTORY_KEY = 'stock_search_history'
+const stockHistory = ref<Array<{ code: string; name: string }>>([])
+const stockInputFocused = ref(false)
+
+const stockHistoryVisible = computed(() => {
+  if (!stockInputFocused.value || stockLookupLoading.value) return []
+  const kw = stockKeyword.value.trim()
+  if (!kw) return stockHistory.value
+  return stockHistory.value.filter(it => it.code.startsWith(kw) || it.name.includes(kw))
+})
+
+function loadStockHistory() {
+  try {
+    const raw = localStorage.getItem(STOCK_HISTORY_KEY)
+    if (raw) stockHistory.value = JSON.parse(raw)
+  } catch { stockHistory.value = [] }
+}
+function addStockHistory(code: string, name: string) {
+  if (!code) return
+  const list = stockHistory.value.filter(it => it.code !== code)
+  list.unshift({ code, name: name || code })
+  stockHistory.value = list.slice(0, 10)
+  try { localStorage.setItem(STOCK_HISTORY_KEY, JSON.stringify(stockHistory.value)) } catch { /* */ }
+}
+function clearStockHistory() {
+  stockHistory.value = []
+  try { localStorage.removeItem(STOCK_HISTORY_KEY) } catch { /* */ }
+}
+function pickStockHistory(item: { code: string; name: string }) {
+  stockKeyword.value = item.code
+  stockInputFocused.value = false
+  handleStockLookup()
+}
+
+// --- Fund search history (最近10个, 单基金与对比共享) ---
+const FUND_HISTORY_KEY = 'fund_search_history'
+const fundHistory = ref<Array<{ code: string; name: string; type: string }>>([])
+const singleInputFocused = ref(false)
+const cmpInputFocused = ref(false)
+
+function loadFundHistory() {
+  try {
+    const raw = localStorage.getItem(FUND_HISTORY_KEY)
+    if (raw) fundHistory.value = JSON.parse(raw)
+  } catch { fundHistory.value = [] }
+}
+function addFundHistory(code: string, name: string, type?: string) {
+  if (!code) return
+  const list = fundHistory.value.filter(it => it.code !== code)
+  list.unshift({ code, name: name || code, type: type || '' })
+  fundHistory.value = list.slice(0, 10)
+  try { localStorage.setItem(FUND_HISTORY_KEY, JSON.stringify(fundHistory.value)) } catch { /* */ }
+}
+function clearFundHistory() {
+  fundHistory.value = []
+  try { localStorage.removeItem(FUND_HISTORY_KEY) } catch { /* */ }
+}
+function pickSingleHistory(item: { code: string; name: string; type: string }) {
+  singleInputFocused.value = false
+  selectSingleFund({ code: item.code, name: item.name, type: item.type || '', pinyin: '' })
+}
+function pickCmpHistory(item: { code: string; name: string; type: string }) {
+  cmpInputFocused.value = false
+  addCompareFund({ code: item.code, name: item.name, type: item.type || '', pinyin: '' })
+}
 
 const COLORS = ['#2563EB', '#DC2626', '#7C3AED', '#059669', '#D97706', '#0891B2']
 
@@ -707,6 +841,8 @@ onMounted(async () => {
   try { usage.value = await getAnalysisUsage() } catch { /* */ }
   usageLoaded.value = true
 
+  loadStockHistory()
+  loadFundHistory()
   const cache = loadCache()
   if (cache) {
     activeTab.value = cache.activeTab
@@ -791,6 +927,7 @@ function handleCmpSearch() { debounceSearch(cmpKeyword.value, v => cmpResults.va
 
 function selectSingleFund(r: SearchResult) {
   singleFund.value = r; singleResults.value = []; singleKeyword.value = ''
+  addFundHistory(r.code, r.name, r.type)
   loadSingleChart(r.code)
 }
 
@@ -806,6 +943,7 @@ async function handleSingleLookup() {
       singleFund.value = { code: r.code, name: r.name, type: r.type, pinyin: '' }
       singleResults.value = []
       singleKeyword.value = ''
+      addFundHistory(r.code, r.name, r.type)
       loadSingleChart(r.code)
     } else {
       singleErrorMsg.value = `未找到基金 ${code}`
@@ -951,6 +1089,7 @@ function isCmpAdded(code: string) { return cmpFunds.value.some(f => f.code === c
 function addCompareFund(r: SearchResult) {
   if (!isCmpAdded(r.code) && cmpFunds.value.length < 6) {
     cmpFunds.value.push(r)
+    addFundHistory(r.code, r.name, r.type)
   }
 }
 
@@ -1211,6 +1350,8 @@ async function handleStockLookup() {
     stockLookupResult.value = result
     if (!result.found) {
       stockErrorMsg.value = `未找到股票 ${code}，请确认代码是否正确`
+    } else {
+      addStockHistory(result.code ?? code, result.name ?? '')
     }
   } catch {
     stockErrorMsg.value = '查询失败，请检查网络'
@@ -1241,6 +1382,8 @@ async function confirmStockAnalysis() {
       stockErrorMsg.value = `未找到股票 ${code}，请确认代码是否正确`
       stockLookupLoading.value = false
       return
+    } else {
+      addStockHistory(result.code ?? code, result.name ?? '')
     }
   } catch {
     stockErrorMsg.value = '查询失败，请检查网络后重试'
@@ -1475,6 +1618,13 @@ async function doCopy(text: string) {
 .dd-type { font-size: 10px; color: #E11D48; font-weight: 500; }
 .dd-action { font-size: 12px; color: #E11D48; font-weight: 500; }
 .dd-action.picked { color: #94A3B8; }
+.history-dropdown .dd-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 14px; background: #F8FAFC; border-bottom: 1px solid #F1F5F9;
+  font-size: 11px; color: #94A3B8; font-weight: 600; letter-spacing: 0.02em;
+}
+.dd-clear { background: none; border: none; cursor: pointer; font-size: 11px; color: #94A3B8; padding: 0; }
+.dd-clear:hover { color: #E11D48; }
 
 .no-result {
   display: flex; align-items: center; justify-content: center; gap: 4px;
@@ -1694,7 +1844,8 @@ async function doCopy(text: string) {
 
 /* Stock Analysis */
 .stock-info-panel {
-  margin: 10px 18px 0; border-radius: 12px; overflow: hidden;
+  position: relative;
+  margin: 10px 18px 0; border-radius: 12px;
   background: linear-gradient(135deg, #FFFBFB 0%, #FFF1F2 55%, #FFE4E6 100%);
   border: 1px solid #FDA4AF;
   box-shadow: 0 2px 12px rgba(225,29,72,0.06);
@@ -1721,9 +1872,41 @@ async function doCopy(text: string) {
   flex: 1; text-align: center; padding: 0 8px;
   border-right: 1px solid rgba(251,113,133,0.15);
 }
-.sip-item:last-child { border-right: none; }
+.sip-item:last-of-type { border-right: none; }
 .sip-item-label { display: block; font-size: 10px; color: #94A3B8; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.03em; }
 .sip-item-value { display: block; font-size: 14px; font-weight: 700; color: #0F172A; }
+
+/* PE/PB help trigger + popover */
+.sip-help-trigger {
+  flex: 0 0 auto; align-self: center; margin-left: 2px;
+  width: 22px; height: 22px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(159,18,57,0.08); border: none; border-radius: 50%;
+  color: #BE123C; cursor: pointer; transition: all 0.15s;
+}
+.sip-help-trigger:hover { background: rgba(159,18,57,0.18); }
+.sip-help-trigger.active { background: #9F1239; color: #fff; }
+.sip-help-trigger svg { width: 14px; height: 14px; display: block; }
+.sip-help-backdrop { position: fixed; inset: 0; z-index: 998; background: transparent; }
+.sip-help-popover {
+  position: absolute; right: 10px; top: calc(100% + 8px); z-index: 999;
+  width: 290px; max-width: calc(100vw - 36px);
+  background: #fff; border: 1px solid #E2E8F0; border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(15,23,42,0.18);
+  padding: 14px 14px 12px; font-size: 12px; color: #334155;
+  animation: sipPopIn 0.16s ease-out;
+}
+@keyframes sipPopIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+.sphp-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-weight: 700; color: #0F172A; font-size: 13px; }
+.sphp-close { background: none; border: none; color: #94A3B8; cursor: pointer; font-size: 13px; line-height: 1; padding: 2px; }
+.sphp-close:hover { color: #475569; }
+.sphp-section { margin-bottom: 10px; }
+.sphp-section:last-of-type { margin-bottom: 8px; }
+.sphp-title { font-weight: 600; color: #9F1239; margin-bottom: 6px; font-size: 12px; }
+.sphp-row { display: flex; align-items: baseline; gap: 8px; padding: 2px 0; }
+.sphp-range { flex: 0 0 58px; font-weight: 700; color: #2563EB; font-variant-numeric: tabular-nums; }
+.sphp-desc { color: #475569; line-height: 1.4; }
+.sphp-tip { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #E2E8F0; font-size: 11px; color: #94A3B8; line-height: 1.5; }
 
 /* Pipeline Flow */
 .pipeline-flow { padding: 20px 18px 16px; }
