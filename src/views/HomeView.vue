@@ -1006,7 +1006,7 @@ function handleClearCache() {
 }
 
 .header-content {
-  max-width: 1200px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 0 20px;
   display: flex;
@@ -1175,7 +1175,7 @@ function handleClearCache() {
 }
 
 .container {
-  max-width: 1200px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 24px 20px;
 }
