@@ -533,12 +533,12 @@ async function fetchStockInfoFromTencent(code: string): Promise<StockInfo | null
       return isNaN(v) ? 0 : v
     }
 
-    // qt.gtimg.cn field mapping (split by '~'):
-    // [1]=name  [3]=price  [4]=prevClose  [31]=change%  [32]=high  [33]=low
-    // [37]=PE(TTM)  [42]=totalMktCap(亿)  [43]=PB
-    const pe = safeFloat(37)
-    const pb = safeFloat(43)
-    const marketCap = safeFloat(42) // 亿元
+    // qt.gtimg.cn field mapping (split by '~'), verified against eastmoney for multiple stocks:
+    // [1]=name  [3]=price  [4]=prevClose  [31]=涨跌额  [32]=涨跌幅%  [33]=high  [34]=low
+    // [37]=成交额(万元, 不是 PE!)  [38]=换手率%  [39]=PE(TTM)  [44]=流通市值(亿)  [45]=总市值(亿)  [46]=PB
+    const pe = safeFloat(39)
+    const pb = safeFloat(46)
+    const marketCap = safeFloat(45) // 总市值(亿元)
     // Derive total shares from market cap and price: 总股本(万) = 市值(亿)*10000 / 价格(元)
     const totalShares = marketCap > 0 && price > 0 ? +(marketCap * 10000 / price).toFixed(0) : 0
 

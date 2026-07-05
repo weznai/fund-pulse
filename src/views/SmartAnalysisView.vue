@@ -294,7 +294,7 @@
           </div>
           <div class="search-box">
             <svg class="s-icon" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            <input v-model="stockKeyword" placeholder="输入6位股票代码，如 600519..." @keydown.enter="handleStockLookup" @focus="stockInputFocused = true" @blur="stockInputFocused = false" class="s-input stock-input" maxlength="6" />
+            <input v-model="stockKeyword" placeholder="输入6位股票代码，如 600183..." @keydown.enter="handleStockLookup" @focus="stockInputFocused = true" @blur="stockInputFocused = false" class="s-input stock-input" maxlength="6" />
             <button v-if="stockKeyword" @click="stockKeyword=''; stockLookupResult=null; stockErrorMsg=''; stockLookupLoading=false" class="s-clear">
               <svg viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             </button>
