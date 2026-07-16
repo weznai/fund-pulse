@@ -7,6 +7,7 @@ import { isTradingTime, fetchEstimateDataForCodes } from '../scheduled/estimate.
 import { checkTradingDay } from '../services/holidayService.js'
 import { fetchFundData, fetchFundsBatch } from '../services/fundService.js'
 import { getClientIp } from '../services/statsService.js'
+import { fetchFinalNavFromMobApi } from '../external/eastmoney.js'
 
 const router = Router()
 
@@ -344,76 +345,15 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
       logger.log('天天基金估值接口失败:', gzError.message)
     }
 
-    try {
-      const historyUrl = `https://fundf10.eastmoney.com/F10DataApi.aspx?type=lsjz&code=${code}&page=1&per=2`
-      const historyResponse = await axios.get(historyUrl, {
-        headers: { 'Referer': 'https://fund.eastmoney.com/' },
-        timeout: 5000
-      })
-
-      const dataStr = historyResponse.data || ''
-      const contentMatch = dataStr.match(/content:\s*"([^"]+)"/s)
-
-      if (contentMatch && contentMatch[1]) {
-        const content = contentMatch[1].replace(/\\'/g, "'").replace(/\\"/g, '"')
-        const rowMatches = content.match(/<tr[\s\S]*?<\/tr>/gi) || []
-        const dataRows = rowMatches.filter(r => /<td[^>]*>/i.test(r))
-
-        if (dataRows.length >= 2) {
-          const getText = (td: string) => td.replace(/<[^>]+>/g, '').trim()
-
-          const cells0 = dataRows[0].match(/<td[^>]*>[\s\S]*?<\/td>/gi) || []
-          const cells1 = dataRows[1].match(/<td[^>]*>[\s\S]*?<\/td>/gi) || []
-
-          if (cells0.length >= 4 && cells1.length >= 4) {
-            const nav0 = parseFloat(getText(cells1[1])) || 0
-            const nav1 = parseFloat(getText(cells0[1])) || 0
-
-            if (nav0 > 0 && nav1 > 0) {
-              const dayGrowth = ((nav1 - nav0) / nav0) * 100
-              logger.log(`📈 历史净值 ${fundName}(${code}): nav=${nav1}, dayGrowth=${dayGrowth.toFixed(2)}%, 无分时数据`)
-            }
-          }
-        }
-      }
-    } catch (historyError: any) {
-      logger.log('历史净值接口失败:', historyError.message)
-    }
-
     if (isQDII) {
       try {
-        const lsjzUrl = `https://fundf10.eastmoney.com/F10DataApi.aspx?type=lsjz&code=${code}&page=1&per=2`
-        const lsjzResponse = await axios.get(lsjzUrl, {
-          headers: { 'Referer': 'https://fund.eastmoney.com/' },
-          timeout: 5000
-        })
-        const lsjzStr = lsjzResponse.data || ''
-        const lsjzContentMatch = lsjzStr.match(/content:\s*"(.+?)"/s)
-        if (lsjzContentMatch && lsjzContentMatch[1]) {
-          const lsjzContent = lsjzContentMatch[1].replace(/\\'/g, "'").replace(/\\"/g, '"')
-          const lsjzRows = lsjzContent.match(/<tr[\s\S]*?<\/tr>/gi) || []
-          const dataRows = lsjzRows.filter(r => /<td[^>]*>/i.test(r))
-          if (dataRows.length >= 2) {
-            const getText = (td: string) => td.replace(/<[^>]+>/g, '').trim()
-            const r0Cells = dataRows[0].match(/<td[^>]*>[\s\S]*?<\/td>/gi) || []
-            const r1Cells = dataRows[1].match(/<td[^>]*>[\s\S]*?<\/td>/gi) || []
-            if (r0Cells.length >= 4 && r1Cells.length >= 4) {
-              const dateStr = getText(r0Cells[0] || '')
-              const nav = parseFloat(getText(r0Cells[1] || '')) || 0
-              const prevNav = parseFloat(getText(r1Cells[1] || '')) || 0
-              const growthText = getText(r0Cells[3] || '')
-              const growthMatch = growthText.match(/([-+]?\d+(?:\.\d+)?)\s*%/)
-              const dayGrowth = growthMatch ? parseFloat(growthMatch[1]) : (prevNav > 0 ? ((nav - prevNav) / prevNav) * 100 : 0)
-
-              if (nav > 0) {
-                logger.log(`🌍 QDII基金获取最新净值 ${fundName}(${code}): nav=${nav.toFixed(4)}, growth=${dayGrowth.toFixed(2)}%, 净值日期=${dateStr}`)
-                return res.json({ data: [], date: dateStr, isHistory: true, isUpdated: true, finalNav: nav, finalGrowth: dayGrowth, isQDII })
-              }
-            }
-          }
+        const mobNav = await fetchFinalNavFromMobApi(code)
+        if (mobNav && mobNav.nav > 0) {
+          logger.log(`🌍 QDII基金获取最新净值 ${fundName}(${code}): nav=${mobNav.nav.toFixed(4)}, growth=${mobNav.growth.toFixed(2)}%, 净值日期=${mobNav.date}`)
+          return res.json({ data: [], date: mobNav.date, isHistory: true, isUpdated: true, finalNav: mobNav.nav, finalGrowth: mobNav.growth, isQDII })
         }
       } catch (qdiiError: any) {
-        logger.log('QDII历史净值获取失败:', qdiiError.message)
+        logger.log('QDII MobAPI获取失败:', qdiiError.message)
       }
 
       const latestCached = getLatestGlobalEstimateCache(code, today)

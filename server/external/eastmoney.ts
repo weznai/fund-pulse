@@ -330,6 +330,13 @@ export interface MobApiNavData {
   nav: number
   growth: number
   date: string
+  accNav?: number
+}
+
+const nonFundCodes = new Set<string>()
+
+export function isKnownNonFund(code: string): boolean {
+  return nonFundCodes.has(code)
 }
 
 export async function fetchFinalNavFromMobApi(code: string): Promise<MobApiNavData | null> {
@@ -352,13 +359,20 @@ export async function fetchFinalNavFromMobApi(code: string): Promise<MobApiNavDa
 
     const datas = response.data?.Datas
     if (!datas || !Array.isArray(datas) || datas.length === 0) {
-      logger.error(`[MobAPI] ${code} no datas:`, JSON.stringify(response.data).substring(0, 200))
+      // Success=true 但 Datas=null：确认不是基金代码（股票/不存在），标记后避免反复请求
+      if (response.data?.Success) {
+        nonFundCodes.add(code)
+        logger.log(`[MobAPI] ${code} 非基金代码，已标记跳过`)
+      } else {
+        logger.error(`[MobAPI] ${code} no datas:`, JSON.stringify(response.data).substring(0, 200))
+      }
       return null
     }
 
     const item = datas[0]
     const nav = parseFloat(item.NAV) || 0
     const growth = parseFloat(item.NAVCHGRT) || 0
+    const accNav = parseFloat(item.ACCNAV) || 0
     const date = item.PDATE || ''
 
     if (nav <= 0 || !date) {
@@ -367,7 +381,7 @@ export async function fetchFinalNavFromMobApi(code: string): Promise<MobApiNavDa
     }
 
     logger.log(`[MobAPI] ${code}: nav=${nav}, growth=${growth}, date=${date}`)
-    return { nav, growth, date }
+    return { nav, growth, date, accNav: accNav > 0 ? accNav : undefined }
   } catch (error) {
     logger.error(`[MobAPI] ${code} fetch error:`, error instanceof Error ? error.message : error)
     return null

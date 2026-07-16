@@ -33,7 +33,7 @@ import {
 } from '../db.js'
 import { checkTradingDay } from '../services/holidayService.js'
 import { settleFundForAllUsers } from './settlement.js'
-import { fetchFinalNavFromMobApi } from '../external/eastmoney.js'
+import { fetchFinalNavFromMobApi, isKnownNonFund } from '../external/eastmoney.js'
 
 let stopScheduledFetchTimer: (() => void) | null = null
 
@@ -297,6 +297,7 @@ async function fetchFinalData(codes: string[]): Promise<void> {
   const codesToSettleOnly: string[] = []
 
   for (const code of codes) {
+    if (isKnownNonFund(code)) continue
     const isQDII = isQDIIFund(code)
     const estOnly = isEstimateOnlyFund(code)
     if (isQDII && !estOnly && !qdiiFinalTimeReady) {

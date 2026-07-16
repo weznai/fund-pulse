@@ -13,6 +13,7 @@ import { checkTradingDay } from './holidayService.js'
 import { getLocalDate, getFundCache, saveFundCache, getGlobalEstimateCache, getFundInfo, FundInfo } from '../db/index.js'
 import type { FundCache } from '../../types/index.js'
 import { ExternalAPIError } from '../utils/errors.js'
+import { fetchFinalNavFromMobApi, isKnownNonFund } from '../external/eastmoney.js'
 
 // ==================== 缓存配置 ====================
 const ESTIMATE_CACHE_TTL = 5 * 60 * 1000  // 5分钟
@@ -74,62 +75,18 @@ async function fetchFundBasicInfoFromSearchApi(code: string): Promise<{ code: st
 }
 
 /**
- * 从历史净值接口获取基金数据
+ * 从 MobAPI 获取基金数据（历史净值接口 F10DataApi 已失效，统一改用移动端 MobAPI）
  */
 async function fetchFundFromLsjz(code: string): Promise<any | null> {
   try {
     const searchInfo = await fetchFundBasicInfoFromSearchApi(code)
     const fundName = searchInfo?.name || ''
 
-    const lsjzUrl = `https://fundf10.eastmoney.com/F10DataApi.aspx?type=lsjz&code=${code}&page=1&per=2&sdate=&edate=`
-    const lsjzResponse = await axios.get(lsjzUrl, {
-      headers: {
-        'Referer': 'https://fund.eastmoney.com/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      },
-      timeout: 8000
-    })
-
-    let content = ''
-    const dataStr = lsjzResponse.data || ''
-    const contentMatch = dataStr.match(/content:\s*"(.+?)"/s)
-    if (contentMatch && contentMatch[1]) {
-      content = contentMatch[1].replace(/\\'/g, "'").replace(/\\"/g, '"')
-    }
-
-    const rowMatches = content.match(/<tr[\s\S]*?<\/tr>/gi) || []
-    const dataRows = rowMatches.filter(r => /<td[^>]*>/i.test(r))
-
-    let latestNav = 0
-    let latestAccNav = 0
-    let latestDate = ''
-    let dayGrowth = 0
-
-    for (let i = 0; i < dataRows.length; i++) {
-      const row = dataRows[i]
-      const cells = row.match(/<td[^>]*>[\s\S]*?<\/td>/gi) || []
-      if (cells.length < 4) continue
-
-      const getText = (td: string) => td.replace(/<[^>]+>/g, '').trim()
-      const dateStr = getText(cells[0] || '')
-
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) continue
-
-      const nav = parseFloat(getText(cells[1] || '')) || 0
-      const accNav = parseFloat(getText(cells[2] || '')) || nav
-
-      if (i === 0) {
-        latestNav = nav
-        latestAccNav = accNav
-        latestDate = dateStr
-        const growthCell = cells[3] || ''
-        const growthText = getText(growthCell)
-        const growthMatch = growthText.match(/([-+]?\d+(?:\.\d+)?)\s*%/)
-        if (growthMatch) {
-          dayGrowth = parseFloat(growthMatch[1])
-        }
-      }
-    }
+    const mobNav = await fetchFinalNavFromMobApi(code)
+    const latestNav = mobNav?.nav || 0
+    const dayGrowth = mobNav?.growth || 0
+    const latestDate = mobNav?.date || ''
+    const latestAccNav = mobNav?.accNav || latestNav
 
     if (latestNav === 0 && fundName === '') return null
 
@@ -149,10 +106,10 @@ async function fetchFundFromLsjz(code: string): Promise<any | null> {
     }
 
     saveFundCache(code, JSON.stringify(fundData))
-    logger.log(`基金 ${code} 通过历史净值接口获取成功: name=${fundName}, nav=${latestNav}`)
+    logger.log(`基金 ${code} 通过MobAPI获取成功: name=${fundName}, nav=${latestNav}`)
     return fundData
   } catch (error) {
-    logger.error(`基金 ${code} 历史净值接口获取失败:`, error)
+    logger.error(`基金 ${code} MobAPI获取失败:`, error)
     return null
   }
 }
@@ -167,6 +124,7 @@ function isQDIIFund(code: string): boolean {
 }
 
 async function fetchFundData(code: string, forceRefresh = false) {
+  if (isKnownNonFund(code)) return null
   const now = Date.now()
   const today = getLocalDate()
 
@@ -243,42 +201,12 @@ async function fetchFundData(code: string, forceRefresh = false) {
         jzrq: data.jzrq
       }
 
-      // 补充历史净值获取日涨跌幅
+      // 补充真实净值日涨跌幅（天天基金给的是估值涨幅，这里用 MobAPI 取真实净值涨幅）
       try {
-        const lsjzUrl = `https://fundf10.eastmoney.com/F10DataApi.aspx?type=lsjz&code=${code}&page=1&per=1&sdate=&edate=`
-        const lsjzResponse = await axios.get(lsjzUrl, {
-          headers: { 'Referer': 'https://fund.eastmoney.com/' },
-          timeout: 5000
-        })
-
-        let content = ''
-        const dataStr = lsjzResponse.data || ''
-        const contentMatch = dataStr.match(/content:\s*"(.+?)"/s)
-        if (contentMatch && contentMatch[1]) {
-          content = contentMatch[1].replace(/\\'/g, "'").replace(/\\"/g, '"')
-        }
-
-        const rowMatches = content.match(/<tr[\s\S]*?<\/tr>/gi) || []
-        const dataRows = rowMatches.filter(r => /<td[^>]*>/i.test(r))
-
-        for (const row of dataRows) {
-          const cells = row.match(/<td[^>]*>[\s\S]*?<\/td>/gi) || []
-          if (cells.length < 4) continue
-
-          const getText = (td: string) => td.replace(/<[^>]+>/g, '').trim()
-          const dateStr = getText(cells[0] || '')
-
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) continue
-
-          const growthCell = cells[3] || ''
-          const growthText = getText(growthCell)
-          const growthMatch = growthText.match(/([-+]?\d+(?:\.\d+)?)\s*%/)
-
-          if (growthMatch) {
-            fundData.dayGrowth = parseFloat(growthMatch[1])
-            fundData.jzrq = dateStr
-          }
-          break
+        const mobNav = await fetchFinalNavFromMobApi(code)
+        if (mobNav) {
+          fundData.dayGrowth = mobNav.growth
+          fundData.jzrq = mobNav.date
         }
       } catch (lsjzError) {
         logger.error(`获取历史净值失败 ${code}:`, lsjzError)

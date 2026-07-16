@@ -10,7 +10,7 @@ import {
   addUserFundsBatch, isFundInUserList, isFundHeld,
   getUserPreferences, saveUserPreferences,
   getHoldings, saveHolding, deleteHolding, saveHoldingsBatch,
-  getFundInfo, saveFundInfo, batchSaveFundInfo,
+  getFundInfo, saveFundInfo, batchSaveFundInfo, isStockCode,
   getTradingDay
 } from '../db/index.js'
 import { fetchFundDetailFromApi } from '../services/fundService.js'
@@ -149,6 +149,10 @@ router.post('/funds', async (req: Request, res: Response) => {
   try {
     const userId = ensureUserSession(req, res)
     const { fundCode, fundName } = req.body
+
+    if (isStockCode(fundCode)) {
+      return res.status(400).json({ error: '该代码为股票，仅支持添加基金' })
+    }
 
     const existing = getFundInfo(fundCode)
     if (!existing) {

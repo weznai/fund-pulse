@@ -117,7 +117,17 @@ export function getFundInfoList(options: {
   }
 }
 
+const stockCodePattern = /^(60[0135]|688|300|301)\d{3}$/
+
+export function isStockCode(code: string): boolean {
+  return stockCodePattern.test(code)
+}
+
 export function saveFundInfo(fund: Partial<FundInfo> & { code: string; name: string }, forceUpdate = false): boolean {
+  if (isStockCode(fund.code)) {
+    logger.log(`saveFundInfo 跳过: ${fund.code} 为股票代码，不录入基金库`)
+    return false
+  }
   const now = Date.now()
   const existing = getFundInfo(fund.code)
 

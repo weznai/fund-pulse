@@ -24,7 +24,7 @@ export type { ReqSource as DbReqSource, VisitLog, VisitStats, VisitLogFromDb, Vi
 export { getSystemParam, setSystemParam, deleteSystemParam, getAllSystemParams, setSystemParams } from './systemParam.js'
 export type { SystemParam } from './systemParam.js'
 
-export { getFundInfo, getFundInfoList, saveFundInfo, updateFundInfoField, updateFundInfoRecommend, getRecommendFundCodes, deleteFundInfo, batchSaveFundInfo, getAllFundInfoCodes } from './fundInfo.js'
+export { getFundInfo, getFundInfoList, saveFundInfo, updateFundInfoField, updateFundInfoRecommend, getRecommendFundCodes, deleteFundInfo, batchSaveFundInfo, getAllFundInfoCodes, isStockCode } from './fundInfo.js'
 export type { FundInfo, FundInfoListResult } from './fundInfo.js'
 
 export { getDailyProfit, getDailyProfitByDateRange, getLatestDailyProfit, upsertDailyProfitTimeshare, updateDailyProfitFinal, getDailyProfitSummaries } from './userDailyProfit.js'
