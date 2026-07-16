@@ -13,7 +13,6 @@ import {
   getLocalDate,
   getGlobalEstimateCache,
   getLatestGlobalEstimateCache,
-  saveGlobalEstimateCache,
   saveGlobalEstimateCacheBatch,
   getAllUserFundCodes,
   updateFinalGrowth,
@@ -204,77 +203,6 @@ async function fetchSingleEstimateFallback(code: string): Promise<{ nav: number;
   return null
 }
 
-async function fetchFinalNavFromHistory(code: string, today: string): Promise<{ nav: number; growth: number; date: string } | null> {
-  try {
-    const url = `https://fundf10.eastmoney.com/F10DataApi.aspx?type=lsjz&code=${code}&page=1&per=3`
-    const response = await axios.get(url, {
-      headers: { 'Referer': 'https://fund.eastmoney.com/' },
-      timeout: 5000
-    })
-
-    const dataStr = response.data || ''
-    const contentMatch = dataStr.match(/content:\s*"(.+?)"/s)
-    if (!contentMatch || !contentMatch[1]) return null
-
-    const content = contentMatch[1].replace(/\\'/g, "'").replace(/\\"/g, '"')
-    const rowMatches = content.match(/<tr[\s\S]*?<\/tr>/gi) || []
-    const dataRows = rowMatches.filter(r => /<td[^>]*>/i.test(r))
-
-    const latestResult = { nav: 0, growth: 0, date: '' }
-
-    for (const row of dataRows) {
-      const cells = row.match(/<td[^>]*>[\s\S]*?<\/td>/gi) || []
-      if (cells.length < 4) continue
-
-      const getText = (td: string) => td.replace(/<[^>]+>/g, '').trim()
-      const dateStr = getText(cells[0] || '')
-
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) continue
-
-      const nav = parseFloat(getText(cells[1] || '')) || 0
-      const growthText = getText(cells[3] || '')
-      const growthMatch = growthText.match(/([-+]?\d+(?:\.\d+)?)\s*%/)
-
-      if (nav > 0 && growthMatch) {
-        const growth = parseFloat(growthMatch[1])
-
-        if (!latestResult.date) {
-          latestResult.nav = nav
-          latestResult.growth = growth
-          latestResult.date = dateStr
-        }
-
-        if (dateStr === today) {
-          return { nav, growth, date: dateStr }
-        }
-      }
-    }
-
-    if (isQDIIFund(code) && latestResult.date) {
-      if (latestResult.date === today) {
-        return { nav: latestResult.nav, growth: latestResult.growth, date: latestResult.date }
-      }
-
-      if (isNavDateAlreadySettled(code, latestResult.date, latestResult.nav, latestResult.growth)) {
-        logger.log(`🌍 ${code} QDII基金净值 ${latestResult.date} (nav=${latestResult.nav}, growth=${latestResult.growth}%) 已在之前结算中使用，跳过`)
-        return null
-      }
-
-      const lastEntry = getLatestGlobalEstimateCache(code, today)
-      if (lastEntry && lastEntry.nav === latestResult.nav && lastEntry.dayGrowth === latestResult.growth) {
-        logger.log(`🌍 ${code} QDII基金最新净值 ${latestResult.date} 与最近记录完全一致，海外休市，跳过`)
-        return null
-      }
-
-      logger.log(`🌍 ${code} QDII基金使用最新净值 (净值日期: ${latestResult.date}, 当天: ${today})`)
-      return { nav: latestResult.nav, growth: latestResult.growth, date: latestResult.date }
-    }
-  } catch (error) {
-    logger.log(`获取 ${code} 历史净值失败:`, error instanceof Error ? error.message : 'Unknown error')
-  }
-  return null
-}
-
 async function fetchEstimateData(codes: string[]): Promise<void> {
   const today = getLocalDate()
   const todayIsTradingDay = checkTradingDay(today)
@@ -408,29 +336,24 @@ async function fetchFinalData(codes: string[]): Promise<void> {
     const batchResults = await Promise.all(batch.map(async (code) => {
       try {
         const cached = getGlobalEstimateCache(code, today)
-        const estOnly = isEstimateOnlyFund(code)
+        const isQDII = isQDIIFund(code)
 
-        let finalData: { nav: number; growth: number; date: string } | null = null
+        const finalData = await fetchFinalNavFromMobApi(code)
+        if (!finalData) {
+          logger.log(`⚠️ ${code} MobAPI净值未获取，稍后重试`)
+          return null
+        }
 
-        if (estOnly) {
-          finalData = await fetchFinalNavFromMobApi(code)
-          if (!finalData) {
-            logger.log(`⚠️ ${code} MobAPI净值未更新，稍后重试`)
-            return null
-          }
-          logger.log(`📡 ${code} MobAPI: nav=${finalData.nav.toFixed(4)} growth=${finalData.growth.toFixed(2)}% (净值日: ${finalData.date})`)
-        } else {
-          finalData = await fetchFinalNavFromHistory(code, today)
-          if (!finalData) {
-            logger.log(`⚠️ ${code} 历史净值未更新，稍后重试`)
-            return null
-          }
+        // 非 QDII 基金净值日期必须是今天，否则视为未更新
+        if (!isQDII && finalData.date !== today) {
+          logger.log(`⏳ ${code} 净值日期 ${finalData.date} 非今天(非QDII)，等待更新后重试`)
+          return null
         }
 
         const lastEntry = getLatestGlobalEstimateCache(code, today)
         let effectiveGrowth = finalData.growth
 
-        if (!estOnly && isQDIIFund(code)) {
+        if (isQDII) {
           if (finalData.date !== today) {
             if (isNavDateAlreadySettled(code, finalData.date, finalData.nav, finalData.growth)) {
               logger.log(`🌍 ${code} QDII基金净值 ${finalData.date} 已被之前结算日使用，跳过本次结算`)
@@ -441,12 +364,7 @@ async function fetchFinalData(codes: string[]): Promise<void> {
               return null
             }
           }
-          logger.log(`🌍 ${code} QDII基金: 净值日=${finalData.date}, 东方财富涨幅=${finalData.growth.toFixed(2)}%`)
-        }
-
-        if (!estOnly && !isQDIIFund(code) && lastEntry && lastEntry.date !== finalData.date && lastEntry.nav === finalData.nav && lastEntry.dayGrowth === finalData.growth) {
-          effectiveGrowth = 0
-          logger.log(`🌍 ${code} 海外休市净值未变 (${finalData.date}, nav=${finalData.nav})，按涨跌幅0%结算`)
+          logger.log(`🌍 ${code} QDII基金: 净值日=${finalData.date}, 涨幅=${finalData.growth.toFixed(2)}%`)
         }
 
         let estimates: Array<{ time: string; value: number; percent: number }> = []
@@ -532,27 +450,21 @@ export async function fetchEstimateDataForCodes(codes: string[]): Promise<void> 
 
 export async function refreshFundToday(fundCode: string, targetDate?: string): Promise<{ success: boolean; message: string }> {
   const today = targetDate || getLocalDate()
-  const estOnly = isEstimateOnlyFund(fundCode)
+  const isQDII = isQDIIFund(fundCode)
 
-  let finalData: { nav: number; growth: number; date: string } | null = null
-
-  if (estOnly) {
-    finalData = await fetchFinalNavFromMobApi(fundCode)
-    if (!finalData) {
-      return { success: false, message: `${fundCode} MobAPI净值未更新，请稍后重试` }
-    }
-    logger.log(`📡 ${fundCode} MobAPI: nav=${finalData.nav.toFixed(4)} growth=${finalData.growth.toFixed(2)}%`)
-  } else {
-    finalData = await fetchFinalNavFromHistory(fundCode, today)
-    if (!finalData) {
-      return { success: false, message: `${fundCode} 历史净值未更新，请稍后重试` }
-    }
+  const finalData = await fetchFinalNavFromMobApi(fundCode)
+  if (!finalData) {
+    return { success: false, message: `${fundCode} MobAPI净值未获取，请稍后重试` }
   }
 
-  const isQDII = isQDIIFund(fundCode)
+  // 非 QDII 基金净值日期必须是目标结算日
+  if (!isQDII && finalData.date !== today) {
+    return { success: false, message: `${fundCode} 净值日期 ${finalData.date} 未更新到今天，请稍后重试` }
+  }
+
   let effectiveGrowth = finalData.growth
 
-  if (!estOnly && isQDII) {
+  if (isQDII) {
     if (finalData.date !== today) {
       const lastEntry = getLatestGlobalEstimateCache(fundCode, today)
       if (isNavDateAlreadySettled(fundCode, finalData.date, finalData.nav, finalData.growth)) {
@@ -562,7 +474,9 @@ export async function refreshFundToday(fundCode: string, targetDate?: string): P
         return { success: false, message: `${fundCode} QDII净值未更新，海外休市` }
       }
     }
-    logger.log(`🌍 ${fundCode} QDII: 净值日=${finalData.date}, 东方财富涨幅=${finalData.growth.toFixed(2)}%`)
+    logger.log(`🌍 ${fundCode} QDII: 净值日=${finalData.date}, 涨幅=${finalData.growth.toFixed(2)}%`)
+  } else {
+    logger.log(`📡 ${fundCode} MobAPI: nav=${finalData.nav.toFixed(4)} growth=${finalData.growth.toFixed(2)}% (净值日: ${finalData.date})`)
   }
 
   const cached = getGlobalEstimateCache(fundCode, today)
