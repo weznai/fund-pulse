@@ -138,7 +138,7 @@ async function fetchFundData(code: string, forceRefresh = false) {
             // QDII基金保留原始jzrq，不强制覆盖为今天
             logger.log(`基金 ${code} QDII缓存覆盖: gszzl=${parsed.gszzl}%, dayGrowth=${parsed.dayGrowth}%`)
           }
-          if (parsed.jzrq === today) {
+          if (parsed.jzrq === today && parsed.name) {
             return parsed
           }
         } catch (e) {}
@@ -151,7 +151,10 @@ async function fetchFundData(code: string, forceRefresh = false) {
     const cached = getFundCache(code, cacheTtl)
     if (cached) {
       try {
-        return JSON.parse(cached.data)
+        const parsed = JSON.parse(cached.data)
+        if (parsed.name) {
+          return parsed
+        }
       } catch (e) {
         logger.error('解析基金缓存数据失败:', e)
       }
