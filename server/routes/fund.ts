@@ -8,7 +8,7 @@ import { checkTradingDay } from '../services/holidayService.js'
 import { fetchFundData, fetchFundsBatch } from '../services/fundService.js'
 import { getClientIp } from '../services/statsService.js'
 import { fetchFinalNavFromMobApi } from '../external/eastmoney.js'
-import { fetchFundEstimateTimeseries, fetchFundEstimatePoint } from '../external/sina.js'
+import { fetchEstimateTimeseries, fetchFundEstimatePoint } from '../external/estimateSource.js'
 
 const router = Router()
 
@@ -229,7 +229,7 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
     }
 
     // 实时获取分时估值曲线（新浪 FdFundService，覆盖普通基金/QDII/ETF联接）
-    const estimate = await fetchFundEstimateTimeseries(code)
+    const estimate = await fetchEstimateTimeseries(code)
     if (estimate && estimate.timeseries.length > 0) {
       saveGlobalEstimateCache({
         code,

@@ -34,7 +34,7 @@ import {
 import { checkTradingDay } from '../services/holidayService.js'
 import { settleFundForAllUsers } from './settlement.js'
 import { fetchFinalNavFromMobApi, isKnownNonFund } from '../external/eastmoney.js'
-import { fetchFundEstimateTimeseries, fetchFundEstimatePoint } from '../external/sina.js'
+import { fetchEstimateTimeseries, fetchFundEstimatePoint } from '../external/estimateSource.js'
 
 let stopScheduledFetchTimer: (() => void) | null = null
 
@@ -91,7 +91,7 @@ function isInQDIIFinalTime(): boolean {
  * 返回标准化 { nav, gsz, gszzl, gztime } 结构。
  */
 async function fetchSingleEstimate(code: string): Promise<{ nav: number; gsz: number; gszzl: number; gztime: string } | null> {
-  const ts = await fetchFundEstimateTimeseries(code)
+  const ts = await fetchEstimateTimeseries(code)
   if (ts && ts.gsz > 0) {
     return { nav: ts.nav, gsz: ts.gsz, gszzl: ts.gszzl, gztime: ts.gztime }
   }
@@ -123,7 +123,7 @@ async function fetchEstimateData(codes: string[]): Promise<void> {
     const batchResults = await Promise.all(batch.map(async (code) => {
       try {
         const cached = getGlobalEstimateCache(code, today)
-        const ts = await fetchFundEstimateTimeseries(code)
+        const ts = await fetchEstimateTimeseries(code)
 
         // 分时曲线获取成功 → 全量替换 data
         if (ts && ts.timeseries.length > 0) {

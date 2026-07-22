@@ -12,7 +12,7 @@ import { checkTradingDay } from './holidayService.js'
 import { getLocalDate, getFundCache, saveFundCache, getGlobalEstimateCache, getFundInfo, FundInfo } from '../db/index.js'
 import type { FundCache } from '../../types/index.js'
 import { fetchFinalNavFromMobApi, isKnownNonFund } from '../external/eastmoney.js'
-import { fetchFundEstimatePoint } from '../external/sina.js'
+import { fetchFundEstimatePoint } from '../external/estimateSource.js'
 
 // ==================== 缓存配置 ====================
 const ESTIMATE_CACHE_TTL = 5 * 60 * 1000  // 5分钟

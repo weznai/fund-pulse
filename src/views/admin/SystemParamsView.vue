@@ -10,6 +10,20 @@
     </div>
 
     <div class="content-body" v-show="activeTab === 'params'">
+      <div class="source-switcher">
+        <span class="switcher-label">估值数据源</span>
+        <div class="switcher-btns">
+          <button
+            v-for="opt in estimateSourceOptions"
+            :key="opt.value"
+            :class="['switcher-btn', { active: currentEstimateSource === opt.value }]"
+            :title="opt.desc"
+            @click="switchEstimateSource(opt.value)"
+          >{{ opt.label }}</button>
+        </div>
+        <span class="switcher-desc">{{ estimateSourceOptions.find(o => o.value === currentEstimateSource)?.desc }}</span>
+      </div>
+
       <div class="params-section">
         <div class="section-header">
           <h3>参数列表</h3>
@@ -292,6 +306,36 @@ interface CalCell {
 }
 
 const activeTab = ref('params')
+
+const estimateSourceOptions = [
+  { value: 'auto', label: '自动', desc: '优先分时曲线，失败降级单点（推荐）' },
+  { value: 'sina', label: '分时曲线', desc: '强制新浪 FdFundService，不降级' },
+  { value: 'point', label: '单点模式', desc: '只用 fu_ 单点，适合 FdFundService 被限流的环境' }
+]
+const currentEstimateSource = ref('auto')
+
+async function loadEstimateSource() {
+  try {
+    const { data } = await axios.get('/api/admin/system-params/ESTIMATE_DATA_SOURCE')
+    currentEstimateSource.value = data.value
+  } catch {
+    currentEstimateSource.value = 'auto'
+  }
+}
+
+async function switchEstimateSource(value: string) {
+  if (currentEstimateSource.value === value) return
+  try {
+    await axios.post('/api/admin/system-params', {
+      key: 'ESTIMATE_DATA_SOURCE',
+      value,
+      remark: '估值数据源模式'
+    })
+    currentEstimateSource.value = value
+  } catch (error: any) {
+    alert(error.response?.data?.error || '切换失败')
+  }
+}
 
 const loading = ref(false)
 const params = ref<SystemParam[]>([])
@@ -603,6 +647,7 @@ watch(selectedYear, () => {
 
 onMounted(() => {
   loadParams()
+  loadEstimateSource()
   loadHolidayStats()
   loadHolidays()
 })
@@ -673,6 +718,58 @@ onMounted(() => {
   border-radius: 16px;
   padding: 24px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.source-switcher {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 16px 24px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.switcher-label {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1e293b;
+  white-space: nowrap;
+}
+
+.switcher-btns {
+  display: flex;
+  gap: 8px;
+}
+
+.switcher-btn {
+  padding: 6px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.switcher-btn:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.switcher-btn.active {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: #fff;
+}
+
+.switcher-desc {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-left: auto;
 }
 
 .params-section.compact {
