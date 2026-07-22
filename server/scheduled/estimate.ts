@@ -34,6 +34,7 @@ import {
 import { checkTradingDay } from '../services/holidayService.js'
 import { settleFundForAllUsers } from './settlement.js'
 import { fetchFinalNavFromMobApi, isKnownNonFund } from '../external/eastmoney.js'
+import { fetchFundEstimateTimeseries, fetchFundEstimatePoint } from '../external/sina.js'
 
 let stopScheduledFetchTimer: (() => void) | null = null
 
@@ -83,195 +84,82 @@ function isInQDIIFinalTime(): boolean {
   return currentTime >= 19 * 60 + 30 && currentTime <= 23 * 60 + 59
 }
 
-function getRecordTimePoint(hasOpenPoint: boolean): string | null {
-  const now = new Date()
-  const hour = now.getHours()
-  const minute = now.getMinutes()
-
-  const totalMinutes = hour * 60 + minute
-  const openTime = 9 * 60 + 25
-  const firstInterval = 9 * 60 + 30
-  const closeTime = 16 * 60
-
-  if (totalMinutes >= closeTime) {
-    return '16:00'
-  }
-
-  if (totalMinutes > 12 * 60 && totalMinutes < 13 * 60) {
-    return null
-  }
-
-  if (totalMinutes >= openTime && totalMinutes < firstInterval) {
-    return hasOpenPoint ? '09:30' : '09:25'
-  }
-
-  const roundedMinutes = Math.floor(totalMinutes / 5) * 5
-  const recordHour = Math.floor(roundedMinutes / 60)
-  const recordMinute = roundedMinutes % 60
-
-  return `${recordHour.toString().padStart(2, '0')}:${recordMinute.toString().padStart(2, '0')}`
-}
-
+/**
+ * 获取基金单点估值（用于盘前/盘后轻量校验）
+ *
+ * 优先用新浪 FdFundService 分时接口的最新点（数据最全），失败降级到 fu_ 单点接口。
+ * 返回标准化 { nav, gsz, gszzl, gztime } 结构。
+ */
 async function fetchSingleEstimate(code: string): Promise<{ nav: number; gsz: number; gszzl: number; gztime: string } | null> {
-  try {
-    const url = `https://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}`
-    const response = await axios.get(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
-      responseType: 'text',
-      timeout: 5000
-    })
-
-    const match = response.data.match(/jsonpgz\s*\(\s*(\{[\s\S]*?\})\s*\)/)
-    if (match && match[1]) {
-      const data = JSON.parse(match[1])
-      return {
-        nav: parseFloat(data.dwjz) || 0,
-        gsz: parseFloat(data.gsz) || 0,
-        gszzl: parseFloat(data.gszzl) || 0,
-        gztime: data.gztime || ''
-      }
-    }
-  } catch (error) {
-    logger.log(`获取 ${code} 估值失败:`, error instanceof Error ? error.message : 'Unknown error')
+  const ts = await fetchFundEstimateTimeseries(code)
+  if (ts && ts.gsz > 0) {
+    return { nav: ts.nav, gsz: ts.gsz, gszzl: ts.gszzl, gztime: ts.gztime }
+  }
+  const point = await fetchFundEstimatePoint(code)
+  if (point && point.gsz > 0) {
+    return point
   }
   return null
 }
 
-async function fetchSingleEstimateFallback(code: string): Promise<{ nav: number; gsz: number; gszzl: number; gztime: string; isEtfStock?: boolean } | null> {
-  try {
-    const fsUrls = [
-      `https://fund.eastmoney.com/tfsj_v1.0.0/fsdata_${code}.js`,
-      `https://fundf10.eastmoney.com/trend_${code}.js`,
-    ]
-    for (const url of fsUrls) {
-      try {
-        const fsResponse = await axios.get(url, {
-          headers: {
-            'Referer': 'https://fund.eastmoney.com/',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-          },
-          timeout: 8000,
-          responseType: 'text'
-        })
-        const jsContent = fsResponse.data || ''
-        const dataMatch = jsContent.match(new RegExp(`var\\s+fsdata_${code}\\s*=\\s*(\\{[\\s\\S]*?\\});`))
-        if (dataMatch && dataMatch[1]) {
-          const fundData = JSON.parse(dataMatch[1])
-          if (fundData.d && Array.isArray(fundData.d) && fundData.d.length > 0) {
-            const baseValue = fundData.d[0][1] || fundData.fsrq || 1
-            const lastPoint = fundData.d[fundData.d.length - 1]
-            if (Array.isArray(lastPoint) && lastPoint.length >= 2) {
-              const value = lastPoint[1]
-              const percent = baseValue > 0 ? ((value - baseValue) / baseValue) * 100 : 0
-              return {
-                nav: baseValue > 1 ? baseValue : value,
-                gsz: value,
-                gszzl: percent,
-                gztime: getLocalDate()
-              }
-            }
-          }
-        }
-      } catch (_e) { }
-    }
-  } catch (error) {
-    logger.log(`ETF ${code} 东方财富分时降级失败:`, error instanceof Error ? error.message : 'Unknown error')
-  }
-
-  try {
-    const sinaPrefix = code.startsWith('5') ? 'sh' : 'sz'
-    const sinaUrl = `https://hq.sinajs.cn/list=${sinaPrefix}${code}`
-    const response = await axios.get(sinaUrl, {
-      headers: { 'Referer': 'https://finance.sina.com.cn/', 'User-Agent': 'Mozilla/5.0' },
-      responseType: 'arraybuffer', timeout: 8000
-    })
-    const iconv = await import('iconv-lite')
-    const decodedData = iconv.decode(Buffer.from(response.data), 'gbk')
-    const sinaMatch = decodedData.match(new RegExp(`${sinaPrefix}${code}="([^"]+)"`))
-    if (sinaMatch && sinaMatch[1]) {
-      const parts = sinaMatch[1].split(',')
-      const preClose = parseFloat(parts[2]) || 0
-      const currentPrice = parseFloat(parts[3]) || 0
-      if (preClose > 0 && currentPrice > 0) {
-        const percent = ((currentPrice - preClose) / preClose) * 100
-        logger.log(`🏦 [场内ETF] ${code} 股票行情降级: 昨收=${preClose} 现价=${currentPrice} 涨幅=${percent.toFixed(2)}%`)
-        return { nav: preClose, gsz: currentPrice, gszzl: percent, gztime: getLocalDate(), isEtfStock: true }
-      }
-    }
-  } catch (_e) { }
-
-  return null
-}
-
+/**
+ * 采集基金分时估值数据（盘中定时任务入口）
+ *
+ * 调用新浪 FdFundService 一次性获取当日完整的分钟级估值曲线，全量写入缓存。
+ * 取代旧的"每分钟采一个点累加"模式，数据更完整、逻辑更简单。
+ * 单点降级（fu_）的基金不写入分时 data（只更新 gsz/gszzl 字段），避免用单点伪造曲线。
+ */
 async function fetchEstimateData(codes: string[]): Promise<void> {
   const today = getLocalDate()
   const todayIsTradingDay = checkTradingDay(today)
-  const results: Array<{ code: string; data: string; date: string; isUpdated: boolean; isTradingDay: boolean }> = []
 
   logger.log(`⏰ [${new Date().toLocaleTimeString()}] 开始采集分时估值数据... (${codes.length}只)`)
 
   const concurrencyLimit = 10
-  const batches: string[][] = []
-  for (let i = 0; i < codes.length; i += concurrencyLimit) {
-    batches.push(codes.slice(i, i + concurrencyLimit))
-  }
+  const results: Array<{ code: string; data: string; date: string; nav?: number; gsz?: number; gszzl?: number; isUpdated: boolean; isTradingDay: boolean }> = []
 
-  for (const batch of batches) {
+  for (let i = 0; i < codes.length; i += concurrencyLimit) {
+    const batch = codes.slice(i, i + concurrencyLimit)
     const batchResults = await Promise.all(batch.map(async (code) => {
       try {
         const cached = getGlobalEstimateCache(code, today)
-        let estimates: Array<{ time: string; value: number; percent: number }> = []
+        const ts = await fetchFundEstimateTimeseries(code)
 
-        if (cached && cached.data) {
-          try {
-            estimates = JSON.parse(cached.data)
-          } catch (e) {
-            estimates = []
+        // 分时曲线获取成功 → 全量替换 data
+        if (ts && ts.timeseries.length > 0) {
+          const fundName = getFundInfo(code)?.name || ''
+          logger.log(`📊 采集 ${code}${fundName ? '(' + fundName + ')' : ''}: ${ts.timeseries.length}点 (最新 ${ts.timeseries[ts.timeseries.length - 1].time} 涨幅=${ts.gszzl.toFixed(2)}%)`)
+          return {
+            code,
+            data: JSON.stringify(ts.timeseries),
+            date: today,
+            nav: ts.nav,
+            gsz: ts.gsz,
+            gszzl: ts.gszzl,
+            isUpdated: false,
+            isTradingDay: todayIsTradingDay
           }
         }
 
-        let estimate = await fetchSingleEstimate(code)
-        if (!estimate || estimate.nav <= 0) {
-          estimate = await fetchSingleEstimateFallback(code)
-          if (!estimate || estimate.nav <= 0) return null
+        // 分时失败 → 降级到 fu_ 单点（仅更新 gsz/gszzl，保留 cached.data 的历史曲线）
+        const point = await fetchFundEstimatePoint(code)
+        if (point && point.gsz > 0) {
+          const fundName = getFundInfo(code)?.name || ''
+          logger.log(`📊 采集 ${code}${fundName ? '(' + fundName + ')' : ''}: 单点估值(无分时曲线) 涨幅=${point.gszzl.toFixed(2)}%`)
+          return {
+            code,
+            data: cached?.data || '[]',
+            date: today,
+            nav: point.nav,
+            gsz: point.gsz,
+            gszzl: point.gszzl,
+            isUpdated: false,
+            isTradingDay: todayIsTradingDay
+          }
         }
 
-        const hasOpenPoint = estimates.some(e => e.time === '09:25' || e.time === '09:30')
-        const recordTime = getRecordTimePoint(hasOpenPoint)
-        if (!recordTime) return null
-
-        const existingIndex = estimates.findIndex(e => e.time === recordTime)
-        const newData = {
-          time: recordTime,
-          value: Number(estimate.gsz.toFixed(4)),
-          percent: Number(estimate.gszzl.toFixed(2))
-        }
-
-        if (existingIndex >= 0) {
-          estimates[existingIndex] = newData
-        } else {
-          estimates.push(newData)
-          estimates.sort((a, b) => {
-            const [ah, am] = a.time.split(':').map(Number)
-            const [bh, bm] = b.time.split(':').map(Number)
-            return (ah * 60 + am) - (bh * 60 + bm)
-          })
-        }
-
-        const fundName = getFundInfo(code)?.name || ''
-        const etfTag = estimate.isEtfStock ? ' [场内ETF]' : ''
-        logger.log(`📊 采集${etfTag} ${code}${fundName ? '(' + fundName + ')' : ''}: ${recordTime} 估值=${estimate.gsz.toFixed(4)} 涨幅=${estimate.gszzl.toFixed(2)}% (累计${estimates.length}点)`)
-
-        return {
-          code,
-          data: JSON.stringify(estimates),
-          date: today,
-          nav: estimate.nav,
-          gsz: estimate.gsz,
-          gszzl: estimate.gszzl,
-          isUpdated: false,
-          isTradingDay: todayIsTradingDay
-        }
+        logger.log(`⚠️  采集 ${code} 失败: 所有数据源均无数据`)
+        return null
       } catch (error) {
         logger.log(`采集 ${code} 失败:`, error instanceof Error ? error.message : 'Unknown error')
         return null

@@ -6,14 +6,13 @@
  */
 
 import axios from 'axios'
-import iconv from 'iconv-lite'
 import { logger } from '../logger.js'
 import { fundInfoRepository } from '../db/index.js'
 import { checkTradingDay } from './holidayService.js'
 import { getLocalDate, getFundCache, saveFundCache, getGlobalEstimateCache, getFundInfo, FundInfo } from '../db/index.js'
 import type { FundCache } from '../../types/index.js'
-import { ExternalAPIError } from '../utils/errors.js'
 import { fetchFinalNavFromMobApi, isKnownNonFund } from '../external/eastmoney.js'
+import { fetchFundEstimatePoint } from '../external/sina.js'
 
 // ==================== 缓存配置 ====================
 const ESTIMATE_CACHE_TTL = 5 * 60 * 1000  // 5分钟
@@ -22,23 +21,14 @@ const FUND_CACHE_TTL = 2 * 60 * 1000  // 2分钟
 // ==================== 辅助函数 ====================
 
 /**
- * 从天天基金获取日涨跌幅
+ * 从新浪获取基金估算日涨跌幅
  */
 async function fetchDayGrowthFromEastmoney(code: string): Promise<number | null> {
-  try {
-    const response = await axios.get(`http://fundgz.1234567.com.cn/js/${code}.js`, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
-    })
-    const data = response.data
-    const match = data.match(/gszzl":"(-?[\d.]+)"/)
-    if (match && match[1]) {
-      return parseFloat(match[1])
-    }
-    return null
-  } catch (err) {
-    logger.error(`Error fetching day growth for ${code}:`, err)
-    return null
+  const point = await fetchFundEstimatePoint(code)
+  if (point && point.gsz > 0) {
+    return point.gszzl
   }
+  return null
 }
 
 /**
@@ -169,36 +159,28 @@ async function fetchFundData(code: string, forceRefresh = false) {
   }
 
   try {
-    // 优先使用天天基金接口
-    const tiantianUrl = `http://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}`
-    const tiantianResponse = await axios.get(tiantianUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
-      responseType: 'text',
-      timeout: 10000
-    })
+    // 优先使用新浪实时估值
+    const estimatePoint = await fetchFundEstimatePoint(code)
 
-    const match = tiantianResponse.data.match(/jsonpgz\s*\(\s*(\{[\s\S]*?\})\s*\)/)
-
-    if (match && match[1]) {
-      const data = JSON.parse(match[1])
-
-      const nav = parseFloat(data.dwjz) || 0
-      const gsz = parseFloat(data.gsz) || nav
-      const gszzl = parseFloat(data.gszzl) || 0
+    if (estimatePoint && estimatePoint.gsz > 0) {
+      const info = getFundInfo(code)
+      const nav = estimatePoint.nav
+      const gsz = estimatePoint.gsz
+      const gszzl = estimatePoint.gszzl
 
       const fundData: any = {
-        code: data.fundcode,
-        name: data.name,
+        code,
+        name: info?.name || '',
         type: '',
         nav: nav,
         accNav: nav,
         dayGrowth: gszzl,
-        lastUpdate: data.gztime,
+        lastUpdate: estimatePoint.gztime,
         growthValue: nav > 0 ? (gszzl / 100) * nav : 0,
         gsz: gsz,
         gszzl: gszzl,
-        gztime: data.gztime,
-        jzrq: data.jzrq
+        gztime: estimatePoint.gztime,
+        jzrq: estimatePoint.gztime ? estimatePoint.gztime.slice(0, 10) : ''
       }
 
       // 补充真实净值日涨跌幅（天天基金给的是估值涨幅，这里用 MobAPI 取真实净值涨幅）
@@ -210,39 +192,6 @@ async function fetchFundData(code: string, forceRefresh = false) {
         }
       } catch (lsjzError) {
         logger.error(`获取历史净值失败 ${code}:`, lsjzError)
-      }
-
-      const today = getLocalDate()
-      const gzDate = fundData.gztime ? fundData.gztime.slice(0, 10) : ''
-      const now = new Date()
-      const currentTime = now.getHours() * 60 + now.getMinutes()
-      const marketOpen = 9 * 60 + 30
-      const isStale = gzDate < today && currentTime >= marketOpen && checkTradingDay(today)
-      if (isStale && fundData.nav > 0) {
-        try {
-          const sinaUrl = `https://hq.sinajs.cn/list=fu_${code}`
-          const sinaResponse = await axios.get(sinaUrl, {
-            headers: { 'Referer': 'https://finance.sina.com.cn/', 'User-Agent': 'Mozilla/5.0' },
-            responseType: 'arraybuffer',
-            timeout: 8000
-          })
-          const decodedData = iconv.decode(Buffer.from(sinaResponse.data), 'gbk')
-          const sinaMatch = decodedData.match(new RegExp(`fu_${code}="([^"]+)"`))
-          if (sinaMatch && sinaMatch[1]) {
-            const parts = sinaMatch[1].split(',')
-            if (parts.length >= 10) {
-              const sinaGsz = parseFloat(parts[8]) || 0
-              const sinaGszzl = parseFloat(parts[9]) || 0
-              if (sinaGsz > 0) {
-                fundData.gsz = sinaGsz
-                fundData.gszzl = sinaGszzl
-                fundData.gztime = parts[7] ? `${parts[7]} ${parts[1]}` : today
-                fundData.lastUpdate = fundData.gztime
-                logger.log(`基金 ${code} 天天基金估值过期(${gzDate})，新浪补充: gszzl=${sinaGszzl}%`)
-              }
-            }
-          }
-        } catch (_e) { }
       }
 
       if (isQDIIFund(code)) {
@@ -281,72 +230,14 @@ async function fetchFundData(code: string, forceRefresh = false) {
         const today = getLocalDate()
         const gztimeToday = lsjzResult.gztime ? lsjzResult.gztime.slice(0, 10) : ''
         if (gztimeToday !== today) {
-          // 东方财富分时
-          let updated = false
-          const fsUrls = [
-            `https://fund.eastmoney.com/tfsj_v1.0.0/fsdata_${code}.js`,
-            `https://fundf10.eastmoney.com/trend_${code}.js`,
-          ]
-          for (const url of fsUrls) {
-            if (updated) break
-            try {
-              const fsResponse = await axios.get(url, {
-                headers: {
-                  'Referer': 'https://fund.eastmoney.com/',
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                },
-                timeout: 8000,
-                responseType: 'text'
-              })
-              const jsContent = fsResponse.data || ''
-              const dataMatch = jsContent.match(new RegExp(`var\\s+fsdata_${code}\\s*=\\s*(\\{[\\s\\S]*?\\});`))
-              if (dataMatch && dataMatch[1]) {
-                const fundFsData = JSON.parse(dataMatch[1])
-                if (fundFsData.d && Array.isArray(fundFsData.d) && fundFsData.d.length > 0) {
-                  const lastPoint = fundFsData.d[fundFsData.d.length - 1]
-                  if (Array.isArray(lastPoint) && lastPoint.length >= 2) {
-                    const baseValue = fundFsData.d[0][1] || lsjzResult.nav
-                    const gsz = lastPoint[1]
-                    const gszzl = baseValue > 0 ? ((gsz - baseValue) / baseValue) * 100 : 0
-                    lsjzResult.gsz = gsz
-                    lsjzResult.gszzl = Number(gszzl.toFixed(2))
-                    lsjzResult.gztime = today
-                    updated = true
-                    logger.log(`基金 ${code} 东方财富分时补充: gszzl=${gszzl.toFixed(2)}%`)
-                  }
-                }
-              }
-            } catch (_e) { }
-          }
-          // 新浪实时估值
-          if (!updated) {
-            try {
-              const sinaUrl = `https://hq.sinajs.cn/list=fu_${code}`
-              const sinaResponse = await axios.get(sinaUrl, {
-                headers: { 'Referer': 'https://finance.sina.com.cn/', 'User-Agent': 'Mozilla/5.0' },
-                responseType: 'arraybuffer',
-                timeout: 8000
-              })
-              const decodedData = iconv.decode(Buffer.from(sinaResponse.data), 'gbk')
-              const sinaMatch = decodedData.match(new RegExp(`fu_${code}="([^"]+)"`))
-              if (sinaMatch && sinaMatch[1]) {
-                const parts = sinaMatch[1].split(',')
-                if (parts.length >= 10) {
-                  const gsz = parseFloat(parts[8]) || 0
-                  const gszzl = parseFloat(parts[9]) || 0
-                  if (gsz > 0) {
-                    lsjzResult.gsz = gsz
-                    lsjzResult.gszzl = gszzl
-                    lsjzResult.gztime = parts[7] ? `${parts[7]} ${parts[1]}` : today
-                    updated = true
-                    logger.log(`基金 ${code} 新浪实时估值补充: gszzl=${gszzl}%`)
-                  }
-                }
-              }
-            } catch (_sinaError) { }
-          }
-          if (updated) {
+          // 新浪实时估值补充
+          const point = await fetchFundEstimatePoint(code)
+          if (point && point.gsz > 0) {
+            lsjzResult.gsz = point.gsz
+            lsjzResult.gszzl = point.gszzl
+            lsjzResult.gztime = point.gztime
             saveFundCache(code, JSON.stringify(lsjzResult))
+            logger.log(`基金 ${code} 新浪实时估值补充: gszzl=${point.gszzl}%`)
           }
         }
       } catch (_supError) { }
@@ -355,45 +246,26 @@ async function fetchFundData(code: string, forceRefresh = false) {
 
     // 历史净值也失败，最后尝试新浪获取实时估值
     try {
-      const sinaUrl = `https://hq.sinajs.cn/list=fu_${code}`
-      const sinaResponse = await axios.get(sinaUrl, {
-        headers: { 'Referer': 'https://finance.sina.com.cn/', 'User-Agent': 'Mozilla/5.0' },
-        responseType: 'arraybuffer',
-        timeout: 8000
-      })
-      const decodedData = iconv.decode(Buffer.from(sinaResponse.data), 'gbk')
-      const sinaMatch = decodedData.match(new RegExp(`fu_${code}="([^"]+)"`))
-
-      if (sinaMatch && sinaMatch[1]) {
-        const parts = sinaMatch[1].split(',')
-        if (parts.length >= 8) {
-          const name = parts[0] || ''
-          const nav = parseFloat(parts[2]) || 0
-          const accNav = parseFloat(parts[3]) || 0
-          const gsz = parseFloat(parts[8]) || nav
-          const gszzl = parseFloat(parts[9]) || 0
-          const gztime = parts[1] ? `${parts[7]} ${parts[1]}` : ''
-
-          if (nav > 0) {
-            const fundData: any = {
-              code,
-              name,
-              type: '',
-              nav,
-              accNav: accNav || nav,
-              dayGrowth: gszzl,
-              lastUpdate: gztime,
-              growthValue: nav > 0 ? (gszzl / 100) * nav : 0,
-              gsz,
-              gszzl,
-              gztime,
-              jzrq: parts[7] || gztime
-            }
-            saveFundCache(code, JSON.stringify(fundData))
-            logger.log(`基金 ${code} 新浪实时估值获取成功: gszzl=${gszzl}%`)
-            return fundData
-          }
+      const point = await fetchFundEstimatePoint(code)
+      if (point && point.nav > 0) {
+        const info = getFundInfo(code)
+        const fundData: any = {
+          code,
+          name: info?.name || '',
+          type: '',
+          nav: point.nav,
+          accNav: point.nav,
+          dayGrowth: point.gszzl,
+          lastUpdate: point.gztime,
+          growthValue: point.nav > 0 ? (point.gszzl / 100) * point.nav : 0,
+          gsz: point.gsz,
+          gszzl: point.gszzl,
+          gztime: point.gztime,
+          jzrq: point.gztime ? point.gztime.slice(0, 10) : ''
         }
+        saveFundCache(code, JSON.stringify(fundData))
+        logger.log(`基金 ${code} 新浪实时估值获取成功: gszzl=${point.gszzl}%`)
+        return fundData
       }
     } catch (sinaError: any) {
       logger.log(`基金 ${code} 新浪估值获取失败:`, sinaError.message)
@@ -606,31 +478,21 @@ export class FundService {
    */
   private async fetchFundFromApi(code: string): Promise<FundCache | null> {
     try {
-      const response = await axios.get(`http://fundgz.1234567.com.cn/js/${code}.js`, {
-        headers: { 
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        },
-        responseType: 'text',
-        timeout: 10000
-      })
-
-      const match = response.data.match(/jsonpgz\s*\(\s*(\{[\s\S]*?\})\s*\)/)
-
-      if (match && match[1]) {
-        const data = JSON.parse(match[1])
-        
+      const point = await fetchFundEstimatePoint(code)
+      if (point && point.gsz > 0) {
+        const info = getFundInfo(code)
         return {
-          code: data.fundcode,
-          name: data.name,
+          code,
+          name: info?.name || '',
           type: '',
-          nav: parseFloat(data.dwjz) || 0,
-          accNav: parseFloat(data.dwjz) || 0,
-          dayGrowth: parseFloat(data.gszzl) || 0,
-          lastUpdate: data.gztime,
-          gsz: parseFloat(data.gsz) || 0,
-          gszzl: parseFloat(data.gszzl) || 0,
-          gztime: data.gztime,
-          jzrq: data.jzrq
+          nav: point.nav,
+          accNav: point.nav,
+          dayGrowth: point.gszzl,
+          lastUpdate: point.gztime,
+          gsz: point.gsz,
+          gszzl: point.gszzl,
+          gztime: point.gztime,
+          jzrq: point.gztime ? point.gztime.slice(0, 10) : ''
         }
       }
 

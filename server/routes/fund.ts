@@ -8,6 +8,7 @@ import { checkTradingDay } from '../services/holidayService.js'
 import { fetchFundData, fetchFundsBatch } from '../services/fundService.js'
 import { getClientIp } from '../services/statsService.js'
 import { fetchFinalNavFromMobApi } from '../external/eastmoney.js'
+import { fetchFundEstimateTimeseries, fetchFundEstimatePoint } from '../external/sina.js'
 
 const router = Router()
 
@@ -91,25 +92,22 @@ router.get('/eastmoney/FundNetValue.ashx', async (req: Request, res: Response) =
 router.get('/fundgz/:code', async (req: Request, res: Response) => {
   try {
     const { code } = req.params
-    const url = `https://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}`
-
-    const response = await axios.get(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
-      responseType: 'text',
-      timeout: 10000
-    })
-
-    const data = response.data
-    const match = data.match(/jsonpgz\s*\(\s*(\{[\s\S]*?\})\s*\)/)
-
-    if (match && match[1]) {
-      const jsonData = JSON.parse(match[1])
-      res.json(jsonData)
-    } else {
-      res.status(404).json({ error: '数据格式错误' })
+    const point = await fetchFundEstimatePoint(code)
+    if (!point || point.gsz <= 0) {
+      return res.status(404).json({ error: '无估值数据' })
     }
+    const today = getLocalDate()
+    res.json({
+      fundcode: code,
+      name: '',
+      dwjz: point.nav,
+      gsz: point.gsz,
+      gszzl: point.gszzl,
+      gztime: point.gztime,
+      jzrq: today
+    })
   } catch (error) {
-    logger.error('天天基金估值接口代理错误:', error)
+    logger.error('获取估值数据失败:', error)
     res.status(500).json({ error: '获取估值数据失败' })
   }
 })
@@ -230,121 +228,22 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
       }
     }
 
-    const estimates: Array<{ time: string; value: number; percent: number }> = []
-
-    try {
-      const eastMoneyUrls = [
-        `https://fund.eastmoney.com/tfsj_v1.0.0/fsdata_${code}.js`,
-        `https://fundf10.eastmoney.com/trend_${code}.js`,
-      ]
-
-      for (const url of eastMoneyUrls) {
-        try {
-          const fsResponse = await axios.get(url, {
-            headers: {
-              'Referer': 'https://fund.eastmoney.com/',
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            },
-            timeout: 8000,
-            responseType: 'text'
-          })
-
-          const jsContent = fsResponse.data || ''
-          const dataMatch = jsContent.match(new RegExp(`var\\s+fsdata_${code}\\s*=\\s*(\\{[\\s\\S]*?\\});`))
-
-          if (dataMatch && dataMatch[1]) {
-            const fundData = JSON.parse(dataMatch[1])
-
-            if (fundData.d && Array.isArray(fundData.d) && fundData.d.length > 0) {
-              const baseValue = fundData.d[0][1] || fundData.fsrq || 1
-
-              fundData.d.forEach((item: any) => {
-                if (Array.isArray(item) && item.length >= 2) {
-                  const timestamp = item[0]
-                  const value = item[1]
-
-                  const date = new Date(timestamp)
-                  const hours = date.getHours().toString().padStart(2, '0')
-                  const minutes = date.getMinutes().toString().padStart(2, '0')
-                  const timeStr = `${hours}:${minutes}`
-
-                  const percent = baseValue > 0 ? ((value - baseValue) / baseValue) * 100 : 0
-
-                  estimates.push({
-                    time: timeStr,
-                    value: Number(value.toFixed(4)),
-                    percent: Number(percent.toFixed(2))
-                  })
-                }
-              })
-
-              if (estimates.length > 0) {
-                saveGlobalEstimateCache({ code, data: JSON.stringify(estimates), date: tradingDay })
-                logger.log(`✅ 东方财富分时数据 ${fundName}(${code}):`, estimates.length, '条')
-                return res.json({ data: estimates, isQDII })
-              }
-            }
-          }
-        } catch (e) {
-        }
-      }
-    } catch (fsError: any) {
-      logger.log('东方财富分时接口失败:', fsError.message)
-    }
-
-    try {
-      const sinaUrl = `https://hq.sinajs.cn/list=fu_${code}`
-      const sinaResponse = await axios.get(sinaUrl, {
-        headers: {
-          'Referer': 'https://finance.sina.com.cn/',
-          'User-Agent': 'Mozilla/5.0'
-        },
-        responseType: 'arraybuffer',
-        timeout: 8000
+    // 实时获取分时估值曲线（新浪 FdFundService，覆盖普通基金/QDII/ETF联接）
+    const estimate = await fetchFundEstimateTimeseries(code)
+    if (estimate && estimate.timeseries.length > 0) {
+      saveGlobalEstimateCache({
+        code,
+        data: JSON.stringify(estimate.timeseries),
+        date: tradingDay,
+        nav: estimate.nav,
+        gsz: estimate.gsz,
+        gszzl: estimate.gszzl
       })
-
-      const decodedData = iconv.decode(Buffer.from(sinaResponse.data), 'gbk')
-      const sinaMatch = decodedData.match(new RegExp(`fu_${code}="([^"]+)"`))
-
-      if (sinaMatch && sinaMatch[1]) {
-        const parts = sinaMatch[1].split(',')
-        if (parts.length >= 8) {
-          const nav = parseFloat(parts[2]) || 0
-          const dayGrowth = parseFloat(parts[6]) || 0
-
-          if (nav > 0) {
-            logger.log(`📊 新浪估值 ${fundName}(${code}): nav=${nav}, dayGrowth=${dayGrowth}%, 无分时数据`)
-          }
-        }
-      }
-    } catch (sinaError: any) {
-      logger.log('新浪估值接口失败:', sinaError.message)
+      logger.log(`✅ 实时分时数据 ${fundName}(${code}):`, estimate.timeseries.length, '条')
+      return res.json({ data: estimate.timeseries, isQDII })
     }
 
-    try {
-      const gzUrl = `https://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}`
-      const gzResponse = await axios.get(gzUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
-        responseType: 'text',
-        timeout: 5000
-      })
-
-      const gzMatch = gzResponse.data.match(/jsonpgz\s*\(\s*(\{[\s\S]*?\})\s*\)/)
-
-      if (gzMatch && gzMatch[1]) {
-        const gzData = JSON.parse(gzMatch[1])
-        const nav = parseFloat(gzData.dwjz) || 0
-        const gsz = parseFloat(gzData.gsz) || nav
-        const gszzl = parseFloat(gzData.gszzl) || 0
-
-        if (nav > 0) {
-          logger.log(`📊 天天基金估值 ${fundName}(${code}): nav=${nav}, gszzl=${gszzl}%, 无分时数据`)
-        }
-      }
-    } catch (gzError: any) {
-      logger.log('天天基金估值接口失败:', gzError.message)
-    }
-
+    // FdFundService 无分时数据时，对 QDII 基金尝试 MobAPI 取最新净值（海外市场可能休市）
     if (isQDII) {
       try {
         const mobNav = await fetchFinalNavFromMobApi(code)
@@ -354,67 +253,6 @@ router.get('/fund/estimate/:code', async (req: Request, res: Response) => {
         }
       } catch (qdiiError: any) {
         logger.log('QDII MobAPI获取失败:', qdiiError.message)
-      }
-
-      const latestCached = getLatestGlobalEstimateCache(code, today)
-      if (latestCached && latestCached.nav && latestCached.nav > 0) {
-        try {
-          const data = latestCached.data ? JSON.parse(latestCached.data) : []
-          logger.log(`🌍 QDII基金回退到历史缓存 ${fundName}(${code}) (${latestCached.date}): nav=${latestCached.nav}, growth=${latestCached.dayGrowth}%`)
-          return res.json({ data, date: latestCached.date, isHistory: true, isUpdated: !!latestCached.isUpdated, finalNav: latestCached.nav ?? null, finalGrowth: latestCached.dayGrowth ?? null, isQDII })
-        } catch (e) {
-          logger.error('解析QDII历史数据失败:', e)
-        }
-      }
-    }
-
-    if (estimates.length === 0) {
-      try {
-        const marketPrefix = code.startsWith('5') ? '1' : '0'
-        const sinaPrefix = code.startsWith('5') ? 'sh' : 'sz'
-        const sinaUrl = `https://hq.sinajs.cn/list=${sinaPrefix}${code}`
-        const sinaResp = await axios.get(sinaUrl, {
-          headers: { 'Referer': 'https://finance.sina.com.cn/', 'User-Agent': 'Mozilla/5.0' },
-          responseType: 'arraybuffer', timeout: 8000
-        })
-        const sinaText = iconv.decode(Buffer.from(sinaResp.data), 'gbk')
-        const sinaMatch = sinaText.match(new RegExp(`${sinaPrefix}${code}="([^"]+)"`))
-
-        if (sinaMatch && sinaMatch[1]) {
-          const sinaParts = sinaMatch[1].split(',')
-          const preClose = parseFloat(sinaParts[2]) || 0
-
-          if (preClose > 0) {
-            const trendUrl = `https://push2his.eastmoney.com/api/qt/stock/trends2/get?secid=${marketPrefix}.${code}&fields1=f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12,f13&fields2=f51,f52,f53,f54,f55,f56,f57,f58&ndays=1&iscr=0&_=${Date.now()}`
-            const trendResp = await axios.get(trendUrl, {
-              headers: { 'Referer': 'https://quote.eastmoney.com/', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-              timeout: 8000
-            })
-
-            if (trendResp.data?.data?.trends) {
-              const trends = trendResp.data.data.trends
-              for (const trend of trends) {
-                const tParts = trend.split(',')
-                const timeStr = tParts[0].split(' ')[1]
-                const price = parseFloat(tParts[2])
-                const percent = ((price - preClose) / preClose) * 100
-                estimates.push({
-                  time: timeStr,
-                  value: Number(price.toFixed(4)),
-                  percent: Number(percent.toFixed(2))
-                })
-              }
-
-              if (estimates.length > 0) {
-                saveGlobalEstimateCache({ code, data: JSON.stringify(estimates), date: tradingDay })
-                logger.log(`📈 [场内ETF] 股票级分时数据 ${fundName}(${code}):`, estimates.length, '条')
-                return res.json({ data: estimates, isQDII })
-              }
-            }
-          }
-        }
-      } catch (etfError: any) {
-        logger.log('[场内ETF] 股票级分时接口失败:', etfError.message)
       }
     }
 
