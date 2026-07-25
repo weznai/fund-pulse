@@ -138,7 +138,7 @@ export function getVisitStats(): VisitStats {
   const todayUv = todayUvResult.count
 
   const recentDays: Array<{ date: string; pv: number; uv: number }> = []
-  for (let i = 6; i >= 0; i--) {
+  for (let i = 29; i >= 0; i--) {
     const date = new Date()
     date.setDate(date.getDate() - i)
     const dateStr = getLocalDate(date)

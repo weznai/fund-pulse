@@ -72,7 +72,7 @@
     <div class="section-header">
       <div class="section-header-left">
         <h3 class="section-title">统计概览</h3>
-        <p class="section-desc">查看最近7天的访问趋势和IP分布情况</p>
+        <p class="section-desc">查看最近30天的访问趋势和IP分布情况</p>
       </div>
     </div>
 
@@ -81,7 +81,7 @@
       <!-- 最近7天数据表格 -->
       <div class="chart-card">
         <div class="chart-header">
-          <h3>最近7天访问数据</h3>
+          <h3>最近30天访问数据</h3>
         </div>
         <div class="chart-body table-body">
           <table class="data-table">
@@ -109,7 +109,7 @@
       <!-- PV/UV 趋势图 -->
       <div class="chart-card">
         <div class="chart-header">
-          <h3>PV/UV 趋势（最近7天）</h3>
+          <h3>PV/UV 趋势（最近30天）</h3>
         </div>
         <div class="chart-body" ref="lineChartRef"></div>
       </div>
@@ -520,7 +520,7 @@ const riskAnalysis = computed(() => {
   return { risks, level }
 })
 
-// 计算最近7天日期列表
+// 计算最近30天日期列表
 const recentDates = computed(() => {
   const dates: string[] = []
   for (let i = 0; i < 30; i++) {
@@ -531,7 +531,7 @@ const recentDates = computed(() => {
   return dates
 })
 
-// 计算最近7天数据（带百分比，按日期从新到旧排列）
+// 计算最近30天数据（带百分比，按日期从新到旧排列）
 const recentDaysData = computed(() => {
   const totalPv = stats.value.recentDays.reduce((sum, d) => sum + d.pv, 0)
   return [...stats.value.recentDays]
