@@ -65,3 +65,6 @@ miniapp/unpackage
 # System update config & packages
 update-config.json
 deploy/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
