@@ -4,6 +4,13 @@
 # 进入脚本所在目录
 cd "$(dirname "$0")"
 
+# 加载 nvm 并切换到 Node v24
+# better-sqlite3 原生模块按 v24 编译，系统默认 node 为 v20 会导致 ERR_DLOPEN_FAILED
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+nvm use 24 >/dev/null 2>&1 || { echo "[$(date)] ❌ 无法切换到 Node v24（better-sqlite3 需要 v24），中止"; exit 1; }
+echo "[$(date)] Node 版本: $(node -v)"
+
 # 终止旧进程
 echo "[$(date)] 正在终止占用端口 3010 的进程..."
 kill $(lsof -t -i:3010) 2>/dev/null || echo "[$(date)] 无旧进程需要终止"
