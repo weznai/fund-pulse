@@ -150,7 +150,7 @@ onMounted(loadList)
 .oplog-page { max-width: 1200px; }
 
 .page-header { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #e5e7eb; }
-.page-title { font-size: 18px; font-weight: 600; color: #1e3a5f; margin: 0 0 8px 0; }
+.page-title { font-size: 18px; font-weight: 600; color: #2563eb; margin: 0 0 8px 0; }
 .page-desc { font-size: 14px; color: #64748b; margin: 0; }
 
 .content-body { display: flex; flex-direction: column; gap: 16px; }

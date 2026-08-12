@@ -439,7 +439,7 @@ async function refreshFund(holding: any) {
 .favorite-item .fund-code {
   font-family: 'SF Mono', Consolas, monospace;
   font-weight: 500;
-  color: #1e3a5f;
+  color: #2563eb;
   font-size: 13px;
 }
 
@@ -489,7 +489,7 @@ async function refreshFund(holding: any) {
 .summary-row td {
   border-bottom: none;
   padding: 10px 12px;
-  color: #1e3a5f;
+  color: #2563eb;
 }
 
 .summary-label {
@@ -564,7 +564,7 @@ async function refreshFund(holding: any) {
 }
 
 .btn-primary {
-  background: #1e3a5f;
+  background: #2563eb;
   color: #fff;
 }
 
@@ -590,7 +590,7 @@ async function refreshFund(holding: any) {
   gap: 6px;
   padding: 6px 14px;
   background: linear-gradient(135deg, #fff 0%, #f8fafc 100%);
-  color: #1e3a5f;
+  color: #2563eb;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
   font-size: 13px;
@@ -738,7 +738,7 @@ async function refreshFund(holding: any) {
   width: 20px;
   height: 20px;
   border: 2px solid #E5E7EB;
-  border-top-color: #1e3a5f;
+  border-top-color: #2563eb;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }

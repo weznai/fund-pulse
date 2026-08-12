@@ -604,10 +604,10 @@ function formatDataExtra(extra: any): string {
 }
 
 async function deleteFund(fund: FundInfo) {
-  if (!confirm(`确定要删除基金 ${fund.code} ${fund.name} 吗？`)) return
+  if (!confirm(`确定要删除基金 ${fund.code} ${fund.name} 吗？\n（有用户持仓的基金无法删除）`)) return
   try {
     await axios.delete(`/api/admin/fund-info/${fund.code}`)
-    showSuccessMessage('删除成功')
+    showSuccessMessage('已删除')
     loadFunds()
   } catch (error: any) {
     showErrorMessage(error.response?.data?.error || '删除失败')
@@ -617,11 +617,17 @@ async function deleteFund(fund: FundInfo) {
 async function batchDelete() {
   if (selectedCodes.value.size === 0) return
   const codes = Array.from(selectedCodes.value)
-  if (!confirm(`确定要删除选中的 ${codes.length} 只基金吗？`)) return
+  if (!confirm(`确定要删除选中的 ${codes.length} 只基金吗？\n（有用户持仓的基金会自动跳过）`)) return
   
   try {
     const { data } = await axios.post('/api/admin/fund-info/batch-delete', { codes })
-    showSuccessMessage(`成功删除 ${data.deleted} 只基金`)
+    const blockedCount = data.blocked?.length || 0
+    if (blockedCount > 0) {
+      const blockedCodes = data.blocked.map((b: any) => b.code).join(', ')
+      showSuccessMessage(`已删除 ${data.deleted} 只，${blockedCount} 只有持仓被跳过：${blockedCodes}`)
+    } else {
+      showSuccessMessage(`已删除 ${data.deleted} 只基金`)
+    }
     selectedCodes.value.clear()
     loadFunds()
   } catch (error: any) {
@@ -651,7 +657,7 @@ function showErrorMessage(msg: string) {
 .fund-manage-page { padding: 0; }
 
 .page-header { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #e5e7eb; }
-.page-title { font-size: 18px; font-weight: 600; color: #1e3a5f; margin: 0 0 8px 0; }
+.page-title { font-size: 18px; font-weight: 600; color: #2563eb; margin: 0 0 8px 0; }
 .page-desc { font-size: 14px; color: #64748b; margin: 0; }
 
 .tabs { display: flex; align-items: center; margin-bottom: 20px; }
@@ -668,7 +674,7 @@ function showErrorMessage(msg: string) {
 
 .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
 .section-header h3 { font-size: 16px; font-weight: 600; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 8px; }
-.section-header h3::before { content: ''; width: 4px; height: 18px; background: linear-gradient(180deg, #1e3a5f 0%, #3b82f6 100%); border-radius: 2px; }
+.section-header h3::before { content: ''; width: 4px; height: 18px; background: linear-gradient(180deg, #2563eb 0%, #3b82f6 100%); border-radius: 2px; }
 .header-actions { display: flex; gap: 10px; }
 .header-right { display: flex; align-items: center; gap: 12px; }
 
@@ -684,7 +690,7 @@ function showErrorMessage(msg: string) {
 .search-result-item:last-child { border-bottom: none; }
 .search-result-item:hover { background: #f8fafc; }
 .fund-info { display: flex; align-items: center; gap: 14px; }
-.fund-info .fund-code { font-family: 'SF Mono', Consolas, monospace; font-weight: 600; color: #1e3a5f; font-size: 14px; }
+.fund-info .fund-code { font-family: 'SF Mono', Consolas, monospace; font-weight: 600; color: #2563eb; font-size: 14px; }
 .fund-info .fund-name { color: #334155; font-size: 14px; }
 .fund-info .fund-type { font-size: 11px; color: #64748b; background: #f1f5f9; padding: 3px 10px; border-radius: 20px; }
 .no-results { margin-top: 16px; text-align: center; padding: 24px; color: #94a3b8; background: #f8fafc; border-radius: 12px; }
@@ -696,12 +702,12 @@ function showErrorMessage(msg: string) {
 .fund-textarea:focus { outline: none; border-color: #3b82f6; }
 .form-hint { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; color: #64748b; padding: 10px 14px; background: rgba(59,130,246,0.05); border-radius: 8px; }
 
-.fund-count { font-size: 13px; font-weight: 600; color: #1e3a5f; background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%); padding: 6px 14px; border-radius: 20px; }
+.fund-count { font-size: 13px; font-weight: 600; color: #2563eb; background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%); padding: 6px 14px; border-radius: 20px; }
 .fund-list { display: flex; flex-wrap: wrap; gap: 10px; }
 .fund-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; }
 .fund-item:hover { border-color: #cbd5e1; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-.fund-index { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #1e3a5f 0%, #3b82f6 100%); border-radius: 4px; font-size: 10px; font-weight: 600; color: #fff; }
-.fund-code { font-size: 13px; font-weight: 600; color: #1e3a5f; font-family: 'SF Mono', Consolas, monospace; }
+.fund-index { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%); border-radius: 4px; font-size: 10px; font-weight: 600; color: #fff; }
+.fund-code { font-size: 13px; font-weight: 600; color: #2563eb; font-family: 'SF Mono', Consolas, monospace; }
 .fund-name-preview { font-size: 12px; color: #64748b; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .btn-remove { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: 6px; cursor: pointer; color: #94a3b8; }
 .btn-remove:hover { background: #fee2e2; color: #ef4444; }
@@ -720,7 +726,7 @@ function showErrorMessage(msg: string) {
 .stats-bar { display: flex; gap: 24px; margin-bottom: 16px; padding: 12px 16px; background: #f8fafc; border-radius: 8px; }
 .stat-item { display: flex; align-items: center; gap: 8px; }
 .stat-label { font-size: 13px; color: #64748b; }
-.stat-value { font-size: 16px; font-weight: 600; color: #1e3a5f; }
+.stat-value { font-size: 16px; font-weight: 600; color: #2563eb; }
 
 .batch-actions { display: flex; gap: 8px; margin-bottom: 12px; padding: 10px 16px; background: #e0f2fe; border-radius: 8px; }
 
@@ -732,7 +738,7 @@ function showErrorMessage(msg: string) {
 .fund-table th, .fund-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #f1f5f9; }
 .fund-table th { background: #f8fafc; font-weight: 600; font-size: 13px; color: #475569; }
 .fund-table td { font-size: 14px; color: #334155; }
-.code-cell { font-family: 'SF Mono', Consolas, monospace; font-weight: 600; color: #1e3a5f; }
+.code-cell { font-family: 'SF Mono', Consolas, monospace; font-weight: 600; color: #2563eb; }
 .name-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .type-tag { display: inline-block; padding: 2px 8px; background: #e0f2fe; color: #0369a1; border-radius: 4px; font-size: 12px; }
 .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
@@ -774,7 +780,7 @@ function showErrorMessage(msg: string) {
 .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .modal { background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); border-radius: 20px; width: 90%; max-width: 480px; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.1); }
 .modal-lg { max-width: 680px; max-height: 120vh; }
-.modal-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: linear-gradient(135deg, #1e3a5f 0%, #3b82f6 100%); }
+.modal-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%); }
 .modal-header h3 { font-size: 14px; font-weight: 600; color: #fff; margin: 0; }
 .modal-close { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.15); border: none; border-radius: 6px; cursor: pointer; color: #fff; font-size: 16px; transition: all 0.2s; }
 .modal-close:hover { background: rgba(255,255,255,0.25); }
@@ -786,12 +792,12 @@ function showErrorMessage(msg: string) {
 .result-item { display: flex; align-items: center; justify-content: space-between; padding: 12px; border-bottom: 1px solid #f1f5f9; }
 .result-item:last-child { border-bottom: none; }
 .result-info { display: flex; align-items: center; gap: 10px; }
-.result-code { font-family: 'SF Mono', Consolas, monospace; font-weight: 600; color: #1e3a5f; font-size: 13px; }
+.result-code { font-family: 'SF Mono', Consolas, monospace; font-weight: 600; color: #2563eb; font-size: 13px; }
 .result-name { font-size: 14px; color: #334155; }
 .result-type { font-size: 11px; color: #64748b; background: #f1f5f9; padding: 2px 8px; border-radius: 4px; }
 
 .edit-info { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; padding: 12px 16px; background: #f8fafc; border-radius: 8px; }
-.edit-code { font-family: 'SF Mono', Consolas, monospace; font-weight: 600; color: #1e3a5f; font-size: 15px; }
+.edit-code { font-family: 'SF Mono', Consolas, monospace; font-weight: 600; color: #2563eb; font-size: 15px; }
 .edit-name { font-size: 14px; color: #334155; }
 .form-select { width: 100%; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: #fff; cursor: pointer; }
 .form-select:focus { outline: none; border-color: #3b82f6; }
@@ -820,7 +826,7 @@ function showErrorMessage(msg: string) {
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 6px 12px; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; }
 .btn svg { width: 14px; height: 14px; }
 .btn-sm { padding: 4px 10px; font-size: 12px; }
-.btn-primary { background: linear-gradient(135deg, #1e3a5f 0%, #3b82f6 100%); color: #fff; }
+.btn-primary { background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%); color: #fff; }
 .btn-primary:hover:not(:disabled) { transform: translateY(-1px); }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-secondary { background: #fff; color: #475569; border: 1px solid #e2e8f0; }

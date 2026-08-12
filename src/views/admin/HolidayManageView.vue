@@ -250,7 +250,7 @@ onMounted(() => {
 .page-title {
   font-size: 18px;
   font-weight: 600;
-  color: #1e3a5f;
+  color: #2563eb;
   margin: 0 0 8px 0;
 }
 
@@ -295,7 +295,7 @@ onMounted(() => {
   content: '';
   width: 4px;
   height: 18px;
-  background: linear-gradient(180deg, #1e3a5f 0%, #3b82f6 100%);
+  background: linear-gradient(180deg, #2563eb 0%, #3b82f6 100%);
   border-radius: 2px;
 }
 
@@ -323,7 +323,7 @@ onMounted(() => {
 }
 
 .chip.active {
-  background: linear-gradient(135deg, #1e3a5f 0%, #3b82f6 100%);
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
   border-color: transparent;
   color: #fff;
 }
@@ -365,7 +365,7 @@ onMounted(() => {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #1e3a5f 0%, #3b82f6 100%);
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
   color: #fff;
   box-shadow: 0 2px 8px rgba(30, 58, 95, 0.3);
 }
@@ -448,7 +448,7 @@ onMounted(() => {
 .stat-value {
   font-size: 24px;
   font-weight: 700;
-  color: #1e3a5f;
+  color: #2563eb;
 }
 
 .table-container {
@@ -550,7 +550,7 @@ onMounted(() => {
   width: 20px;
   height: 20px;
   border: 2px solid #e2e8f0;
-  border-top-color: #1e3a5f;
+  border-top-color: #2563eb;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }

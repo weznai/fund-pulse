@@ -143,7 +143,7 @@ async function handleLogin() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);
+  background: linear-gradient(135deg, #0f172a 0%, #2563eb 50%, #0f172a 100%);
   padding: 20px;
   position: relative;
   overflow: hidden;
@@ -244,7 +244,7 @@ async function handleLogin() {
   justify-content: center;
   width: 72px;
   height: 72px;
-  background: linear-gradient(135deg, #1e3a5f 0%, #3b82f6 100%);
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
   border-radius: 20px;
   margin-bottom: 24px;
   box-shadow: 0 10px 30px -5px rgba(30, 58, 95, 0.4);
@@ -382,7 +382,7 @@ async function handleLogin() {
   align-items: center;
   justify-content: center;
   padding: 16px 24px;
-  background: linear-gradient(135deg, #1e3a5f 0%, #3b82f6 100%);
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
   color: #fff;
   border: none;
   border-radius: 14px;
@@ -398,7 +398,7 @@ async function handleLogin() {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, #3b82f6 0%, #1e3a5f 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
   opacity: 0;
   transition: opacity 0.3s ease;
 }
@@ -469,7 +469,7 @@ async function handleLogin() {
 }
 
 .back-home:hover {
-  color: #1e3a5f;
+  color: #2563eb;
   background: #f1f5f9;
 }
 

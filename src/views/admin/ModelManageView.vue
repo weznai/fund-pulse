@@ -360,11 +360,11 @@ onMounted(loadProviders)
 <style scoped>
 .model-manage-page { max-width: 1200px; }
 .page-header { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #e5e7eb; }
-.page-title { font-size: 18px; font-weight: 600; color: #1e3a5f; margin: 0; }
+.page-title { font-size: 18px; font-weight: 600; color: #2563eb; margin: 0; }
 
 .tabs { display: flex; gap: 4px; margin-bottom: 16px; background: #f1f5f9; border-radius: 8px; padding: 4px; }
 .tab { padding: 8px 20px; border: none; border-radius: 6px; background: transparent; font-size: 13px; font-weight: 500; cursor: pointer; color: #64748b; transition: all 0.2s; }
-.tab.active { background: #fff; color: #1e3a5f; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.tab.active { background: #fff; color: #2563eb; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
 
 .content-body { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; }
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
@@ -402,7 +402,7 @@ onMounted(loadProviders)
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .modal { background: #fff; border-radius: 12px; width: 480px; max-width: 90vw; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
 .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #e2e8f0; }
-.modal-header h3 { font-size: 16px; font-weight: 600; color: #1e3a5f; margin: 0; }
+.modal-header h3 { font-size: 16px; font-weight: 600; color: #2563eb; margin: 0; }
 .modal-close { background: none; border: none; font-size: 20px; color: #94a3b8; cursor: pointer; }
 .modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
 .modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid #e2e8f0; }

@@ -242,6 +242,33 @@ export function initDatabase() {
         }
         db.exec(`UPDATE fund_info SET data_source = 'mobapi' WHERE data_source = 'estimate_only'`)
       }
+    },
+    {
+      name: 'estimate_source_v1_20260727',
+      description: '估值数据源改造：新增 fund_info.estimate_source 字段，迁移旧 ESTIMATE_DATA_SOURCE 到新键',
+      up: () => {
+        const cols = db.prepare(`PRAGMA table_info(fund_info)`).all() as any[]
+        if (!cols.some(c => c.name === 'estimate_source')) {
+          db.exec(`ALTER TABLE fund_info ADD COLUMN estimate_source TEXT DEFAULT NULL`)
+        }
+        // 旧配置迁移映射：auto/sina -> sina_v1, point -> sina_point
+        const oldRow = db.prepare(`SELECT value FROM system_params WHERE key = ?`).get('ESTIMATE_DATA_SOURCE') as { value?: string } | undefined
+        const oldValue = oldRow?.value || 'auto'
+        const migrated = oldValue === 'point' ? 'sina_point' : 'sina_v1'
+        const hasDefault = db.prepare(`SELECT 1 FROM system_params WHERE key = ?`).get('ESTIMATE_DEFAULT_SOURCE')
+        if (!hasDefault) {
+          db.prepare(`INSERT INTO system_params (key, value, remark) VALUES (?, ?, ?)`)
+            .run('ESTIMATE_DEFAULT_SOURCE', migrated, '估值数据源默认源 ID')
+        }
+        const hasChain = db.prepare(`SELECT 1 FROM system_params WHERE key = ?`).get('ESTIMATE_FALLBACK_CHAIN')
+        if (!hasChain) {
+          db.prepare(`INSERT INTO system_params (key, value, remark) VALUES (?, ?, ?)`)
+            .run('ESTIMATE_FALLBACK_CHAIN', JSON.stringify(['sina_v1', 'tiantian', 'sina_v2', 'sina_point']), '估值数据源降级链（JSON 数组）')
+        }
+        // 标记旧键废弃但保留（向下兼容）
+        db.prepare(`UPDATE system_params SET remark = ? WHERE key = ?`)
+          .run('[已废弃-已迁移到 ESTIMATE_DEFAULT_SOURCE]', 'ESTIMATE_DATA_SOURCE')
+      }
     }
   ]
 

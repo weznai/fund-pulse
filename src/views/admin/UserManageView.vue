@@ -323,7 +323,7 @@ onMounted(() => {
 .page-title {
   font-size: 18px;
   font-weight: 600;
-  color: #1e3a5f;
+  color: #2563eb;
   margin: 0 0 8px 0;
 }
 
@@ -401,14 +401,14 @@ onMounted(() => {
   content: '';
   width: 4px;
   height: 18px;
-  background: linear-gradient(180deg, #1e3a5f 0%, #3b82f6 100%);
+  background: linear-gradient(180deg, #2563eb 0%, #3b82f6 100%);
   border-radius: 2px;
 }
 
 .user-count {
   font-size: 13px;
   font-weight: 600;
-  color: #1e3a5f;
+  color: #2563eb;
   background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
   padding: 6px 14px;
   border-radius: 20px;
@@ -462,7 +462,7 @@ onMounted(() => {
   font-family: 'SF Mono', Consolas, monospace;
   font-size: 13px;
   font-weight: 600;
-  color: #1e3a5f;
+  color: #2563eb;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -647,11 +647,11 @@ onMounted(() => {
 
 .stat-icon.users {
   background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-  color: #1e3a5f;
+  color: #2563eb;
 }
 
 .stat-card:has(.stat-icon.users)::before {
-  background: linear-gradient(90deg, #1e3a5f, #3b82f6);
+  background: linear-gradient(90deg, #2563eb, #3b82f6);
 }
 
 .stat-icon.holdings {
@@ -765,7 +765,7 @@ onMounted(() => {
   width: 20px;
   height: 20px;
   border: 2px solid #e2e8f0;
-  border-top-color: #1e3a5f;
+  border-top-color: #2563eb;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }

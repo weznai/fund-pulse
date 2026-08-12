@@ -12,7 +12,7 @@ import {
   updateUserLabel, isUserLabelExists,
   getSystemParam, getAllSystemParams, setSystemParam, deleteSystemParam,
   getFundInfo, getFundInfoList, saveFundInfo, updateFundInfoField, updateFundInfoRecommend,
-  deleteFundInfo, batchSaveFundInfo, getAllFundInfoCodes,
+  deleteFundInfo, hasFundHolders, batchSaveFundInfo, getAllFundInfoCodes,
   ensureVisitLogsTable, getVisitStats, migrateStatsToDatabase,
   getVisitLogs, getIpStats, deleteVisitLogsByIps, deleteVisitLogsByUserIds,
   getTaskList, createTask, updateTask, getTaskById,
@@ -808,10 +808,15 @@ router.put('/fund-info/:code', validateAdminToken, (req: Request, res: Response)
 
 router.delete('/fund-info/:code', validateAdminToken, (req: Request, res: Response) => {
   try {
-    const success = deleteFundInfo(req.params.code)
-    if (!success) {
-      return res.status(404).json({ error: '基金不存在' })
+    const code = req.params.code
+    if (hasFundHolders(code)) {
+      return res.status(400).json({ error: '该基金有用户持仓，无法删除。请先清除所有用户的持仓后再操作。' })
     }
+    const success = deleteFundInfo(code)
+    if (!success) {
+      return res.status(404).json({ error: '基金不存在或已删除' })
+    }
+    logger.log(`[基金管理] 软删除基金: ${code}`)
     res.json({ success: true })
   } catch (error) {
     logger.error('删除基金失败:', error)
@@ -828,12 +833,22 @@ router.post('/fund-info/batch-delete', validateAdminToken, (req: Request, res: R
     }
 
     let deletedCount = 0
+    const blocked: Array<{ code: string; reason: string }> = []
     for (const code of codes) {
+      if (hasFundHolders(code)) {
+        blocked.push({ code, reason: '有用户持仓' })
+        continue
+      }
       const success = deleteFundInfo(code)
-      if (success) deletedCount++
+      if (success) {
+        deletedCount++
+      } else {
+        blocked.push({ code, reason: '不存在或已删除' })
+      }
     }
 
-    res.json({ success: true, deleted: deletedCount, total: codes.length })
+    logger.log(`[基金管理] 批量软删除: 成功 ${deletedCount}/${codes.length}，被阻止 ${blocked.length}`)
+    res.json({ success: true, deleted: deletedCount, total: codes.length, blocked })
   } catch (error) {
     logger.error('批量删除基金失败:', error)
     res.status(500).json({ error: '批量删除基金失败' })

@@ -256,7 +256,7 @@ onMounted(loadList)
 .credit-page { max-width: 1200px; }
 
 .page-header { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #e5e7eb; }
-.page-title { font-size: 18px; font-weight: 600; color: #1e3a5f; margin: 0 0 8px 0; }
+.page-title { font-size: 18px; font-weight: 600; color: #2563eb; margin: 0 0 8px 0; }
 .page-desc { font-size: 14px; color: #64748b; margin: 0; }
 
 .content-body { display: flex; flex-direction: column; gap: 16px; }
@@ -293,7 +293,7 @@ onMounted(loadList)
   flex: 1; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
   padding: 16px 20px; display: flex; flex-direction: column; align-items: center; gap: 4px;
 }
-.stat-value { font-size: 24px; font-weight: 700; color: #1e3a5f; }
+.stat-value { font-size: 24px; font-weight: 700; color: #2563eb; }
 .stat-label { font-size: 12px; color: #64748b; font-weight: 500; }
 
 /* 表格 */
@@ -316,7 +316,7 @@ onMounted(loadList)
 .type-badge.registered { background: #dbeafe; color: #1e40af; }
 .type-badge.guest { background: #f1f5f9; color: #64748b; }
 
-.credits-value { font-weight: 600; color: #1e3a5f; }
+.credits-value { font-weight: 600; color: #2563eb; }
 
 .loading-state, .empty-state {
   display: flex; align-items: center; justify-content: center;
@@ -358,7 +358,7 @@ onMounted(loadList)
   display: flex; align-items: center; justify-content: space-between;
   padding: 16px 20px; border-bottom: 1px solid #e5e7eb;
 }
-.dialog-header h3 { margin: 0; font-size: 16px; color: #1e3a5f; }
+.dialog-header h3 { margin: 0; font-size: 16px; color: #2563eb; }
 .dialog-close {
   background: none; border: none; font-size: 20px; color: #94a3b8; cursor: pointer;
   padding: 0; line-height: 1;

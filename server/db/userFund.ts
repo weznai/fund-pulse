@@ -474,9 +474,9 @@ export function settleHoldingProfit(
 
   const transaction = db.transaction(() => {
     const existingRecord = db.prepare(`
-      SELECT id, day_profit FROM user_funds_profit_history
+      SELECT id, day_profit, opening_amount FROM user_funds_profit_history
       WHERE user_id = ? AND fund_code = ? AND profit_date = ? AND profit_type = 'final'
-    `).get(userId, fundCode, today) as { id: number; day_profit: number } | undefined
+    `).get(userId, fundCode, today) as { id: number; day_profit: number; opening_amount: number } | undefined
 
     if (existingRecord) {
       if (!options?.reSettle) {
@@ -484,25 +484,29 @@ export function settleHoldingProfit(
         return { skipped: true } as const
       }
 
+      const baseAmount = existingRecord.opening_amount || holding.amount
+      const reDayProfit = Math.round(baseAmount * (fundData.dayGrowth / 100) * 100) / 100
+      const reOpening = Math.round(baseAmount * 100) / 100
+      const reClosing = Math.round((baseAmount + reDayProfit) * 100) / 100
+
       const oldProfit = existingRecord.day_profit || 0
-      const profitDelta = Math.round((dayProfit - oldProfit) * 100) / 100
-      const newAccumulatedProfit = Math.round(((holding.accumulated_profit || 0) + profitDelta) * 100) / 100
+      const newAccumulatedProfit = Math.round(((holding.accumulated_profit || 0) - oldProfit + reDayProfit) * 100) / 100
 
       db.prepare(`
         UPDATE user_funds_profit_history
         SET opening_amount = ?, closing_amount = ?, day_profit = ?, day_profit_rate = ?,
             nav = ?, day_growth = ?
         WHERE id = ?
-      `).run(openingAmount, closingAmount, dayProfit, dayProfitRate, fundData.nav, fundData.dayGrowth, existingRecord.id)
+      `).run(reOpening, reClosing, reDayProfit, dayProfitRate, fundData.nav, fundData.dayGrowth, existingRecord.id)
 
       db.prepare(`
         UPDATE user_funds
         SET amount = ?, accumulated_profit = ?, current_day_profit = ?, current_day_profit_rate = ?,
             settled = 1, settle_date = ?, profit_type = 'final', last_profit_date = ?
         WHERE user_id = ? AND fund_code = ? AND is_held = 1
-      `).run(closingAmount, newAccumulatedProfit, dayProfit, dayProfitRate, today, today, userId, fundCode)
+      `).run(reClosing, newAccumulatedProfit, reDayProfit, dayProfitRate, today, today, userId, fundCode)
 
-      logger.log(`🔄 持仓重新结算 ${fundCode}: 净值${fundData.nav} 涨幅${fundData.dayGrowth}% 收益${dayProfit.toFixed(2)}(旧${oldProfit.toFixed(2)}) 累计${newAccumulatedProfit.toFixed(2)}`)
+      logger.log(`🔄 持仓重新结算 ${fundCode}: 净值${fundData.nav} 涨幅${fundData.dayGrowth}% 收益${reDayProfit.toFixed(2)}(旧${oldProfit.toFixed(2)}) 累计${newAccumulatedProfit.toFixed(2)}`)
       return { historyId: existingRecord.id } as const
     }
 

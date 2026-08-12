@@ -78,7 +78,7 @@
 
     <!-- 图表区域 - 三列布局 -->
     <div class="charts-container-three">
-      <!-- 最近7天数据表格 -->
+      <!-- 最近30天数据表格 -->
       <div class="chart-card">
         <div class="chart-header">
           <h3>最近30天访问数据</h3>
@@ -787,7 +787,7 @@ function updateLineChart() {
         lineStyle: {
           width: 3,
           color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-            { offset: 0, color: '#1e3a5f' },
+            { offset: 0, color: '#2563eb' },
             { offset: 1, color: '#3b82f6' }
           ])
         },
@@ -798,7 +798,7 @@ function updateLineChart() {
           ])
         },
         itemStyle: {
-          color: '#1e3a5f'
+          color: '#2563eb'
         }
       },
       {
@@ -876,7 +876,7 @@ function updatePieChart() {
           show: false
         },
         data: data,
-        color: ['#1e3a5f', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316']
+        color: ['#2563eb', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316']
       }
     ]
   }, true)
@@ -926,7 +926,7 @@ function updateIpBarChart() {
         borderRadius: [0, 4, 4, 0],
         color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
           { offset: 0, color: '#3b82f6' },
-          { offset: 1, color: '#1e3a5f' }
+          { offset: 1, color: '#2563eb' }
         ])
       }
     }]
@@ -993,7 +993,7 @@ onUnmounted(() => {
 .page-title {
   font-size: 18px;
   font-weight: 600;
-  color: #1e3a5f;
+  color: #2563eb;
   margin: 0 0 8px 0;
 }
 
@@ -1043,7 +1043,7 @@ onUnmounted(() => {
 }
 
 .stat-card.today .stat-icon {
-  background: linear-gradient(135deg, #1e3a5f 0%, #3b82f6 100%);
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
   color: #fff;
 }
 
@@ -1101,7 +1101,7 @@ onUnmounted(() => {
 .section-title {
   font-size: 16px;
   font-weight: 600;
-  color: #1e3a5f;
+  color: #2563eb;
   margin: 0 0 4px 0;
 }
 
@@ -1339,7 +1339,7 @@ onUnmounted(() => {
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #1e3a5f 0%, #3b82f6 100%);
+  background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
   border-radius: 10px;
   transition: width 0.3s ease;
 }
@@ -1408,7 +1408,7 @@ onUnmounted(() => {
   width: 40px;
   height: 40px;
   border: 3px solid #e2e8f0;
-  border-top-color: #1e3a5f;
+  border-top-color: #2563eb;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -1519,7 +1519,7 @@ onUnmounted(() => {
 
 .ip-cell {
   font-family: monospace;
-  color: #1e3a5f !important;
+  color: #2563eb !important;
 }
 
 .path-cell {
@@ -1681,7 +1681,7 @@ onUnmounted(() => {
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 13px;
-  color: #1e3a5f;
+  color: #2563eb;
 }
 
 .modal-body .text-muted {
@@ -1871,7 +1871,7 @@ onUnmounted(() => {
 .log-detail-section {
   font-size: 13px;
   font-weight: 600;
-  color: #1e3a5f;
+  color: #2563eb;
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid #f1f5f9;

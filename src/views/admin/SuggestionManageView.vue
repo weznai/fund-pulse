@@ -204,7 +204,7 @@ onMounted(() => { loadList() })
 .page-title {
   font-size: 18px;
   font-weight: 600;
-  color: #1e3a5f;
+  color: #2563eb;
   margin: 0 0 8px 0;
 }
 
@@ -250,7 +250,7 @@ onMounted(() => { loadList() })
 }
 
 .stat-chip span { font-weight: 400; color: #64748b; }
-.stat-chip strong { font-weight: 600; color: #1e3a5f; }
+.stat-chip strong { font-weight: 600; color: #2563eb; }
 
 .stat-chip:hover { background: #f1f5f9; border-color: #cbd5e1; }
 

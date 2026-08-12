@@ -55,6 +55,8 @@ export interface FundEstimatePointData {
   gszzl: number
   /** 估值时间 "YYYY-MM-DD HH:mm:ss" */
   gztime: string
+  /** 基金名称（仅部分数据源能提供，如天天基金 FundValuationLast 的 SHORTNAME） */
+  name?: string
 }
 
 const FUND_TIMESERIES_URL = 'https://stock.finance.sina.com.cn/fundInfo/api/openapi.php/FdFundService.getEstimateNetworthPic'
@@ -74,12 +76,88 @@ function round4(n: number): number {
 }
 
 /**
- * 获取基金分钟级分时估值曲线（主数据源）
+ * 新浪 FdFundService 返回的两种估值口径字段名映射
  *
- * 调用新浪 FdFundService.getEstimateNetworthPic，返回当日完整的分钟级估值序列。
- * 适用于基金详情页分时图、定时采集入库等需要完整曲线的场景。
+ * 新浪接口对同一净值序列提供两套口径：
+ *   - 第一口径（V1）：pre_nav / nav_pct（百分比字符串，如 "3.4170" 表示 3.417%）
+ *   - 第二口径（V2）：pre_nav2 / nav2_pct（注意字段名是 nav2_pct 不是 nav_pct2）
+ *
+ * 另有 growthrate / growthrate2 字段，是小数比例（如 0.03417 表示 3.417%），
+ * 作为 nav_pct / nav2_pct 缺失时的 fallback，需要乘以 100 转百分比。
+ *
+ * 不同基金/时期最准的口径不同，因此 V2 也作为独立数据源暴露。
  */
-export async function fetchFundEstimateTimeseries(code: string): Promise<FundEstimateTimeseries | null> {
+export type SinaVariant = 'v1' | 'v2'
+
+interface VariantFields {
+  navKey: string
+  pctKey: string
+  /** 涨幅字段的缩放倍数：nav_pct/nav2_pct 类 = 1，growthrate 类 = 100 */
+  scale: number
+}
+
+const VARIANT_FIELD_MAP: Record<SinaVariant, VariantFields[]> = {
+  v1: [
+    { navKey: 'pre_nav', pctKey: 'nav_pct', scale: 1 },
+    { navKey: 'pre_nav', pctKey: 'growthrate', scale: 100 }
+  ],
+  v2: [
+    { navKey: 'pre_nav2', pctKey: 'nav2_pct', scale: 1 },
+    { navKey: 'pre_nav2', pctKey: 'growthrate2', scale: 100 }
+  ]
+}
+
+function pickVariantValue(item: any, variant: SinaVariant): { nav: number; pct: number } | null {
+  for (const fields of VARIANT_FIELD_MAP[variant]) {
+    const nav = Number(item[fields.navKey])
+    const rawPct = Number(item[fields.pctKey])
+    if (!isNaN(nav) && !isNaN(rawPct)) {
+      return { nav, pct: rawPct * fields.scale }
+    }
+  }
+  return null
+}
+
+/**
+ * 通用分时曲线解析：按指定口径版本解析 networth 数组
+ *
+ * 抽出原 fetchFundEstimateTimeseries 的解析逻辑并参数化，
+ * V1/V2 共用同一段代码，避免重复。
+ */
+function parseTimeseriesByVariant(networth: any[], variant: SinaVariant): {
+  timeseries: FundEstimatePoint[]
+  lastNav: number
+  lastPct: number
+  lastDate: string
+  lastMinTime: string
+} | null {
+  const timeseries: FundEstimatePoint[] = []
+  let lastNav = NaN
+  let lastPct = NaN
+  let lastDate = ''
+  let lastMinTime = ''
+
+  for (const item of networth) {
+    const minTime: string = item.min_time || ''
+    if (minTime.length < 5) continue
+    const picked = pickVariantValue(item, variant)
+    if (!picked) continue
+    timeseries.push({
+      time: minTime.substring(0, 5),
+      value: round4(picked.nav),
+      percent: round2(picked.pct)
+    })
+    lastNav = picked.nav
+    lastPct = picked.pct
+    lastDate = item.pre_date || lastDate
+    lastMinTime = minTime
+  }
+
+  if (timeseries.length === 0 || isNaN(lastNav) || isNaN(lastPct)) return null
+  return { timeseries, lastNav, lastPct, lastDate, lastMinTime }
+}
+
+async function fetchTimeseriesByVariant(code: string, variant: SinaVariant): Promise<FundEstimateTimeseries | null> {
   try {
     const response = await axios.get(FUND_TIMESERIES_URL, {
       params: { symbol: code },
@@ -92,43 +170,47 @@ export async function fetchFundEstimateTimeseries(code: string): Promise<FundEst
       return null
     }
 
-    const timeseries: FundEstimatePoint[] = []
-    for (const item of networth) {
-      const minTime: string = item.min_time || ''
-      const preNav = Number(item.pre_nav)
-      const navPct = Number(item.nav_pct)
-      if (minTime.length < 5 || isNaN(preNav) || isNaN(navPct)) continue
-      // "09:30:00" -> "09:30"
-      timeseries.push({
-        time: minTime.substring(0, 5),
-        value: round4(preNav),
-        percent: round2(navPct)
-      })
-    }
+    const parsed = parseTimeseriesByVariant(networth, variant)
+    if (!parsed) return null
 
-    if (timeseries.length === 0) return null
-
-    const last = networth[networth.length - 1]
-    const gsz = Number(last.pre_nav)
-    const gszzl = Number(last.nav_pct)
-    const date: string = last.pre_date || ''
-    const minTime: string = (last.min_time || '').substring(0, 5)
-    const gztime = date ? `${date} ${minTime}`.trim() : minTime
+    const { timeseries, lastNav, lastPct, lastDate, lastMinTime } = parsed
+    const minTime = lastMinTime.substring(0, 5)
+    const gztime = lastDate ? `${lastDate} ${minTime}`.trim() : minTime
     // 由最新估算净值和涨幅反推基准（昨日）净值：nav = gsz / (1 + gszzl/100)
-    const nav = gsz > 0 && gszzl ? gsz / (1 + gszzl / 100) : gsz
+    const nav = lastNav > 0 && lastPct ? lastNav / (1 + lastPct / 100) : lastNav
 
     return {
       timeseries,
       nav: round4(nav),
-      gsz: round4(gsz),
-      gszzl: round2(gszzl),
+      gsz: round4(lastNav),
+      gszzl: round2(lastPct),
       gztime,
-      date
+      date: lastDate
     }
   } catch (error) {
-    logger.error(`[新浪分时] ${code} 获取失败:`, error instanceof Error ? error.message : error)
+    logger.error(`[新浪分时${variant.toUpperCase()}] ${code} 获取失败:`, error instanceof Error ? error.message : error)
     return null
   }
+}
+
+/**
+ * 获取基金分钟级分时估值曲线（主数据源，第一口径）
+ *
+ * 调用新浪 FdFundService.getEstimateNetworthPic，返回当日完整的分钟级估值序列。
+ * 适用于基金详情页分时图、定时采集入库等需要完整曲线的场景。
+ */
+export async function fetchFundEstimateTimeseries(code: string): Promise<FundEstimateTimeseries | null> {
+  return fetchTimeseriesByVariant(code, 'v1')
+}
+
+/**
+ * 获取基金分钟级分时估值曲线（第二口径）
+ *
+ * 与 fetchFundEstimateTimeseries 同一接口，但解析 pre_nav2/nav_pct2 字段。
+ * 部分基金第二口径更接近实际涨跌幅，作为独立数据源暴露供选择。
+ */
+export async function fetchFundEstimateTimeseriesV2(code: string): Promise<FundEstimateTimeseries | null> {
+  return fetchTimeseriesByVariant(code, 'v2')
 }
 
 /**

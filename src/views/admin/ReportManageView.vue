@@ -317,7 +317,7 @@ onMounted(() => {
 .report-page { max-width: 1200px; }
 
 .page-header { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #e5e7eb; }
-.page-title { font-size: 18px; font-weight: 600; color: #1e3a5f; margin: 0 0 8px 0; }
+.page-title { font-size: 18px; font-weight: 600; color: #2563eb; margin: 0 0 8px 0; }
 .page-desc { font-size: 14px; color: #64748b; margin: 0; }
 
 .content-body { display: flex; flex-direction: column; gap: 16px; }
@@ -327,7 +327,7 @@ onMounted(() => {
   flex: 1; min-width: 100px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
   padding: 14px 16px; display: flex; flex-direction: column; align-items: center; gap: 2px;
 }
-.stat-value { font-size: 24px; font-weight: 700; color: #1e3a5f; }
+.stat-value { font-size: 24px; font-weight: 700; color: #2563eb; }
 .stat-label { font-size: 12px; color: #64748b; font-weight: 500; }
 .stat-buy .stat-value { color: #2563EB; }
 .stat-sell .stat-value { color: #DC2626; }

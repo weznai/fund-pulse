@@ -276,6 +276,35 @@ const menuItems = [
     }
   },
   {
+    path: '/admin/estimate-source',
+    title: '数据源配置',
+    icon: {
+      render() {
+        return h('svg', { viewBox: '0 0 24 24', fill: 'none' }, [
+          h('path', {
+            d: 'M3 12h4l3-8 4 16 3-8h4',
+            stroke: 'currentColor',
+            'stroke-width': '1.8',
+            'stroke-linecap': 'round',
+            'stroke-linejoin': 'round'
+          }),
+          h('circle', {
+            cx: '3',
+            cy: '12',
+            r: '1.5',
+            fill: 'currentColor'
+          }),
+          h('circle', {
+            cx: '21',
+            cy: '12',
+            r: '1.5',
+            fill: 'currentColor'
+          })
+        ])
+      }
+    }
+  },
+  {
     path: '/admin/visit-stats',
     title: '访问管理',
     icon: {
@@ -466,7 +495,7 @@ function handleLogout() {
 /* 头部 */
 .admin-header {
   height: 64px;
-  background: #1e3a5f;
+  background: #2563eb;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -601,7 +630,7 @@ function handleLogout() {
   transform: translateY(-50%);
   margin-left: 8px;
   padding: 6px 12px;
-  background: #1e3a5f;
+  background: #2563eb;
   color: #fff;
   font-size: 13px;
   border-radius: 4px;
@@ -622,7 +651,7 @@ function handleLogout() {
 .sidebar-title {
   font-size: 16px;
   font-weight: 600;
-  color: #1e3a5f;
+  color: #2563eb;
   white-space: nowrap;
 }
 
@@ -679,12 +708,12 @@ function handleLogout() {
 
 .nav-item:hover {
   background: #f1f5f9;
-  color: #1e3a5f;
+  color: #2563eb;
 }
 
 .nav-item.active {
   background: #e0f2fe;
-  color: #1e3a5f;
+  color: #2563eb;
 }
 
 .nav-icon {
@@ -788,7 +817,7 @@ function handleLogout() {
 }
 
 .breadcrumb-item.active {
-  color: #1e3a5f;
+  color: #2563eb;
   font-weight: 600;
 }
 
@@ -848,7 +877,7 @@ function handleLogout() {
 }
 
 .breadcrumb-item.active {
-  color: #1e3a5f;
+  color: #2563eb;
   font-weight: 600;
 }
 

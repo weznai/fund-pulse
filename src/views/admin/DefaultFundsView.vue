@@ -395,7 +395,7 @@ function showErrorMessage(msg: string) {
 .page-title {
   font-size: 18px;
   font-weight: 600;
-  color: #1e3a5f;
+  color: #2563eb;
   margin: 0 0 8px 0;
 }
 
@@ -432,7 +432,7 @@ function showErrorMessage(msg: string) {
   content: '';
   width: 4px;
   height: 18px;
-  background: linear-gradient(180deg, #1e3a5f 0%, #3b82f6 100%);
+  background: linear-gradient(180deg, #2563eb 0%, #3b82f6 100%);
   border-radius: 2px;
 }
 
@@ -534,7 +534,7 @@ function showErrorMessage(msg: string) {
 .fund-info .fund-code {
   font-family: 'SF Mono', Consolas, monospace;
   font-weight: 600;
-  color: #1e3a5f;
+  color: #2563eb;
   font-size: 14px;
 }
 
@@ -622,7 +622,7 @@ function showErrorMessage(msg: string) {
 .fund-count {
   font-size: 13px;
   font-weight: 600;
-  color: #1e3a5f;
+  color: #2563eb;
   background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
   padding: 6px 14px;
   border-radius: 20px;
@@ -657,7 +657,7 @@ function showErrorMessage(msg: string) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1e3a5f 0%, #3b82f6 100%);
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
   border-radius: 4px;
   font-size: 10px;
   font-weight: 600;
@@ -667,7 +667,7 @@ function showErrorMessage(msg: string) {
 .fund-code {
   font-size: 13px;
   font-weight: 600;
-  color: #1e3a5f;
+  color: #2563eb;
   font-family: 'SF Mono', Consolas, monospace;
 }
 
@@ -786,7 +786,7 @@ function showErrorMessage(msg: string) {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #1e3a5f 0%, #3b82f6 100%);
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
   color: #fff;
   box-shadow: 0 2px 8px rgba(30, 58, 95, 0.3);
 }

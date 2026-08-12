@@ -395,24 +395,26 @@ function generateTimeSeries(nav: number, finalPercent: number, code: string): Ar
  * 从东方财富API获取基金详情
  */
 async function fetchFundDetailFromApi(code: string): Promise<Partial<FundInfo> | null> {
-  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
   try {
-    const response = await axios.get('https://fundgzapp.eastmoney.com/fundapp/native/ntdetail', {
-      params: { FCODE: code, _: Date.now() },
-      headers: { 'Referer': 'https://fund.eastmoney.com/', 'User-Agent': UA },
+    const response = await axios.get('https://fundmobapi.eastmoney.com/FundMNewApi/FundMNDetailInformation', {
+      params: {
+        FCode: code,
+        deviceid: '3f8b2c5d-7a1e-4d9b-b6e3-2c4f8a1d5e7b',
+        plat: 'Android',
+        appType: 'ttjj',
+        product: 'EFund',
+        Version: '1'
+      },
+      headers: {
+        'Referer': 'https://mpservice.com/eastmoneyfund/',
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'
+      },
       timeout: 8000
     })
 
-    logger.log(`基金 ${code} API 响应状态: ${response.status}`)
-
-    if (!response.data) {
-      logger.error(`基金 ${code} API 返回空数据`)
-      return null
-    }
-
     const data = response.data?.Datas
-    if (!data) {
-      logger.warn(`基金 ${code} ntdetail API 无 Datas 字段，尝试 Search API 降级...`)
+    if (!data || !response.data?.Success) {
+      logger.warn(`基金 ${code} DetailInformation 无数据，尝试 Search API 降级...`)
       return await fetchFundBasicInfoFromSearchApi(code)
     }
 
@@ -422,20 +424,15 @@ async function fetchFundDetailFromApi(code: string): Promise<Partial<FundInfo> |
       ftype: data.FTYPE || undefined,
       fund_company: data.JJGS || undefined,
       fund_manager: data.JJJL || undefined,
-      establish_date: data.FOUNDDATE || undefined,
-      fund_scale: data.FUNDSCALE ? parseFloat(data.FUNDSCALE) : undefined,
-      benchmark: data.BENCHMARK || undefined
+      establish_date: data.ESTABDATE || undefined,
+      fund_scale: data.ENDNAV ? parseFloat(data.ENDNAV) / 1e8 : undefined,
+      benchmark: data.BENCH || undefined
     }
 
     logger.log(`获取基金 ${code} 详情成功: name=${result.name}`)
-
     return result
   } catch (error: any) {
-    if (error.response) {
-      logger.warn(`基金 ${code} ntdetail 请求失败(HTTP ${error.response.status}),尝试 Search API 降级...`)
-    } else {
-      logger.warn(`基金 ${code} ntdetail 请求异常(${error.code || error.message}),尝试 Search API 降级...`)
-    }
+    logger.warn(`基金 ${code} DetailInformation 请求异常(${error.code || error.message}),尝试 Search API 降级...`)
     return await fetchFundBasicInfoFromSearchApi(code)
   }
 }
@@ -508,38 +505,12 @@ export class FundService {
 
   /**
    * 获取基金详情
+   * 
+   * 委托给独立的 fetchFundDetailFromApi（使用 MobAPI FundMNDetailInformation），
+   * 避免与批量导入逻辑重复维护两套接口调用。
    */
   async fetchFundDetail(code: string): Promise<Partial<FundCache> | null> {
-    try {
-      const response = await axios.get('https://fundgzapp.eastmoney.com/fundapp/native/ntdetail', {
-        params: { FCODE: code, _: Date.now() },
-        headers: { 
-          'Referer': 'https://fund.eastmoney.com/',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        },
-        timeout: 8000
-      })
-
-      const data = response.data?.Datas
-      
-      if (!data) {
-        return fetchFundBasicInfoFromSearchApi(code)
-      }
-
-      return {
-        code: data.FCODE,
-        name: data.SHORTNAME,
-        ftype: data.FTYPE,
-        fund_company: data.JJGS,
-        fund_manager: data.JJJL,
-        establish_date: data.FOUNDDATE,
-        fund_scale: data.FUNDSCALE ? parseFloat(data.FUNDSCALE) : undefined,
-        benchmark: data.BENCHMARK
-      }
-    } catch (error) {
-      logger.error(`获取基金 ${code} 详情失败:`, error)
-      return fetchFundBasicInfoFromSearchApi(code)
-    }
+    return fetchFundDetailFromApi(code)
   }
 
   /**

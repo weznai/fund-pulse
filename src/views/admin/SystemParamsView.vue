@@ -10,18 +10,15 @@
     </div>
 
     <div class="content-body" v-show="activeTab === 'params'">
-      <div class="source-switcher">
-        <span class="switcher-label">估值数据源</span>
-        <div class="switcher-btns">
-          <button
-            v-for="opt in estimateSourceOptions"
-            :key="opt.value"
-            :class="['switcher-btn', { active: currentEstimateSource === opt.value }]"
-            :title="opt.desc"
-            @click="switchEstimateSource(opt.value)"
-          >{{ opt.label }}</button>
+      <div class="source-redirect">
+        <div class="redirect-info">
+          <span class="redirect-icon">↗</span>
+          <div>
+            <div class="redirect-title">估值数据源已迁移到独立配置页</div>
+            <div class="redirect-desc">原三按钮切换器已升级为多数据源管理，支持基金级配置、健康检查和实时对比</div>
+          </div>
         </div>
-        <span class="switcher-desc">{{ estimateSourceOptions.find(o => o.value === currentEstimateSource)?.desc }}</span>
+        <router-link to="/admin/estimate-source" class="redirect-btn">前往数据源配置</router-link>
       </div>
 
       <div class="params-section">
@@ -306,36 +303,6 @@ interface CalCell {
 }
 
 const activeTab = ref('params')
-
-const estimateSourceOptions = [
-  { value: 'auto', label: '自动', desc: '优先分时曲线，失败降级单点（推荐）' },
-  { value: 'sina', label: '分时曲线', desc: '强制新浪 FdFundService，不降级' },
-  { value: 'point', label: '单点模式', desc: '只用 fu_ 单点，适合 FdFundService 被限流的环境' }
-]
-const currentEstimateSource = ref('auto')
-
-async function loadEstimateSource() {
-  try {
-    const { data } = await axios.get('/api/admin/system-params/ESTIMATE_DATA_SOURCE')
-    currentEstimateSource.value = data.value
-  } catch {
-    currentEstimateSource.value = 'auto'
-  }
-}
-
-async function switchEstimateSource(value: string) {
-  if (currentEstimateSource.value === value) return
-  try {
-    await axios.post('/api/admin/system-params', {
-      key: 'ESTIMATE_DATA_SOURCE',
-      value,
-      remark: '估值数据源模式'
-    })
-    currentEstimateSource.value = value
-  } catch (error: any) {
-    alert(error.response?.data?.error || '切换失败')
-  }
-}
 
 const loading = ref(false)
 const params = ref<SystemParam[]>([])
@@ -647,7 +614,6 @@ watch(selectedYear, () => {
 
 onMounted(() => {
   loadParams()
-  loadEstimateSource()
   loadHolidayStats()
   loadHolidays()
 })
@@ -667,7 +633,7 @@ onMounted(() => {
 .page-title {
   font-size: 18px;
   font-weight: 600;
-  color: #1e3a5f;
+  color: #2563eb;
   margin: 0 0 8px 0;
 }
 
@@ -720,56 +686,56 @@ onMounted(() => {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-.source-switcher {
+.source-redirect {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%);
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.redirect-info {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  padding: 16px 24px;
-  margin-bottom: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-.switcher-label {
+.redirect-icon {
+  font-size: 22px;
+  color: #3b82f6;
   font-weight: 600;
+}
+
+.redirect-title {
   font-size: 14px;
-  color: #1e293b;
-  white-space: nowrap;
+  font-weight: 600;
+  color: #1e40af;
+  margin-bottom: 2px;
 }
 
-.switcher-btns {
-  display: flex;
-  gap: 8px;
-}
-
-.switcher-btn {
-  padding: 6px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #f8fafc;
-  color: #64748b;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.switcher-btn:hover {
-  border-color: #3b82f6;
+.redirect-desc {
+  font-size: 12px;
   color: #3b82f6;
 }
 
-.switcher-btn.active {
+.redirect-btn {
+  padding: 8px 16px;
   background: #3b82f6;
-  border-color: #3b82f6;
   color: #fff;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background 0.2s;
 }
 
-.switcher-desc {
-  font-size: 12px;
-  color: #94a3b8;
-  margin-left: auto;
+.redirect-btn:hover {
+  background: #2563eb;
 }
 
 .params-section.compact {
@@ -821,7 +787,7 @@ onMounted(() => {
   content: '';
   width: 4px;
   height: 18px;
-  background: linear-gradient(180deg, #1e3a5f 0%, #3b82f6 100%);
+  background: linear-gradient(180deg, #2563eb 0%, #3b82f6 100%);
   border-radius: 2px;
 }
 
@@ -849,7 +815,7 @@ onMounted(() => {
 }
 
 .chip.active {
-  background: linear-gradient(135deg, #1e3a5f 0%, #3b82f6 100%);
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
   border-color: transparent;
   color: #fff;
 }
@@ -896,7 +862,7 @@ onMounted(() => {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #1e3a5f 0%, #3b82f6 100%);
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
   color: #fff;
   box-shadow: 0 2px 8px rgba(30, 58, 95, 0.3);
 }
@@ -979,7 +945,7 @@ onMounted(() => {
 .stat-value {
   font-size: 20px;
   font-weight: 700;
-  color: #1e3a5f;
+  color: #2563eb;
 }
 
 .table-container {
@@ -1026,7 +992,7 @@ onMounted(() => {
   font-family: 'SF Mono', Consolas, monospace;
   font-size: 13px;
   font-weight: 600;
-  color: #1e3a5f;
+  color: #2563eb;
 }
 
 .param-value,
@@ -1117,7 +1083,7 @@ onMounted(() => {
   width: 20px;
   height: 20px;
   border: 2px solid #e2e8f0;
-  border-top-color: #1e3a5f;
+  border-top-color: #2563eb;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -1187,7 +1153,7 @@ onMounted(() => {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #1e3a5f;
+  color: #2563eb;
 }
 
 .modal-close {

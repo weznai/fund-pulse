@@ -29,6 +29,7 @@ import suggestionRoutes from './routes/suggestion.js'
 import analysisRoutes from './routes/analysis.js'
 import wechatRoutes from './routes/wechat.js'
 import systemUpdateRoutes from './routes/systemUpdate.js'
+import { setupEstimateSourceRoutes } from './routes/estimateSource.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -70,6 +71,7 @@ logger.log('⏰ 已启动定时任务（8:00初始化结算状态，18:00后获�
 
 app.use('/api/admin/holidays', setupHolidayRoutes(validateAdminToken))
 app.use('/api/holidays', setupPublicHolidayRoutes())
+app.use('/api/admin/estimate-sources', setupEstimateSourceRoutes(validateAdminToken))
 
 app.use('/api', fundRoutes)
 app.use('/api/auth', authRoutes)

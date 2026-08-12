@@ -64,11 +64,55 @@ router.get('/eastmoney/FundSearch.ashx', async (req: Request, res: Response) => 
 router.get('/eastmoney/FundDetail.ashx', async (req: Request, res: Response) => {
   try {
     const { FCODE } = req.query
-    const response = await axios.get('https://fundgzapp.eastmoney.com/fundapp/native/ntdetail', {
-      params: { FCODE, _: Date.now() },
-      headers: { 'Referer': 'https://fund.eastmoney.com/', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
+    const code = String(FCODE)
+    const mobHeaders = {
+      'Referer': 'https://mpservice.com/eastmoneyfund/',
+      'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'
+    }
+    const mobParams = {
+      deviceid: '3f8b2c5d-7a1e-4d9b-b6e3-2c4f8a1d5e7b',
+      plat: 'Android',
+      appType: 'ttjj',
+      product: 'EFund',
+      Version: '1'
+    }
+
+    // 并行获取静态详情 + 最新净值
+    const [detailRes, navRes] = await Promise.all([
+      axios.get('https://fundmobapi.eastmoney.com/FundMNewApi/FundMNDetailInformation', {
+        params: { FCode: code, ...mobParams }, headers: mobHeaders, timeout: 8000
+      }),
+      axios.get('https://fundmobapi.eastmoney.com/FundMNewApi/FundMNFInfo', {
+        params: { Fcodes: code, ...mobParams }, headers: mobHeaders, timeout: 8000
+      })
+    ])
+
+    const d = detailRes.data?.Datas
+    const n = navRes.data?.Datas?.[0]
+    if (!d) {
+      return res.json({ Datas: null, Success: false })
+    }
+
+    // 映射为前端 getFundDetail 预期的字段结构
+    res.json({
+      Datas: {
+        FCODE: d.FCODE,
+        SHORTNAME: d.SHORTNAME,
+        FTYPE: d.FTYPE || '',
+        FOUNDDATE: d.ESTABDATE || '',
+        JJGS: d.JJGS || '',
+        JJJL: d.JJJL || '',
+        FUNDMANAGER: d.JJJL || '',
+        FUNDSCALE: d.ENDNAV ? (parseFloat(d.ENDNAV) / 1e8).toFixed(2) : '',
+        BENCHMARK: d.BENCH || '',
+        NAV: n?.NAV || 0,
+        ACCNAV: n?.ACCNAV || 0,
+        DAYGROWTH: n?.NAVCHGRT || 0,
+        FSRQ: n?.PDATE || '',
+        NETVALUE: []
+      },
+      Success: true
     })
-    res.json(response.data)
   } catch (error) {
     logger.error('Eastmoney Detail API proxy error:', error)
     res.status(500).json({ error: '获取数据失败' })

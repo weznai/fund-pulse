@@ -17,6 +17,8 @@ export interface FundInfo {
   updated_at: number
   data_source?: string
   data_extra?: Record<string, string> | null
+  /** 基金级估值数据源 ID（如 'sina_v1'/'tiantian'，NULL 表示跟随全局默认） */
+  estimate_source?: string | null
 }
 
 export interface FundInfoListResult {
@@ -45,6 +47,7 @@ export function getFundInfo(code: string): FundInfo | null {
       is_recommend: result.is_recommend || 0,
       data_source: result.data_source || 'standard',
       data_extra: result.data_extra ? JSON.parse(result.data_extra) : null,
+      estimate_source: result.estimate_source ?? null,
       created_at: result.created_at,
       updated_at: result.updated_at
     }
@@ -63,7 +66,7 @@ export function getFundInfoList(options: {
   const pageSize = options.pageSize || 20
   const offset = (page - 1) * pageSize
 
-  let whereClause = '1=1'
+  let whereClause = 'status = \'active\''
   const params: (string | number)[] = []
 
   if (options.keyword) {
@@ -107,6 +110,7 @@ export function getFundInfoList(options: {
       is_recommend: r.is_recommend || 0,
       data_source: r.data_source || 'standard',
       data_extra: r.data_extra ? JSON.parse(r.data_extra) : null,
+      estimate_source: r.estimate_source ?? null,
       created_at: r.created_at,
       updated_at: r.updated_at
     })),
@@ -196,12 +200,32 @@ export function updateFundInfoRecommend(code: string, isRecommend: number): bool
 }
 
 export function getRecommendFundCodes(): string[] {
-  const stmt = db.prepare('SELECT code FROM fund_info WHERE is_recommend = 1')
+  const stmt = db.prepare('SELECT code FROM fund_info WHERE is_recommend = 1 AND status = \'active\'')
   const results = stmt.all() as { code: string }[]
   return results.map(r => r.code)
 }
 
+/**
+ * 检查基金是否还有用户持仓（任意用户 is_held=1）
+ * 用于删除前校验：有持仓的基金不允许删除
+ */
+export function hasFundHolders(code: string): boolean {
+  const result = db.prepare('SELECT COUNT(*) as c FROM user_funds WHERE fund_code = ? AND is_held = 1').get(code) as { c: number }
+  return result.c > 0
+}
+
+/**
+ * 软删除基金：标记 status = 'inactive'
+ * 调用前应先用 hasFundHolders 校验无持仓
+ */
 export function deleteFundInfo(code: string): boolean {
+  const stmt = db.prepare('UPDATE fund_info SET status = \'inactive\', updated_at = ? WHERE code = ? AND status = \'active\'')
+  const result = stmt.run(Date.now(), code)
+  return result.changes > 0
+}
+
+/** 物理删除基金（仅用于数据维护，正常流程用 deleteFundInfo 软删除） */
+export function purgeFundInfo(code: string): boolean {
   const stmt = db.prepare('DELETE FROM fund_info WHERE code = ?')
   const result = stmt.run(code)
   return result.changes > 0
@@ -235,7 +259,7 @@ export function batchSaveFundInfo(funds: Array<Partial<FundInfo> & { code: strin
 export function updateFundInfoField(code: string, fields: Record<string, any>): boolean {
   const existing = getFundInfo(code)
   if (!existing) return false
-  const allowedKeys = ['data_source', 'data_extra', 'ftype', 'fund_company', 'fund_manager', 'benchmark']
+  const allowedKeys = ['data_source', 'data_extra', 'ftype', 'fund_company', 'fund_manager', 'benchmark', 'estimate_source']
   const updates: string[] = []
   const values: any[] = []
   for (const key of allowedKeys) {
@@ -253,7 +277,7 @@ export function updateFundInfoField(code: string, fields: Record<string, any>): 
 }
 
 export function getAllFundInfoCodes(): string[] {
-  const stmt = db.prepare('SELECT code, name FROM fund_info')
+  const stmt = db.prepare('SELECT code, name FROM fund_info WHERE status = \'active\'')
   const results = stmt.all() as { code: string; name: string }[]
   logger.log(`getAllFundInfoCodes: 查询到 ${results.length} 条记录`)
   results.forEach(r => logger.log(`  - ${r.code}: ${r.name}`))

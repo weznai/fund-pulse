@@ -75,6 +75,11 @@ const router = createRouter({
           component: () => import('@/views/admin/SystemParamsView.vue')
         },
         {
+          path: 'estimate-source',
+          name: 'admin-estimate-source',
+          component: () => import('@/views/admin/EstimateSourceView.vue')
+        },
+        {
           path: 'operation-logs',
           name: 'admin-operation-logs',
           component: () => import('@/views/admin/OperationLogView.vue')

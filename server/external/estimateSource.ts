@@ -1,65 +1,112 @@
 /**
- * 估值数据源分发层
+ * 估值数据源分发层（统一入口）
  *
- * 通过 system_params 表的 ESTIMATE_DATA_SOURCE 参数控制数据源，
- * 后台可随时切换，无需改代码重启。
+ * 本模块是所有估值请求的对外门面，内部通过 adapters/registry 协调多个数据源：
+ *   - 基金级配置 fund_info.estimate_source
+ *   - 全局默认 system_params.ESTIMATE_DEFAULT_SOURCE
+ *   - 降级链 system_params.ESTIMATE_FALLBACK_CHAIN
+ *   - 多数据源：sina_v1 / sina_v2 / sina_point / tiantian
  *
- * 支持的模式：
- *   - auto（默认）：优先用新浪 FdFundService 拿完整分时曲线，失败降级到 fu_ 单点
- *   - sina：强制新浪 FdFundService 分时曲线（不降级，适合调试）
- *   - point：强制 fu_ 单点模式（分时曲线留空，只展示当前估值数字。
- *            适合 FdFundService 被封/IP 限流的生产环境）
+ * 旧的 auto/sina/point 三段式配置已废弃（启动时由迁移自动映射到新键），
+ * 旧导出 ESTIMATE_SOURCE_KEY / ESTIMATE_SOURCE_OPTIONS / getEstimateSource 仅为
+ * 向下兼容保留，不再影响实际分发逻辑。
+ *
+ * 后台管理请使用独立的 /api/admin/estimate-sources 路由（routes/estimateSource.ts）。
  */
 
-import { getSystemParam } from '../db/index.js'
 import {
-  fetchFundEstimateTimeseries as fetchFromSina,
-  fetchFundEstimatePoint,
-  type FundEstimateTimeseries,
-  type FundEstimatePoint,
-  type FundEstimatePointData
-} from './sina.js'
+  fetchTimeseriesWithFallback,
+  fetchPointWithFallback,
+  resolveAdapterChain,
+  getDefaultSource,
+  getFallbackChain
+} from './adapters/registry.js'
+import type { FundEstimateTimeseries, FundEstimatePointData } from './sina.js'
 
-export type EstimateSourceMode = 'auto' | 'sina' | 'point'
-
-export const ESTIMATE_SOURCE_KEY = 'ESTIMATE_DATA_SOURCE'
-
-/** 估值数据源可选模式 */
-export const ESTIMATE_SOURCE_OPTIONS: Array<{ value: EstimateSourceMode; label: string; desc: string }> = [
-  { value: 'auto', label: '自动', desc: '优先分时曲线，失败降级单点（推荐）' },
-  { value: 'sina', label: '分时曲线', desc: '强制新浪 FdFundService，不降级' },
-  { value: 'point', label: '单点模式', desc: '只用 fu_ 单点，适合 FdFundService 被限流的环境' }
-]
-
-/** 读取当前配置的数据源模式 */
-export function getEstimateSource(): EstimateSourceMode {
-  const v = getSystemParam(ESTIMATE_SOURCE_KEY) || 'auto'
-  return v === 'sina' || v === 'point' ? v : 'auto'
-}
-
-// 单点估值接口：所有模式统一用 fu_，不受配置影响
-export { fetchFundEstimatePoint }
-export type { FundEstimatePoint, FundEstimatePointData }
+// ============================================================================
+// 向下兼容的旧导出（已废弃，不再影响分发）
+// ============================================================================
 
 /**
- * 获取基金分时估值曲线（根据配置分发）
- *
- * - auto：先试 FdFundService，失败返回 null（调用方应降级到 fetchFundEstimatePoint）
- * - sina：强制 FdFundService（不降级）
- * - point：直接返回 null（不请求分时曲线，调用方走单点逻辑）
+ * @deprecated 已迁移到 system_params.ESTIMATE_DEFAULT_SOURCE
+ *   旧键 ESTIMATE_DATA_SOURCE（auto/sina/point）在启动迁移时已自动映射：
+ *     auto/sina → sina_v1, point → sina_point
+ *   此常量保留仅供旧代码 import 不报错，实际读取请用 getDefaultSource()
  */
-export async function fetchEstimateTimeseries(code: string): Promise<FundEstimateTimeseries | null> {
-  const mode = getEstimateSource()
+export const ESTIMATE_SOURCE_KEY = 'ESTIMATE_DATA_SOURCE'
 
-  if (mode === 'point') {
-    return null
+/** @deprecated 旧的三段式选项，新 UI 请走 /api/admin/estimate-sources 接口 */
+export type EstimateSourceMode = 'auto' | 'sina' | 'point'
+
+/** @deprecated 旧选项数组 */
+export const ESTIMATE_SOURCE_OPTIONS: Array<{ value: EstimateSourceMode; label: string; desc: string }> = [
+  { value: 'auto', label: '自动', desc: '已废弃，请使用数据源管理页面配置' },
+  { value: 'sina', label: '分时曲线', desc: '已废弃，请使用数据源管理页面配置' },
+  { value: 'point', label: '单点模式', desc: '已废弃，请使用数据源管理页面配置' }
+]
+
+/**
+ * @deprecated 旧配置读取，现在总是返回 'auto'（等效于"使用新机制"）
+ *   旧调用方（如定时任务）继续工作，但实际行为已改为走 registry 多源降级链。
+ */
+export function getEstimateSource(): EstimateSourceMode {
+  return 'auto'
+}
+
+// ============================================================================
+// 类型 re-export（保持原有导入路径可用）
+// ============================================================================
+
+export type { FundEstimateTimeseries, FundEstimatePointData }
+export type { FundEstimatePoint } from './sina.js'
+
+// ============================================================================
+// 统一分发 API（走 registry 降级链）
+// ============================================================================
+
+/**
+ * 获取基金分时估值曲线
+ *
+ * 按优先级解析适配器链（override → 基金级 → 全局默认 + 降级链），
+ * 遍历 timeseries 类适配器，返回第一个成功的结果。
+ *
+ * @param code 基金代码
+ * @param override 显式指定适配器 ID（如对比工具、健康检查）
+ */
+export async function fetchEstimateTimeseries(
+  code: string,
+  override?: string
+): Promise<FundEstimateTimeseries | null> {
+  const { result } = await fetchTimeseriesWithFallback(code, override)
+  return result
+}
+
+/**
+ * 获取基金单点估值（走完整降级链）
+ *
+ * 替代旧版从 sina.ts 直接 re-export 的 fetchFundEstimatePoint。
+ * 现在会按适配器链顺序尝试所有已启用数据源，第一个成功即返回。
+ *
+ * @param code 基金代码
+ * @param override 显式指定适配器 ID
+ */
+export async function fetchFundEstimatePoint(
+  code: string,
+  override?: string
+): Promise<FundEstimatePointData | null> {
+  const { result } = await fetchPointWithFallback(code, override)
+  return result
+}
+
+/**
+ * 解析指定基金命中的数据源链（供 UI 展示"当前使用的数据源"）
+ */
+export function resolveEstimateSource(code: string, override?: string) {
+  const result = resolveAdapterChain(code, override)
+  return {
+    primaryId: result.chain[0]?.id ?? getDefaultSource(),
+    resolvedFrom: result.resolvedFrom,
+    chain: result.chain.map(a => a.id),
+    fallbackChain: getFallbackChain()
   }
-
-  const ts = await fetchFromSina(code)
-  if (ts && ts.timeseries.length > 0) {
-    return ts
-  }
-
-  // sina 模式不降级，auto 模式返回 null 让调用方走单点
-  return mode === 'sina' ? ts : null
 }
