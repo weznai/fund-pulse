@@ -7,6 +7,8 @@
  * 3. 安全的查询构建
  */
 
+import { logger } from '../logger.js'
+
 /**
  * SQL 注入危险字符模式
  */
@@ -368,6 +370,6 @@ export function validatePagination(page?: any, pageSize?: any): { page: number; 
 export function logQuery(sql: string, params: any[], userId?: string): void {
   // 在生产环境中，可以将查询日志记录到文件或数据库
   if (process.env.NODE_ENV === 'development') {
-    console.log('[SQL]', sql, params, userId ? `userId: ${userId}` : '')
+    logger.log('[SQL]', sql, params, userId ? `userId: ${userId}` : '')
   }
 }

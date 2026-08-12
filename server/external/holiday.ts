@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { logger } from '../logger.js'
 
 const DATA_BASE = 'https://registry.npmmirror.com/chinese-days/latest/files/dist/years'
 
@@ -22,7 +23,7 @@ export async function fetchHolidaysFromCDN(year: number): Promise<CDNHolidayData
     })
     return response.data
   } catch (error) {
-    console.error('Fetch holiday data failed for year ' + year + ':', error)
+    logger.error('Fetch holiday data failed for year ' + year + ':', error)
     return null
   }
 }

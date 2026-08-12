@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import nodemailer from 'nodemailer'
 import { getSystemParam, setSystemParam } from './db.js'
+import { logger } from './logger.js'
 
 // 默认邮件配置（仅用于初始化）
 const DEFAULT_EMAIL_CONFIG = {
@@ -53,7 +54,7 @@ export function isEmailConfigured(): boolean {
 export function configureEmailService(user: string, pass: string): void {
   setSystemParam('email_user', user, '发件邮箱地址')
   setSystemParam('email_pass', pass, '邮箱授权码')
-  console.log('✅ 邮件服务配置已保存')
+  logger.log('✅ 邮件服务配置已保存')
 }
 
 /**
@@ -72,7 +73,7 @@ export async function sendOtpEmail(to: string, otp: string, type: 'login' | 'reg
     }
     
     await transporter.verify()
-    console.log('SMTP连接验证成功')
+    logger.log('SMTP连接验证成功')
 
     const titles: Record<string, string> = {
       login: '您的登录验证码',
@@ -96,11 +97,11 @@ export async function sendOtpEmail(to: string, otp: string, type: 'login' | 'reg
     }
 
     await transporter.sendMail(mailOptions)
-    console.log('验证码邮件已发送到: ' + to)
+    logger.log('验证码邮件已发送到: ' + to)
     return { success: true }
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
-    console.error('发送验证码邮件失败:', errorMessage)
+    logger.error('发送验证码邮件失败:', errorMessage)
     return { success: false, error: errorMessage }
   }
 }

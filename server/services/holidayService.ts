@@ -198,17 +198,17 @@ export async function runSyncCli() {
   const currentYear = new Date().getFullYear()
   const years = [currentYear - 1, currentYear, currentYear + 1, currentYear + 2]
 
-  console.log('Syncing holidays for years:', years.join(', '))
+  logger.log('Syncing holidays for years:', years.join(', '))
   const { count, errors } = await syncYears(years)
 
-  console.log('\n=== Summary ===')
-  console.log('Total synced:', count, 'records')
+  logger.log('=== Summary ===')
+  logger.log('Total synced:', count, 'records')
   if (errors.length > 0) {
-    console.log('Errors:', errors.length)
-    errors.forEach(e => console.log('  -', e))
+    logger.log('Errors:', errors.length)
+    errors.forEach(e => logger.log('  -', e))
   }
 
-  console.log('\n=== Current Stats ===')
+  logger.log('=== Current Stats ===')
   const stats = getHolidayStats()
-  console.table(stats)
+  logger.log('Stats:', stats)
 }
