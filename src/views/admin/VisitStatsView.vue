@@ -108,8 +108,11 @@
 
       <!-- PV/UV 趋势图 -->
       <div class="chart-card">
-        <div class="chart-header">
+        <div class="chart-header chart-header-clickable" @click="openLineChartLarge" title="点击放大查看">
           <h3>PV/UV 趋势（最近30天）</h3>
+          <svg class="expand-icon" viewBox="0 0 24 24" fill="none">
+            <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
         </div>
         <div class="chart-body" ref="lineChartRef"></div>
       </div>
@@ -365,6 +368,17 @@
       </div>
     </div>
 
+    <!-- 趋势图放大查看 -->
+    <div class="modal-overlay chart-large-overlay" v-if="showLineChartLarge" @click.self="closeLineChartLarge">
+      <div class="chart-large-content">
+        <div class="chart-large-header">
+          <h3>PV/UV 趋势（最近30天）</h3>
+          <button class="modal-close" @click="closeLineChartLarge">&times;</button>
+        </div>
+        <div class="chart-large-body" ref="lineChartLargeRef"></div>
+      </div>
+    </div>
+
     <!-- 加载状态 -->
     <div class="loading-overlay" v-if="loading">
       <div class="loading-spinner"></div>
@@ -374,7 +388,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import axios from 'axios'
 import * as echarts from 'echarts'
 
@@ -388,10 +402,13 @@ const ipInfoData = ref<any>(null)
 const lineChartRef = ref<HTMLElement | null>(null)
 const pieChartRef = ref<HTMLElement | null>(null)
 const ipBarChartRef = ref<HTMLElement | null>(null)
+const lineChartLargeRef = ref<HTMLElement | null>(null)
+const showLineChartLarge = ref(false)
 
 let lineChart: echarts.ECharts | null = null
 let pieChart: echarts.ECharts | null = null
 let ipBarChart: echarts.ECharts | null = null
+let lineChartLarge: echarts.ECharts | null = null
 
 interface DailyData {
   date: string
@@ -722,15 +739,13 @@ function updateCharts() {
   updatePieChart()
 }
 
-// 更新折线图
-function updateLineChart() {
-  if (!lineChart) return
-
+// 构建折线图配置（复用于小图与放大图）
+function buildLineChartOption(withZoom = false): any {
   const dates = stats.value.recentDays.map(d => d.date.slice(5)) // 只显示 MM-DD
   const pvData = stats.value.recentDays.map(d => d.pv)
   const uvData = stats.value.recentDays.map(d => d.uv)
 
-  lineChart.setOption({
+  const option: any = {
     tooltip: {
       trigger: 'axis',
       axisPointer: {
@@ -744,7 +759,7 @@ function updateLineChart() {
     grid: {
       left: '3%',
       right: '4%',
-      bottom: '3%',
+      bottom: withZoom ? 60 : '3%',
       top: 50,
       containLabel: true
     },
@@ -785,7 +800,7 @@ function updateLineChart() {
         smooth: true,
         data: pvData,
         lineStyle: {
-          width: 3,
+          width: 1.5,
           color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
             { offset: 0, color: '#2563eb' },
             { offset: 1, color: '#3b82f6' }
@@ -793,8 +808,8 @@ function updateLineChart() {
         },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(30, 58, 95, 0.3)' },
-            { offset: 1, color: 'rgba(30, 58, 95, 0.05)' }
+            { offset: 0, color: 'rgba(37, 99, 235, 0.3)' },
+            { offset: 1, color: 'rgba(37, 99, 235, 0.05)' }
           ])
         },
         itemStyle: {
@@ -807,7 +822,7 @@ function updateLineChart() {
         smooth: true,
         data: uvData,
         lineStyle: {
-          width: 3,
+          width: 1.5,
           color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
             { offset: 0, color: '#10b981' },
             { offset: 1, color: '#34d399' }
@@ -824,7 +839,41 @@ function updateLineChart() {
         }
       }
     ]
-  }, true)
+  }
+
+  if (withZoom) {
+    option.dataZoom = [
+      { type: 'inside', start: 0, end: 100 },
+      { type: 'slider', start: 0, end: 100, height: 20, bottom: 10 }
+    ]
+  }
+
+  return option
+}
+
+// 更新折线图
+function updateLineChart() {
+  if (!lineChart) return
+  lineChart.setOption(buildLineChartOption(false), true)
+}
+
+// 放大查看趋势图
+function openLineChartLarge() {
+  showLineChartLarge.value = true
+  nextTick(() => {
+    if (!lineChartLargeRef.value) return
+    if (!lineChartLarge) {
+      lineChartLarge = echarts.init(lineChartLargeRef.value)
+    }
+    lineChartLarge.setOption(buildLineChartOption(true), true)
+    lineChartLarge.resize()
+  })
+}
+
+function closeLineChartLarge() {
+  showLineChartLarge.value = false
+  lineChartLarge?.dispose()
+  lineChartLarge = null
 }
 
 // 更新饼图
@@ -938,6 +987,7 @@ function handleResize() {
   lineChart?.resize()
   pieChart?.resize()
   ipBarChart?.resize()
+  lineChartLarge?.resize()
 }
 
 onMounted(() => {
@@ -953,6 +1003,7 @@ onUnmounted(() => {
   lineChart?.dispose()
   pieChart?.dispose()
   ipBarChart?.dispose()
+  lineChartLarge?.dispose()
 })
 </script>
 
@@ -1139,6 +1190,64 @@ onUnmounted(() => {
   font-weight: 600;
   color: #1e293b;
   margin: 0;
+}
+
+.chart-header-clickable {
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.chart-header-clickable:hover {
+  background: #f8fafc;
+}
+
+.expand-icon {
+  width: 16px;
+  height: 16px;
+  color: #94a3b8;
+  transition: color 0.2s;
+}
+
+.chart-header-clickable:hover .expand-icon {
+  color: #2563eb;
+}
+
+.chart-large-overlay {
+  z-index: 200;
+}
+
+.chart-large-content {
+  background: #fff;
+  border-radius: 12px;
+  width: 90vw;
+  max-width: 1200px;
+  height: 80vh;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chart-large-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f5f9;
+  flex-shrink: 0;
+}
+
+.chart-large-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.chart-large-body {
+  flex: 1;
+  width: 100%;
+  padding: 12px;
 }
 
 .charts-container-three .chart-body {
