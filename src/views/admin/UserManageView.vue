@@ -195,7 +195,7 @@ const editingUserId = ref<string | null>(null)
 const editingLabel = ref('')
 const labelInputRef = ref<HTMLInputElement | null>(null)
 const togglingUserId = ref<string | null>(null)
-const sortKey = ref<'createdAt' | 'lastActive' | null>(null)
+const sortKey = ref<'createdAt' | 'lastActive'>('lastActive')
 const sortOrder = ref<'asc' | 'desc'>('desc')
 
 const stats = computed(() => {
@@ -216,27 +216,20 @@ const filteredUsers = computed(() => {
       (user.email && user.email.toLowerCase().includes(keyword))
     )
   }
-  if (sortKey.value) {
-    const key = sortKey.value
-    const dir = sortOrder.value === 'asc' ? 1 : -1
-    result = [...result].sort((a, b) => {
-      const va = a[key] || 0
-      const vb = b[key] || 0
-      if (va === vb) return 0
-      return va > vb ? dir : -dir
-    })
-  }
+  const key = sortKey.value
+  const dir = sortOrder.value === 'asc' ? 1 : -1
+  result = [...result].sort((a, b) => {
+    const va = a[key] || 0
+    const vb = b[key] || 0
+    if (va === vb) return 0
+    return va > vb ? dir : -dir
+  })
   return result
 })
 
 function toggleSort(key: 'createdAt' | 'lastActive') {
   if (sortKey.value === key) {
-    if (sortOrder.value === 'desc') {
-      sortOrder.value = 'asc'
-    } else {
-      sortKey.value = null
-      sortOrder.value = 'desc'
-    }
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
   } else {
     sortKey.value = key
     sortOrder.value = 'desc'
