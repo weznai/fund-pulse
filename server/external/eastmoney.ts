@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { getStockChangePercent } from './tencent.js'
 import { logger } from '../logger.js'
+import { getFundInfo } from '../db/fundInfo.js'
 
 export interface HistoryData {
   date: string
@@ -361,8 +362,13 @@ export async function fetchFinalNavFromMobApi(code: string): Promise<MobApiNavDa
     if (!datas || !Array.isArray(datas) || datas.length === 0) {
       // Success=true 但 Datas=null：确认不是基金代码（股票/不存在），标记后避免反复请求
       if (response.data?.Success) {
-        nonFundCodes.add(code)
-        logger.log(`[MobAPI] ${code} 非基金代码，已标记跳过`)
+        // fund_info 已收录的代码是确认存在的基金，空数据多为数据源瞬时异常，不拉黑
+        if (getFundInfo(code)) {
+          logger.warn(`[MobAPI] ${code} 返回空数据但 fund_info 已收录，视为瞬时异常不拉黑`)
+        } else {
+          nonFundCodes.add(code)
+          logger.log(`[MobAPI] ${code} 非基金代码，已标记跳过`)
+        }
       } else {
         logger.error(`[MobAPI] ${code} no datas:`, JSON.stringify(response.data).substring(0, 200))
       }
