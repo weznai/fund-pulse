@@ -55,8 +55,16 @@
                 <th>用户名</th>
                 <th>自选基金</th>
                 <th>持仓数量</th>
-                <th>创建时间</th>
-                <th>最后活跃</th>
+                <th class="sortable" :class="{ active: sortKey === 'createdAt' }" @click="toggleSort('createdAt')">
+                  创建时间
+                  <span class="sort-icon" v-if="sortKey === 'createdAt'">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
+                  <span class="sort-icon idle" v-else>⇅</span>
+                </th>
+                <th class="sortable" :class="{ active: sortKey === 'lastActive' }" @click="toggleSort('lastActive')">
+                  最后活跃
+                  <span class="sort-icon" v-if="sortKey === 'lastActive'">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
+                  <span class="sort-icon idle" v-else>⇅</span>
+                </th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -187,6 +195,8 @@ const editingUserId = ref<string | null>(null)
 const editingLabel = ref('')
 const labelInputRef = ref<HTMLInputElement | null>(null)
 const togglingUserId = ref<string | null>(null)
+const sortKey = ref<'createdAt' | 'lastActive' | null>(null)
+const sortOrder = ref<'asc' | 'desc'>('desc')
 
 const stats = computed(() => {
   const totalUsers = users.value.length
@@ -197,16 +207,41 @@ const stats = computed(() => {
 })
 
 const filteredUsers = computed(() => {
-  if (!searchKeyword.value.trim()) {
-    return users.value
+  let result = users.value
+  const keyword = searchKeyword.value.trim().toLowerCase()
+  if (keyword) {
+    result = result.filter(user =>
+      user.id.toLowerCase().includes(keyword) ||
+      (user.label && user.label.toLowerCase().includes(keyword)) ||
+      (user.email && user.email.toLowerCase().includes(keyword))
+    )
   }
-  const keyword = searchKeyword.value.toLowerCase()
-  return users.value.filter(user =>
-    user.id.toLowerCase().includes(keyword) ||
-    (user.label && user.label.toLowerCase().includes(keyword)) ||
-    (user.email && user.email.toLowerCase().includes(keyword))
-  )
+  if (sortKey.value) {
+    const key = sortKey.value
+    const dir = sortOrder.value === 'asc' ? 1 : -1
+    result = [...result].sort((a, b) => {
+      const va = a[key] || 0
+      const vb = b[key] || 0
+      if (va === vb) return 0
+      return va > vb ? dir : -dir
+    })
+  }
+  return result
 })
+
+function toggleSort(key: 'createdAt' | 'lastActive') {
+  if (sortKey.value === key) {
+    if (sortOrder.value === 'desc') {
+      sortOrder.value = 'asc'
+    } else {
+      sortKey.value = null
+      sortOrder.value = 'desc'
+    }
+  } else {
+    sortKey.value = key
+    sortOrder.value = 'desc'
+  }
+}
 
 async function loadUsers() {
   loading.value = true
@@ -456,6 +491,28 @@ onMounted(() => {
 
 .data-table tbody tr:last-child td {
   border-bottom: none;
+}
+
+.data-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.data-table th.sortable:hover {
+  color: #2563eb;
+}
+
+.data-table th.sortable.active {
+  color: #2563eb;
+}
+
+.sort-icon {
+  font-size: 12px;
+  margin-left: 2px;
+}
+
+.sort-icon.idle {
+  opacity: 0.3;
 }
 
 .user-id {
