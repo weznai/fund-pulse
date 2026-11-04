@@ -15,6 +15,15 @@
 
         </div>
         <div class="actions">
+          <button class="news-btn" @click="$router.push('/news')" title="基金资讯">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M18 14h-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M15 18h-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M10 6h8v4h-8V6Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>资讯</span>
+          </button>
           <div class="view-mode-toggle">
             <button 
               class="view-mode-btn"
@@ -97,11 +106,6 @@
           <button class="ai-analysis-btn" @click="$router.push('/smart-analysis')" title="智能分析">
             <svg viewBox="0 0 24 24" fill="none">
               <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-          <button class="ai-analysis-btn" @click="$router.push('/news')" title="基金资讯">
-            <svg viewBox="0 0 24 24" fill="none">
-              <path d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 002-2V9m-4 11l-2 2m2-2a2 2 0 002 2m-2-2v-7a2 2 0 012-2h1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
         </div>
@@ -1099,6 +1103,35 @@ function handleClearCache() {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
+.news-btn {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px 0 12px;
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  border-radius: 16px;
+  cursor: pointer;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.news-btn svg {
+  width: 15px;
+  height: 15px;
+  color: #EF4444;
+  flex-shrink: 0;
+}
+
+.news-btn:hover {
+  background: #FEE2E2;
+  border-color: #FCA5A5;
+  color: #B91C1C;
+}
+
 .refresh-btn {
   width: 32px;
   height: 32px;
@@ -1511,7 +1544,12 @@ function handleClearCache() {
     flex-wrap: nowrap;
     gap: 8px;
   }
-  
+
+  .news-btn {
+    padding: 0 10px 0 8px;
+    font-size: 12px;
+  }
+
   .container {
     padding: 16px 12px;
   }
