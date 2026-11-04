@@ -432,6 +432,23 @@ const menuItems = [
     }
   },
   {
+    path: '/admin/news-manage',
+    title: '资讯管理',
+    icon: {
+      render() {
+        return h('svg', { viewBox: '0 0 24 24', fill: 'none' }, [
+          h('path', {
+            d: 'M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 002-2V9m-4 11l-2 2m2-2a2 2 0 002 2m-2-2v-7a2 2 0 012-2h1',
+            stroke: 'currentColor',
+            'stroke-width': '1.8',
+            'stroke-linecap': 'round',
+            'stroke-linejoin': 'round'
+          })
+        ])
+      }
+    }
+  },
+  {
     path: '/admin/system-update',
     title: '系统更新',
     icon: {

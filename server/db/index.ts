@@ -59,6 +59,20 @@ export {
 } from './report.js'
 export type { StockReportRecord, ReportListQuery } from './report.js'
 
+export {
+  ensureNewsTable,
+  createNews,
+  updateNews,
+  setNewsStatus,
+  deleteNewsById,
+  deleteNewsBatch,
+  getNewsById,
+  getNewsList,
+  getNewsStats,
+  incrementNewsViews
+} from './news.js'
+export type { NewsArticle, NewsArticleSummary, NewsInput, NewsListQuery } from './news.js'
+
 export { ensureOperationLogTable, addOperationLog, getOperationLogList } from './operationLog.js'
 export type { OperationLog, OperationLogListResult, OperationLogQuery } from './operationLog.js'
 

@@ -25,6 +25,16 @@ const router = createRouter({
       component: () => import('@/views/SmartAnalysisView.vue')
     },
     {
+      path: '/news',
+      name: 'news',
+      component: () => import('@/views/NewsView.vue')
+    },
+    {
+      path: '/news/:id',
+      name: 'news-detail',
+      component: () => import('@/views/NewsDetailView.vue')
+    },
+    {
       path: '/about',
       name: 'about',
       component: () => import('@/views/DisclaimerView.vue')
@@ -104,6 +114,11 @@ const router = createRouter({
           path: 'report-manage',
           name: 'admin-report-manage',
           component: () => import('@/views/admin/ReportManageView.vue')
+        },
+        {
+          path: 'news-manage',
+          name: 'admin-news-manage',
+          component: () => import('@/views/admin/NewsManageView.vue')
         },
         {
           path: 'system-update',

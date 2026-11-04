@@ -17,6 +17,7 @@ import { ensureOperationLogTable } from './db/operationLog.js'
 import { ensureModelConfigTable } from './db/modelConfig.js'
 import { seedDefaultData } from './model_config.js'
 import { ensureReportsTable } from './db/report.js'
+import { ensureNewsTable } from './db/news.js'
 
 import fundRoutes from './routes/fund.js'
 import authRoutes from './routes/auth.js'
@@ -30,6 +31,7 @@ import analysisRoutes from './routes/analysis.js'
 import wechatRoutes from './routes/wechat.js'
 import systemUpdateRoutes from './routes/systemUpdate.js'
 import { setupEstimateSourceRoutes } from './routes/estimateSource.js'
+import { setupPublicNewsRoutes, setupAdminNewsRoutes } from './routes/news.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -46,6 +48,7 @@ ensureVisitLogsTable()
 ensureOperationLogTable()
 ensureModelConfigTable()
 ensureReportsTable()
+ensureNewsTable()
 seedDefaultData()
 
 app.get('/api/health', (_req, res) => {
@@ -72,6 +75,8 @@ logger.log('⏰ 已启动定时任务（8:00初始化结算状态，18:00后获�
 app.use('/api/admin/holidays', setupHolidayRoutes(validateAdminToken))
 app.use('/api/holidays', setupPublicHolidayRoutes())
 app.use('/api/admin/estimate-sources', setupEstimateSourceRoutes(validateAdminToken))
+app.use('/api/news', setupPublicNewsRoutes())
+app.use('/api/admin/news', setupAdminNewsRoutes(validateAdminToken))
 
 app.use('/api', fundRoutes)
 app.use('/api/auth', authRoutes)
