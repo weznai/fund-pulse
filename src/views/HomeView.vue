@@ -50,15 +50,6 @@
             </button>
           </div>
           <button
-            v-if="store.favorites.length > 0"
-            class="manage-toggle-btn"
-            :class="{ active: manageMode }"
-            @click="toggleManageMode"
-            :title="manageMode ? '退出管理' : '批量管理自选基金'"
-          >
-            {{ manageMode ? '完成' : '管理' }}
-          </button>
-          <button
             class="refresh-btn"
             @click="store.fetchFavorites(true)"
             :disabled="store.loading"
@@ -168,7 +159,7 @@
             持
           </button>
           <div class="toolbar-right">
-            <button 
+            <button
               v-if="store.viewMode !== 'list'"
               class="toolbar-btn"
               @click="store.toggleSortDirection"
@@ -184,7 +175,19 @@
               </svg>
               <span>排序</span>
             </button>
-            <button 
+            <button
+              class="toolbar-btn"
+              :class="{ 'toolbar-btn-active': manageMode }"
+              @click="toggleManageMode"
+              :title="manageMode ? '退出批量管理' : '批量管理自选基金'"
+            >
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>{{ manageMode ? '完成' : '管理' }}</span>
+            </button>
+            <button
               class="toolbar-btn"
               @click="showImportDialog = true"
               title="导入基金"
@@ -1238,29 +1241,6 @@ function handleClearCache() {
   color: #B91C1C;
 }
 
-.manage-toggle-btn {
-  height: 32px;
-  padding: 0 14px;
-  border: 1px solid #D1D5DB;
-  border-radius: 16px;
-  background: transparent;
-  color: #374151;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.manage-toggle-btn:hover {
-  background: #F3F4F6;
-}
-
-.manage-toggle-btn.active {
-  background: #1F2937;
-  border-color: #1F2937;
-  color: #fff;
-}
-
 .manage-bar {
   position: fixed;
   left: 50%;
@@ -1698,6 +1678,16 @@ function handleClearCache() {
 
 .toolbar-btn:active {
   transform: translateY(0.5px);
+}
+
+.toolbar-btn-active {
+  background: #1F2937 !important;
+  border-color: #1F2937 !important;
+  color: #fff !important;
+}
+
+.toolbar-btn-active svg path {
+  stroke: currentColor;
 }
 
 .error-message {
