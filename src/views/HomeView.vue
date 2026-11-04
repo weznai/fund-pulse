@@ -1513,7 +1513,7 @@ function handleClearCache() {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
 }
 
 .ai-analysis-group {
@@ -1526,19 +1526,19 @@ function handleClearCache() {
 
 .ai-analysis-btn {
   height: 38px;
-  padding: 0 18px 0 14px;
+  padding: 0 14px 0 11px;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 5px;
   background: linear-gradient(135deg, #0EA5E9 0%, #06B6D4 100%);
   border: none;
   border-radius: 19px;
   cursor: pointer;
   color: white;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.2px;
   transition: all 0.2s ease-out;
   box-shadow: 0 2px 10px rgba(14, 165, 233, 0.3);
 }
@@ -1554,8 +1554,8 @@ function handleClearCache() {
 }
 
 .ai-analysis-btn svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   flex-shrink: 0;
 }
 
