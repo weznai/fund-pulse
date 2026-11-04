@@ -1,58 +1,128 @@
 <template>
   <div class="news-page">
-    <header class="news-header">
-      <button class="back-btn" @click="$router.push('/')" title="返回首页">
-        <svg viewBox="0 0 24 24" fill="none">
-          <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <header class="news-hero">
+      <div class="hero-inner">
+        <button class="back-btn" @click="$router.push('/')" title="返回首页" aria-label="返回首页">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="hero-text">
+          <h1 class="hero-title">基金资讯</h1>
+          <p class="hero-sub">市场动态 · 宏观分析 · 投资洞察</p>
+        </div>
+        <svg class="hero-deco" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M3 17L9 11L13 15L21 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M17 7H21V11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-      </button>
-      <h1 class="news-title">基金资讯</h1>
+      </div>
     </header>
 
     <div class="news-container">
-      <div v-if="loading && articles.length === 0" class="loading-tip">加载中...</div>
+      <!-- 骨架屏 -->
+      <div v-if="loading && articles.length === 0" class="skeleton-list" aria-label="加载中">
+        <div v-for="n in 3" :key="n" class="skeleton-card">
+          <div class="sk sk-date"></div>
+          <div class="sk-body">
+            <div class="sk sk-title"></div>
+            <div class="sk sk-line"></div>
+            <div class="sk sk-line short"></div>
+          </div>
+        </div>
+      </div>
 
+      <!-- 空状态 -->
       <div v-else-if="articles.length === 0" class="empty-tip">
         <svg viewBox="0 0 24 24" fill="none">
-          <path d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 002-2V9m-4 11l-2 2m2-2a2 2 0 002 2m-2-2v-7a2 2 0 012-2h1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M18 14h-8M15 18h-5M10 6h8v4h-8V6Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <p>暂无资讯</p>
+        <p>暂无资讯，敬请期待</p>
+        <button class="empty-btn" @click="$router.push('/')">返回首页</button>
       </div>
 
       <template v-else>
+        <!-- 头条大卡（置顶优先，否则第一篇） -->
         <article
-          v-for="item in articles"
+          v-if="featured"
+          class="featured-card"
+          :style="{ animationDelay: '0ms' }"
+          @click="$router.push(`/news/${featured.id}`)"
+        >
+          <div class="featured-top">
+            <span class="badge badge-hot">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              置顶
+            </span>
+            <span class="featured-date">{{ formatDate(featured.created_at) }}</span>
+          </div>
+          <h2 class="featured-title">{{ featured.title }}</h2>
+          <p v-if="featured.summary" class="featured-summary">{{ featured.summary }}</p>
+          <div class="featured-meta">
+            <span v-if="featured.source" class="meta-chip">{{ featured.source }}</span>
+            <span class="meta-views">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
+              </svg>
+              {{ featured.views }} 次阅读
+            </span>
+            <span class="featured-cta">阅读全文
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+          </div>
+        </article>
+
+        <!-- 普通列表 -->
+        <article
+          v-for="(item, idx) in restList"
           :key="item.id"
           class="news-card"
+          :style="{ animationDelay: `${Math.min(idx + 1, 6) * 45}ms` }"
           @click="$router.push(`/news/${item.id}`)"
         >
+          <div class="date-block">
+            <span class="date-day">{{ formatDay(item.created_at) }}</span>
+            <span class="date-month">{{ formatMonth(item.created_at) }}</span>
+          </div>
           <div class="card-main">
             <h2 class="card-title">
-              <span v-if="item.pinned" class="pin-badge">置顶</span>
               {{ item.title }}
+              <span v-if="item.pinned" class="badge badge-mini">顶</span>
             </h2>
             <p v-if="item.summary" class="card-summary">{{ item.summary }}</p>
             <div class="card-meta">
-              <span>{{ formatDate(item.created_at) }}</span>
-              <span v-if="item.source" class="meta-source">{{ item.source }}</span>
-              <span>{{ item.views }} 次阅读</span>
+              <span v-if="item.source" class="meta-chip">{{ item.source }}</span>
+              <span class="meta-views">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                  <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
+                </svg>
+                {{ item.views }}
+              </span>
             </div>
           </div>
-          <svg class="card-arrow" viewBox="0 0 24 24" fill="none">
+          <svg class="card-arrow" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </article>
 
         <button v-if="hasMore" class="load-more-btn" :disabled="loading" @click="loadMore">
+          <span v-if="loading" class="btn-spinner" aria-hidden="true"></span>
           {{ loading ? '加载中...' : '加载更多' }}
         </button>
+        <p v-else-if="articles.length > 3" class="list-end">— 已经到底啦 —</p>
       </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 
 interface NewsItem {
   id: number
@@ -70,6 +140,20 @@ const page = ref(1)
 const total = ref(0)
 const loading = ref(false)
 const hasMore = ref(false)
+
+const featured = computed<NewsItem | null>(() => {
+  if (articles.value.length === 0) return null
+  if (page.value === 1) {
+    const pinned = articles.value.find(a => a.pinned)
+    return pinned || articles.value[0]
+  }
+  return null
+})
+
+const restList = computed<NewsItem[]>(() => {
+  if (!featured.value) return articles.value
+  return articles.value.filter(a => a.id !== featured.value!.id)
+})
 
 async function fetchNews() {
   if (loading.value) return
@@ -97,6 +181,13 @@ function loadMore() {
 function formatDate(dt: string): string {
   return (dt || '').slice(0, 10)
 }
+function formatDay(dt: string): string {
+  return (dt || '').slice(8, 10) || '-'
+}
+function formatMonth(dt: string): string {
+  const m = (dt || '').slice(5, 7)
+  return m ? `${parseInt(m, 10)}月` : '-'
+}
 
 onMounted(fetchNews)
 </script>
@@ -104,140 +195,359 @@ onMounted(fetchNews)
 <style scoped>
 .news-page {
   min-height: 100vh;
-  background: #f6f7f9;
-  padding-bottom: 48px;
+  background: #f4f6f9;
+  padding-bottom: 64px;
 }
 
-.news-header {
-  position: sticky;
-  top: 0;
-  z-index: 10;
+/* ---------- Hero ---------- */
+.news-hero {
+  background: linear-gradient(135deg, #1a2a3a 0%, #24425c 55%, #2c5a7d 100%);
+  padding: 18px 0 56px;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-inner {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 20px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 20px;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid #e4e8ee;
+  gap: 14px;
+  position: relative;
+  z-index: 1;
 }
 
 .back-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: none;
-  border-radius: 10px;
-  background: #f1f5f9;
-  color: #475569;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.2s, transform 0.2s;
+  flex-shrink: 0;
 }
-.back-btn:hover { background: #e2e8f0; }
+.back-btn:hover { background: rgba(255, 255, 255, 0.22); }
 .back-btn svg { width: 20px; height: 20px; }
 
-.news-title {
-  font-size: 18px;
+.hero-text { min-width: 0; }
+
+.hero-title {
+  font-size: 22px;
   font-weight: 700;
-  color: #1f2933;
+  color: #fff;
+  letter-spacing: 0.5px;
+  margin: 0;
+  line-height: 1.3;
 }
 
+.hero-sub {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.66);
+  letter-spacing: 1px;
+}
+
+.hero-deco {
+  width: 52px;
+  height: 52px;
+  color: rgba(255, 255, 255, 0.2);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* ---------- 容器 ---------- */
 .news-container {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 20px 16px 0;
+  max-width: 760px;
+  margin: -36px auto 0;
+  padding: 0 16px;
+  position: relative;
+  z-index: 2;
 }
 
-.loading-tip, .empty-tip {
+/* ---------- 骨架屏 ---------- */
+.skeleton-list { display: flex; flex-direction: column; gap: 12px; }
+.skeleton-card {
+  display: flex;
+  gap: 16px;
+  background: #fff;
+  border-radius: 16px;
+  padding: 18px 20px;
+}
+.sk { background: linear-gradient(90deg, #eef1f5 25%, #e2e7ee 50%, #eef1f5 75%); background-size: 200% 100%; animation: shimmer 1.3s ease-in-out infinite; border-radius: 8px; }
+.sk-date { width: 52px; height: 52px; border-radius: 12px; flex-shrink: 0; }
+.sk-body { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+.sk-title { height: 18px; width: 68%; }
+.sk-line { height: 13px; width: 92%; }
+.sk-line.short { width: 55%; }
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* ---------- 空状态 ---------- */
+.empty-tip {
+  background: #fff;
+  border-radius: 18px;
+  padding: 56px 20px;
   text-align: center;
   color: #94a3b8;
-  padding: 60px 0;
-  font-size: 14px;
 }
-.empty-tip svg { width: 44px; height: 44px; margin-bottom: 8px; }
-
-.news-card {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: #fff;
-  border: 1px solid #e4e8ee;
-  border-radius: 14px;
-  padding: 18px 20px;
-  margin-bottom: 12px;
-  cursor: pointer;
-  transition: box-shadow 0.2s, transform 0.2s;
-}
-.news-card:hover {
-  box-shadow: 0 4px 16px rgba(31, 41, 51, 0.08);
-  transform: translateY(-1px);
-}
-
-.card-main { flex: 1; min-width: 0; }
-
-.card-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #1f2933;
-  line-height: 1.5;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.pin-badge {
-  flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 600;
-  color: #b9770e;
-  background: #fef5e7;
-  border-radius: 4px;
-  padding: 1px 6px;
-}
-
-.card-summary {
-  margin-top: 6px;
+.empty-tip svg { width: 46px; height: 46px; margin-bottom: 10px; }
+.empty-tip p { margin: 0 0 18px; font-size: 14px; }
+.empty-btn {
+  padding: 9px 28px;
+  border: none;
+  border-radius: 999px;
+  background: #1a2a3a;
+  color: #fff;
   font-size: 13px;
-  color: #64707d;
-  line-height: 1.6;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+.empty-btn:hover { background: #24425c; transform: translateY(-1px); }
+
+/* ---------- 头条大卡 ---------- */
+.featured-card {
+  background: linear-gradient(135deg, #1a2a3a 0%, #2c4a63 70%, #33607f 100%);
+  border-radius: 18px;
+  padding: 24px 26px 22px;
+  margin-bottom: 16px;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 10px 30px rgba(26, 42, 58, 0.28);
+  transition: transform 0.25s ease-out, box-shadow 0.25s ease-out;
+  animation: card-in 0.4s ease-out both;
+}
+.featured-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 36px rgba(26, 42, 58, 0.36);
+}
+
+.featured-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 3px 9px;
+}
+.badge svg { width: 12px; height: 12px; }
+.badge-hot {
+  color: #fde68a;
+  background: rgba(253, 230, 138, 0.16);
+  border: 1px solid rgba(253, 230, 138, 0.35);
+}
+.badge-mini {
+  color: #b45309;
+  background: #fef3c7;
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+
+.featured-date { font-size: 12px; color: rgba(255, 255, 255, 0.6); }
+
+.featured-title {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.55;
+  margin: 0 0 8px;
+}
+
+.featured-summary {
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.78);
+  margin: 0 0 16px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-.card-meta {
+.featured-meta {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-top: 10px;
+  gap: 14px;
+}
+
+.featured-meta .meta-chip {
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.9);
+  border: none;
+}
+
+.featured-meta .meta-views { color: rgba(255, 255, 255, 0.66); }
+
+.featured-cta {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fde68a;
+  transition: gap 0.2s;
+}
+.featured-card:hover .featured-cta { gap: 9px; }
+.featured-cta svg { width: 15px; height: 15px; }
+
+/* ---------- 普通卡片 ---------- */
+.news-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: #fff;
+  border-radius: 16px;
+  padding: 18px 20px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  border: 1px solid #eef1f5;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  transition: transform 0.22s ease-out, box-shadow 0.22s ease-out, border-color 0.22s;
+  animation: card-in 0.4s ease-out both;
+}
+.news-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.09);
+  border-color: #e2e8f0;
+}
+
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.date-block {
+  flex-shrink: 0;
+  width: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 6px 0;
+  border-radius: 12px;
+  background: #f4f6f9;
+}
+.date-day { font-size: 19px; font-weight: 700; color: #1e3a5f; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.date-month { font-size: 11px; color: #94a3b8; }
+
+.card-main { flex: 1; min-width: 0; }
+
+.card-title {
+  font-size: 15.5px;
+  font-weight: 600;
+  color: #1f2933;
+  line-height: 1.5;
+  margin: 0 0 5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.card-summary {
+  font-size: 13px;
+  color: #64707d;
+  line-height: 1.65;
+  margin: 0 0 9px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.card-meta { display: flex; align-items: center; gap: 12px; }
+
+.meta-chip {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #1e5490;
+  background: #edf4fb;
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+.meta-views {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 12px;
   color: #94a3b8;
 }
-.meta-source::before { content: '·'; margin-right: 12px; color: #cbd5e1; }
+.meta-views svg { width: 14px; height: 14px; }
 
 .card-arrow {
   flex-shrink: 0;
   width: 18px;
   height: 18px;
   color: #cbd5e1;
+  transition: color 0.2s, transform 0.2s;
 }
+.news-card:hover .card-arrow { color: #64748b; transform: translateX(2px); }
 
+/* ---------- 加载更多 ---------- */
 .load-more-btn {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   width: 100%;
-  margin-top: 8px;
-  padding: 12px;
-  border: 1px solid #e4e8ee;
-  border-radius: 12px;
+  margin-top: 10px;
+  min-height: 46px;
+  border: 1px solid #e2e8f0;
+  border-radius: 13px;
   background: #fff;
   color: #475569;
   font-size: 14px;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.2s, border-color 0.2s;
 }
-.load-more-btn:hover:not(:disabled) { background: #f8fafc; }
+.load-more-btn:hover:not(:disabled) { background: #f8fafc; border-color: #cbd5e1; }
 .load-more-btn:disabled { color: #94a3b8; cursor: default; }
+
+.btn-spinner {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid #e2e8f0;
+  border-top-color: #1e5490;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.list-end {
+  text-align: center;
+  font-size: 12px;
+  color: #b6c2d0;
+  margin: 22px 0 0;
+  letter-spacing: 1px;
+}
+
+/* ---------- 移动端 & 无障碍 ---------- */
+@media (max-width: 480px) {
+  .hero-title { font-size: 19px; }
+  .featured-card { padding: 20px; }
+  .featured-title { font-size: 17px; }
+  .date-block { width: 46px; border-radius: 10px; }
+  .date-day { font-size: 17px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .news-card, .featured-card { animation: none; }
+  .news-card, .featured-card, .load-more-btn, .empty-btn { transition: none; }
+  .sk { animation: none; }
+}
 </style>
