@@ -138,7 +138,8 @@ onMounted(fetchDetail)
 
 /* ---------- Hero ---------- */
 .detail-hero {
-  background: linear-gradient(135deg, #1a2a3a 0%, #24425c 60%, #2c5a7d 100%);
+  background: linear-gradient(180deg, #edf3fa 0%, #f4f6f9 100%);
+  border-bottom: 1px solid #e2eaf3;
   padding: 14px 0 44px;
 }
 
@@ -157,18 +158,18 @@ onMounted(fetchDetail)
   justify-content: center;
   width: 38px;
   height: 38px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  border: 1px solid #d6dce4;
   border-radius: 11px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: #ffffff;
+  color: #475569;
   cursor: pointer;
   transition: background 0.2s;
 }
-.back-btn:hover { background: rgba(255, 255, 255, 0.22); }
+.back-btn:hover { background: #f1f5f9; }
 .back-btn svg { width: 19px; height: 19px; }
 
 .hero-label {
-  color: rgba(255, 255, 255, 0.85);
+  color: #1a2a3a;
   font-size: 15px;
   font-weight: 600;
   letter-spacing: 2px;

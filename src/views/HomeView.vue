@@ -112,10 +112,11 @@
       <template v-else>
         <div class="search-section">
           <FundSearch @select="handleSearchSelect" />
-          <button class="ai-analysis-btn" @click="$router.push('/smart-analysis')" title="智能分析">
+          <button class="ai-analysis-btn" @click="$router.push('/smart-analysis')" title="AI 智能分析">
             <svg viewBox="0 0 24 24" fill="none">
-              <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3zM18.5 14.5l.95 2.3 2.3.95-2.3.95-.95 2.3-.95-2.3-2.3-.95 2.3-.95.95-2.3z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
+            <span>智能分析</span>
           </button>
         </div>
         
@@ -1524,28 +1525,38 @@ function handleClearCache() {
 }
 
 .ai-analysis-btn {
-  width: 24px;
-  height: 24px;
+  height: 38px;
+  padding: 0 18px 0 14px;
   flex-shrink: 0;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 7px;
   background: linear-gradient(135deg, #0EA5E9 0%, #06B6D4 100%);
   border: none;
-  border-radius: 6px;
+  border-radius: 19px;
   cursor: pointer;
   color: white;
-  transition: all 0.2s;
-  box-shadow: 0 1px 4px rgba(14, 165, 233, 0.2);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  transition: all 0.2s ease-out;
+  box-shadow: 0 2px 10px rgba(14, 165, 233, 0.3);
 }
 
 .ai-analysis-btn:hover {
-  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.42);
+  background: linear-gradient(135deg, #0284C7 0%, #0891B2 100%);
+}
+
+.ai-analysis-btn:active {
+  transform: translateY(0);
 }
 
 .ai-analysis-btn svg {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
 .ai-analysis-text {
