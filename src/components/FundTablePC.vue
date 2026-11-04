@@ -3,6 +3,15 @@
     <table>
       <thead>
         <tr>
+          <th v-if="manageMode" class="col-check">
+            <input
+              type="checkbox"
+              class="row-check"
+              :checked="allSelected"
+              @change="$emit('toggle-all')"
+              aria-label="全选"
+            />
+          </th>
           <th class="col-name">基金名称</th>
           <th class="col-change sortable" @click="$emit('sort', 'dayGrowth')">
             涨跌幅
@@ -53,7 +62,20 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="row in funds" :key="row.code" @click="$emit('row-click', row)">
+        <tr
+          v-for="row in funds"
+          :key="row.code"
+          :class="{ 'row-selected': manageMode && selectedCodes?.has(row.code) }"
+          @click="handleRowClick(row)"
+        >
+          <td v-if="manageMode" class="col-check" @click.stop="$emit('toggle-select', row.code)">
+            <input
+              type="checkbox"
+              class="row-check"
+              :checked="selectedCodes?.has(row.code)"
+              aria-label="选择"
+            />
+          </td>
           <td class="col-name">
             <div class="fund-info" @click.stop="$emit('detail-click', row)" title="点击查询详情">
               <div class="fund-name-row">
@@ -118,7 +140,7 @@
             </div>
           </td>
           <td class="col-action">
-            <button class="delete-btn" @click.stop="$emit('delete', row)" title="删除">
+            <button v-if="!manageMode" class="delete-btn" @click.stop="$emit('delete', row)" title="删除">
               <svg viewBox="0 0 24 24" fill="none">
                 <path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
@@ -131,22 +153,41 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { FundTableRow } from '@/types'
 
-defineProps<{
+const props = defineProps<{
   funds: FundTableRow[]
   sortField: string
   sortDirection: 'asc' | 'desc'
   hideAmount?: boolean
+  manageMode?: boolean
+  selectedCodes?: Set<string>
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'row-click', row: FundTableRow): void
   (e: 'delete', row: FundTableRow): void
   (e: 'holding-click', row: FundTableRow): void
   (e: 'sort', field: string): void
   (e: 'detail-click', row: FundTableRow): void
+  (e: 'toggle-select', code: string): void
+  (e: 'toggle-all'): void
 }>()
+
+const allSelected = computed(() =>
+  props.manageMode &&
+  props.funds.length > 0 &&
+  props.funds.every(f => props.selectedCodes?.has(f.code))
+)
+
+function handleRowClick(row: FundTableRow) {
+  if (props.manageMode) {
+    emit('toggle-select', row.code)
+  } else {
+    emit('row-click', row)
+  }
+}
 
 function getChangeClass(value: number | null): string {
   if (value === null || value === 0) return ''
@@ -302,6 +343,26 @@ tbody tr {
 
 tbody tr:hover {
   background: #F9FAFB;
+}
+
+tbody tr.row-selected {
+  background: #EFF6FF;
+}
+
+tbody tr.row-selected:hover {
+  background: #E0EDFF;
+}
+
+.col-check {
+  width: 40px;
+  text-align: center;
+}
+
+.row-check {
+  width: 16px;
+  height: 16px;
+  accent-color: #2563eb;
+  cursor: pointer;
 }
 
 tbody tr:last-child td {

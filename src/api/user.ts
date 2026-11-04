@@ -243,6 +243,15 @@ export async function deleteUserFund(fundCode: string): Promise<{ success: boole
   return response.data
 }
 
+// 批量删除基金
+export async function batchDeleteUserFunds(codes: string[]): Promise<{ success: boolean; deleted: number; total: number }> {
+  const clientId = getClientId()
+  const response = await axios.post<{ success: boolean; deleted: number; total: number }>(`${API_BASE}/user/funds/batch-delete`, { codes }, {
+    headers: { 'X-Client-Id': clientId }
+  })
+  return response.data
+}
+
 // 获取推荐基金列表
 export async function getRecommendFunds(): Promise<{ codes: string[] }> {
   const response = await axios.get<{ codes: string[] }>(`${API_BASE}/recommend-funds`)

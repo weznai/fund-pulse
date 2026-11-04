@@ -1,5 +1,13 @@
 <template>
-  <div :class="['fund-card', mode]">
+  <div :class="['fund-card', mode, { managing: manageMode, checked: manageMode && selected }]" @click="handleCardClick">
+    <div v-if="manageMode" class="check-overlay" aria-hidden="true">
+      <span class="check-circle" :class="{ on: selected }">
+        <svg v-if="selected" viewBox="0 0 24 24" fill="none">
+          <path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+    </div>
+
     <div v-if="mode === 'list'" class="fund-card-list-content">
       <div class="fund-info">
         <div class="fund-code-label">
@@ -54,7 +62,7 @@
       </div>
     </div>
     
-    <button class="delete-btn" @click.stop="handleDelete" title="移除自选">
+    <button v-if="!manageMode" class="delete-btn" @click.stop="handleDelete" title="移除自选">
       <svg viewBox="0 0 24 24" fill="none">
         <path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
@@ -70,13 +78,22 @@ import { useFundStore } from '@/stores/fund'
 const props = defineProps<{
   fund: Fund
   mode: 'list' | 'grid'
+  manageMode?: boolean
+  selected?: boolean
 }>()
 
 const emit = defineEmits<{
   delete: [code: string]
   detail: [fund: Fund]
   holding: [fund: Fund]
+  'toggle-select': [code: string]
 }>()
+
+function handleCardClick() {
+  if (props.manageMode) {
+    emit('toggle-select', props.fund.code)
+  }
+}
 
 const store = useFundStore()
 
@@ -407,6 +424,46 @@ function toggleHeld() {
   border-color: #3B82F6;
   color: white;
   opacity: 1;
+}
+
+.check-overlay {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.check-circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #cbd5e1;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  transition: all 0.15s ease-out;
+}
+
+.check-circle.on {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.check-circle svg {
+  width: 12px;
+  height: 12px;
+}
+
+.fund-card.managing {
+  cursor: pointer;
+}
+
+.fund-card.checked {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
 }
 
 .delete-btn {

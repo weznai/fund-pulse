@@ -216,6 +216,36 @@ router.post('/funds/batch', async (req: Request, res: Response) => {
   }
 })
 
+router.post('/funds/batch-delete', (req: Request, res: Response) => {
+  try {
+    const userId = ensureUserSession(req, res)
+    const { codes } = req.body
+
+    if (!Array.isArray(codes) || codes.length === 0) {
+      return res.status(400).json({ error: '缺少基金代码列表' })
+    }
+    if (codes.length > 500) {
+      return res.status(400).json({ error: '单次最多删除 500 只基金' })
+    }
+
+    logger.log(`🗑️ 批量删除基金请求 - 用户: ${userId.id} (${userId.type}), 数量: ${codes.length}`)
+
+    if (!isRegisteredUser(userId)) {
+      return res.json({ success: true, deleted: codes.length, total: codes.length, tempUser: true })
+    }
+
+    let deleted = 0
+    for (const code of codes) {
+      if (deleteUserFund(String(code))) deleted++
+    }
+    logger.log(`🗑️ 批量删除基金完成: ${deleted}/${codes.length}`)
+    res.json({ success: true, deleted, total: codes.length })
+  } catch (error) {
+    logger.error('批量删除基金失败:', error)
+    res.status(500).json({ error: '批量删除基金失败' })
+  }
+})
+
 router.delete('/funds/:code', (req: Request, res: Response) => {
   try {
     const userId = ensureUserSession(req, res)

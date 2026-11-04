@@ -50,6 +50,15 @@
             </button>
           </div>
           <button
+            v-if="store.favorites.length > 0"
+            class="manage-toggle-btn"
+            :class="{ active: manageMode }"
+            @click="toggleManageMode"
+            :title="manageMode ? '退出管理' : '批量管理自选基金'"
+          >
+            {{ manageMode ? '完成' : '管理' }}
+          </button>
+          <button
             class="refresh-btn"
             @click="store.fetchFavorites(true)"
             :disabled="store.loading"
@@ -207,11 +216,15 @@
             :sort-field="store.sortField"
             :sort-direction="store.sortDirection"
             :hide-amount="store.hideAmount"
+            :manage-mode="manageMode"
+            :selected-codes="selectedCodes"
             @row-click="handleRowClick"
             @delete="handleDeleteFromTable"
             @holding-click="handleHoldingClick"
             @sort="handleSort"
             @detail-click="handleDetailClick"
+            @toggle-select="toggleSelect"
+            @toggle-all="toggleAll"
           />
         </div>
 
@@ -221,12 +234,33 @@
             :key="fund.code"
             :fund="fund"
             mode="grid"
+            :manage-mode="manageMode"
+            :selected="selectedCodes.has(fund.code)"
             @delete="handleDelete"
             @detail="handleGridDetail"
             @holding="handleGridHolding"
+            @toggle-select="toggleSelect"
           />
         </div>
       </template>
+    </div>
+
+    <!-- 批量管理操作条 -->
+    <div v-if="manageMode" class="manage-bar">
+      <div class="manage-info">
+        <span class="manage-count">已选 <b>{{ selectedCodes.size }}</b> 项</span>
+        <span v-if="selectedHeldCount > 0" class="manage-held-warn">其中 {{ selectedHeldCount }} 只有持仓</span>
+      </div>
+      <div class="manage-actions">
+        <button class="manage-btn" @click="smartSelect">智能勾选(无持仓)</button>
+        <button
+          class="manage-btn manage-btn-danger"
+          :disabled="selectedCodes.size === 0 || batchDeleting"
+          @click="handleBatchDelete"
+        >
+          {{ batchDeleting ? '删除中...' : `删除(${selectedCodes.size})` }}
+        </button>
+      </div>
     </div>
 
     <footer class="footer">
@@ -475,7 +509,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 import FundCard from '@/components/FundCard.vue'
 import FundTablePC from '@/components/FundTablePC.vue'
@@ -540,6 +574,77 @@ const showDetailDialog = ref(false)
 const showDeleteConfirm = ref(false)
 const deleteConfirmMessage = ref('')
 const deleteCallback = ref<(() => void) | null>(null)
+
+// ---------- 批量管理 ----------
+const manageMode = ref(false)
+const batchDeleting = ref(false)
+const selectedCodes = reactive(new Set<string>())
+
+const selectedHeldCount = computed(() => {
+  let n = 0
+  for (const code of selectedCodes) {
+    if (store.isHeld(code)) n++
+  }
+  return n
+})
+
+function toggleManageMode() {
+  manageMode.value = !manageMode.value
+  selectedCodes.clear()
+  if (manageMode.value) {
+    smartSelect()
+  }
+}
+
+function toggleSelect(code: string) {
+  if (selectedCodes.has(code)) {
+    selectedCodes.delete(code)
+  } else {
+    selectedCodes.add(code)
+  }
+}
+
+function toggleAll() {
+  const codes = filteredFavorites.value.map(f => f.code)
+  const allIn = codes.length > 0 && codes.every(c => selectedCodes.has(c))
+  codes.forEach(c => selectedCodes.delete(c))
+  if (!allIn) {
+    codes.forEach(c => selectedCodes.add(c))
+  }
+}
+
+/** 智能勾选：仅勾选无持仓的基金（保护持仓数据） */
+function smartSelect() {
+  selectedCodes.clear()
+  for (const f of filteredFavorites.value) {
+    if (!store.isHeld(f.code)) {
+      selectedCodes.add(f.code)
+    }
+  }
+}
+
+async function handleBatchDelete() {
+  const codes = Array.from(selectedCodes)
+  if (codes.length === 0) return
+  const heldCount = selectedHeldCount.value
+
+  deleteConfirmMessage.value = heldCount > 0
+    ? `确定要删除选中的 ${codes.length} 只基金吗？\n其中 ${heldCount} 只处于持仓状态，删除后将同时清除其持仓金额与收益数据，且不可恢复！`
+    : `确定要删除选中的 ${codes.length} 只基金吗？`
+  deleteCallback.value = async () => {
+    batchDeleting.value = true
+    try {
+      await store.removeFavoritesBatch(codes)
+    } finally {
+      batchDeleting.value = false
+      selectedCodes.clear()
+      if (store.favorites.length === 0) {
+        manageMode.value = false
+      }
+    }
+  }
+  showDeleteConfirm.value = true
+}
 const detailFund = ref<FundTableRow | null>(null)
 const selectedFundCode = ref('')
 const selectedFundName = ref('')
@@ -1130,6 +1235,128 @@ function handleClearCache() {
   background: #FEE2E2;
   border-color: #FCA5A5;
   color: #B91C1C;
+}
+
+.manage-toggle-btn {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid #D1D5DB;
+  border-radius: 16px;
+  background: transparent;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.manage-toggle-btn:hover {
+  background: #F3F4F6;
+}
+
+.manage-toggle-btn.active {
+  background: #1F2937;
+  border-color: #1F2937;
+  color: #fff;
+}
+
+.manage-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 18px;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid #E5E7EB;
+  border-radius: 16px;
+  box-shadow: 0 10px 32px rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(8px);
+}
+
+.manage-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.manage-count {
+  font-size: 13px;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.manage-count b {
+  color: #2563eb;
+  font-size: 15px;
+}
+
+.manage-held-warn {
+  font-size: 11.5px;
+  color: #DC2626;
+  white-space: nowrap;
+}
+
+.manage-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.manage-btn {
+  min-height: 38px;
+  padding: 8px 16px;
+  border: 1px solid #E5E7EB;
+  border-radius: 10px;
+  background: #fff;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.manage-btn:hover:not(:disabled) {
+  background: #F3F4F6;
+}
+
+.manage-btn-danger {
+  background: #DC2626;
+  border-color: #DC2626;
+  color: #fff;
+}
+
+.manage-btn-danger:hover:not(:disabled) {
+  background: #B91C1C;
+  border-color: #B91C1C;
+}
+
+.manage-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+  .manage-bar {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    transform: none;
+    max-width: none;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+  }
+
+  .manage-btn {
+    padding: 8px 12px;
+    font-size: 12.5px;
+  }
 }
 
 .refresh-btn {
@@ -1954,6 +2181,7 @@ function handleClearCache() {
   font-size: 14px;
   color: #6B7280;
   line-height: 1.6;
+  white-space: pre-line;
 }
 
 .confirm-actions {

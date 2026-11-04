@@ -989,8 +989,21 @@ export function addUserFund(fundCode: string, fundName?: string): boolean {
       VALUES (?, ?, ?, 0, 'a', 0, 0, 0, ?)
     `)
     const result = stmt.run(userId, fundCode, name, now)
-    logger.log(`➕ 添加自选基金: ${fundCode}`)
-    return result.changes > 0
+    if (result.changes > 0) {
+      logger.log(`➕ 添加自选基金: ${fundCode}`)
+      return true
+    }
+    // 行已存在：若为软删除状态则复活（保留原有持仓数据）
+    const reactivate = db.prepare(`
+      UPDATE user_funds SET status = 'a'
+      WHERE user_id = ? AND fund_code = ? AND status = 'd'
+    `)
+    const re = reactivate.run(userId, fundCode)
+    if (re.changes > 0) {
+      logger.log(`♻️ 复活软删除基金: ${fundCode}（保留原持仓数据）`)
+      return true
+    }
+    return false
   } catch (error) {
     logger.error(`添加基金失败: ${fundCode}`, error)
     return false
@@ -1316,9 +1329,18 @@ export function addUserFundsBatch(funds: Array<{ code: string; name?: string; is
     VALUES (?, ?, ?, ?, 'a', 0, 0, 0, ?, 0, ?)
   `)
 
+  // 软删除行复活（与 addUserFund 一致：重新添加即恢复，保留原持仓数据）
+  const reactivate = db.prepare(`
+    UPDATE user_funds SET status = 'a'
+    WHERE user_id = ? AND fund_code = ? AND status = 'd'
+  `)
+
   const transaction = db.transaction(() => {
     for (const fund of funds) {
-      stmt.run(userId, fund.code, fund.name || '', fund.isHeld ? 1 : 0, now, today)
+      const r = stmt.run(userId, fund.code, fund.name || '', fund.isHeld ? 1 : 0, now, today)
+      if (r.changes === 0) {
+        reactivate.run(userId, fund.code)
+      }
     }
   })
 
@@ -1329,7 +1351,7 @@ export function addUserFundsBatch(funds: Array<{ code: string; name?: string; is
 
 export function isFundInUserList(fundCode: string): boolean {
   const userId = getCurrentUserId().id
-  const stmt = db.prepare('SELECT 1 FROM user_funds WHERE user_id = ? AND fund_code = ?')
+  const stmt = db.prepare("SELECT 1 FROM user_funds WHERE user_id = ? AND fund_code = ? AND (status IS NULL OR status != 'd')")
   return !!stmt.get(userId, fundCode)
 }
 

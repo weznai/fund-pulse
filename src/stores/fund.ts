@@ -513,6 +513,30 @@ export const useFundStore = defineStore('fund', () => {
     }
   }
 
+  async function removeFavoritesBatch(codes: string[]) {
+    if (codes.length === 0) return 0
+    const codeSet = new Set(codes)
+    favoriteCodes.value = favoriteCodes.value.filter(c => !codeSet.has(c))
+    favoriteFunds.value = favoriteFunds.value.filter(f => !codeSet.has(f.code))
+
+    console.log('🗑️ 批量删除基金:', codes.length, '只, useDatabase:', useDatabase.value)
+
+    if (useDatabase.value) {
+      try {
+        const result = await userApi.batchDeleteUserFunds(codes)
+        console.log('🗑️ 批量删除结果:', result)
+        return result.deleted ?? codes.length
+      } catch (error) {
+        console.error('批量删除基金失败:', error)
+        return 0
+      }
+    } else {
+      saveToStorage()
+      console.log('🗑️ 批量删除(localStorage), remaining:', favoriteCodes.value.length)
+      return codes.length
+    }
+  }
+
   function isFavorite(code: string): boolean {
     return favoriteCodes.value.includes(code)
   }
@@ -800,6 +824,7 @@ export const useFundStore = defineStore('fund', () => {
     addFavorite,
     addFavoritesBatch,
     removeFavorite,
+    removeFavoritesBatch,
     isFavorite,
     toggleViewMode,
     setSortField,
