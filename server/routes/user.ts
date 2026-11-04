@@ -251,11 +251,12 @@ router.put('/funds/:code/name', (req: Request, res: Response) => {
     const userId = ensureUserSession(req, res)
 
     const { code } = req.params
-    const { name } = req.body
-    if (typeof name !== 'string' || !name.trim()) {
-      return res.status(400).json({ error: '名称不能为空' })
+    const raw = req.body?.name
+    if (typeof raw !== 'string') {
+      return res.status(400).json({ error: '名称必须是字符串' })
     }
-    if (name.trim().length > 50) {
+    const name = raw.trim()
+    if (name.length > 50) {
       return res.status(400).json({ error: '名称过长（最多50字）' })
     }
 
@@ -263,8 +264,9 @@ router.put('/funds/:code/name', (req: Request, res: Response) => {
       return res.json({ success: true, tempUser: true })
     }
 
-    const success = updateUserFund(code, { fundName: name.trim() })
-    logger.log(`✏️ 用户重命名基金: ${code} -> ${name.trim()}`)
+    // 留空 = 恢复官方名称（fund_info 名，查询层 COALESCE 自动回退）
+    const success = updateUserFund(code, { fundName: name })
+    logger.log(name ? `✏️ 用户重命名基金: ${code} -> ${name}` : `↩️ 用户恢复基金官方名称: ${code}`)
     res.json({ success })
   } catch (error) {
     logger.error('重命名基金失败:', error)

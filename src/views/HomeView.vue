@@ -794,10 +794,23 @@ const closeUserMenu = () => {
 }
 
 async function handleRenameFund(row: FundTableRow) {
-  const name = window.prompt('修改基金显示名称：', row.fundName)
+  const name = window.prompt('修改基金显示名称（清空后确定 = 恢复官方名称）：', row.fundName)
   if (name === null) return
   const trimmed = name.trim()
-  if (!trimmed || trimmed === row.fundName) return
+  if (trimmed === row.fundName) return
+
+  // 留空 = 恢复官方名称
+  if (!trimmed) {
+    if (!store.useDatabase) {
+      alert('本地模式暂不支持恢复官方名称，请直接输入新名称')
+      return
+    }
+    if (!confirm('恢复为官方名称？')) return
+    await store.renameFavorite(row.code, '')
+    store.fetchFavorites()
+    return
+  }
+
   await store.renameFavorite(row.code, trimmed)
 }
 

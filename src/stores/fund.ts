@@ -539,7 +539,11 @@ export const useFundStore = defineStore('fund', () => {
   async function renameFavorite(code: string, name: string) {
     const fund = favoriteFunds.value.find(f => f.code === code)
     if (!fund) return
-    fund.name = name
+
+    // name 为空 = 恢复官方名称（本地不清名称，等服务端刷新回填）
+    if (name) {
+      fund.name = name
+    }
 
     if (useDatabase.value) {
       try {
@@ -547,10 +551,10 @@ export const useFundStore = defineStore('fund', () => {
       } catch (error) {
         console.error('重命名基金失败:', error)
       }
-    } else {
+    } else if (name) {
       saveToStorage()
     }
-    console.log('✏️ 重命名基金:', code, '->', name)
+    console.log('✏️ 重命名基金:', code, '->', name || '(恢复官方名称)')
   }
 
   function isFavorite(code: string): boolean {
