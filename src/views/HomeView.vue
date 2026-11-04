@@ -1,5 +1,5 @@
 <template>
-  <div class="home">
+  <div class="home" :class="{ 'manage-on': manageMode }">
     <header class="header">
       <div class="header-content">
         <div class="brand">
@@ -251,6 +251,11 @@
 
     <!-- 批量管理操作条 -->
     <div v-if="manageMode" class="manage-bar">
+      <button class="manage-close" @click="toggleManageMode" title="退出管理" aria-label="退出管理">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
       <div class="manage-info">
         <span class="manage-count">已选 <b>{{ selectedCodes.size }}</b> 项</span>
         <span v-if="selectedHeldCount > 0" class="manage-held-warn">其中 {{ selectedHeldCount }} 只有持仓</span>
@@ -1249,14 +1254,45 @@ function handleClearCache() {
   z-index: 90;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   max-width: calc(100vw - 32px);
-  padding: 10px 18px;
+  padding: 10px 14px 10px 12px;
   background: rgba(255, 255, 255, 0.97);
   border: 1px solid #E5E7EB;
   border-radius: 16px;
   box-shadow: 0 10px 32px rgba(15, 23, 42, 0.18);
   backdrop-filter: blur(8px);
+}
+
+/* 管理模式：页面底部留白，避免固定操作条遮挡列表最后一行 */
+.home.manage-on {
+  padding-bottom: 96px;
+}
+
+.manage-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 1px solid #E5E7EB;
+  border-radius: 10px;
+  background: #fff;
+  color: #6B7280;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.manage-close:hover {
+  background: #FEF2F2;
+  border-color: #FECACA;
+  color: #DC2626;
+}
+
+.manage-close svg {
+  width: 15px;
+  height: 15px;
 }
 
 .manage-info {
