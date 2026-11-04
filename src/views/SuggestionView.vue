@@ -65,9 +65,6 @@
         <div v-else class="suggestion-list">
           <div v-for="item in list" :key="item.id" class="suggestion-item">
             <div class="item-header">
-              <span class="item-summary" :class="{ 'placeholder': item.summary === '更新中...' }">
-                {{ item.summary }}
-              </span>
               <span class="item-status" :class="statusClass(item.status)">{{ statusLabel(item.status) }}</span>
             </div>
             <div class="item-content">{{ item.content }}</div>
@@ -444,21 +441,9 @@ function formatTime(ts: number) {
 .item-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   margin-bottom: 8px;
 }
-
-.item-summary {
-  font-size: 15px;
-  font-weight: 600;
-  color: #111827;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.item-summary.placeholder { color: #9CA3AF; font-style: italic; }
 
 .item-status {
   font-size: 11px;
@@ -527,6 +512,5 @@ function formatTime(ts: number) {
   .page-container { padding: 16px 12px; }
   .form-card { padding: 16px; }
   .suggestion-item { padding: 12px 14px; }
-  .item-summary { font-size: 14px; }
 }
 </style>

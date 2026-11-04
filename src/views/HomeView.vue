@@ -1717,9 +1717,9 @@ function handleClearCache() {
 }
 
 .toolbar-btn-active {
-  background: #1F2937 !important;
-  border-color: #1F2937 !important;
-  color: #fff !important;
+  background: #EFF6FF !important;
+  border-color: #93C5FD !important;
+  color: #2563EB !important;
 }
 
 .toolbar-btn-active svg path {
