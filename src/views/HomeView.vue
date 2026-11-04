@@ -229,6 +229,7 @@
             @detail-click="handleDetailClick"
             @toggle-select="toggleSelect"
             @toggle-all="toggleAll"
+            @rename="handleRenameFund"
           />
         </div>
 
@@ -792,8 +793,15 @@ const closeUserMenu = () => {
   showUserMenu.value = false
 }
 
-function handleDelete(code: string) {
-  const isHeldFund = store.isHeld(code)
+async function handleRenameFund(row: FundTableRow) {
+  const name = window.prompt('修改基金显示名称：', row.fundName)
+  if (name === null) return
+  const trimmed = name.trim()
+  if (!trimmed || trimmed === row.fundName) return
+  await store.renameFavorite(row.code, trimmed)
+}
+
+function handleDelete(code: string) {  const isHeldFund = store.isHeld(code)
   deleteConfirmMessage.value = isHeldFund 
     ? '该基金当前为持仓状态，删除后将同时清除持仓信息！'
     : '确定要从自选中移除这只基金吗？'

@@ -6,7 +6,7 @@ import {
   setRegisteredUser,
   getAllUsers, getUserIdFromClientId, userContext,
   getUserFunds, getHeldFunds, getFavoriteFunds,
-  addUserFund, deleteUserFund, setHolding, removeHolding,
+  addUserFund, deleteUserFund, setHolding, removeHolding, updateUserFund,
   addUserFundsBatch, isFundInUserList, isFundHeld,
   getUserPreferences, saveUserPreferences,
   getHoldings, saveHolding, deleteHolding, saveHoldingsBatch,
@@ -243,6 +243,32 @@ router.post('/funds/batch-delete', (req: Request, res: Response) => {
   } catch (error) {
     logger.error('批量删除基金失败:', error)
     res.status(500).json({ error: '批量删除基金失败' })
+  }
+})
+
+router.put('/funds/:code/name', (req: Request, res: Response) => {
+  try {
+    const userId = ensureUserSession(req, res)
+
+    const { code } = req.params
+    const { name } = req.body
+    if (typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: '名称不能为空' })
+    }
+    if (name.trim().length > 50) {
+      return res.status(400).json({ error: '名称过长（最多50字）' })
+    }
+
+    if (!isRegisteredUser(userId)) {
+      return res.json({ success: true, tempUser: true })
+    }
+
+    const success = updateUserFund(code, { fundName: name.trim() })
+    logger.log(`✏️ 用户重命名基金: ${code} -> ${name.trim()}`)
+    res.json({ success })
+  } catch (error) {
+    logger.error('重命名基金失败:', error)
+    res.status(500).json({ error: '重命名基金失败' })
   }
 })
 

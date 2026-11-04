@@ -81,6 +81,17 @@
               <div class="fund-name-row">
                 <span class="fund-name fund-name-link">{{ row.fundName }}</span>
                 <span v-if="row.holdingAmountValue" class="hold-badge">持</span>
+                <button
+                  v-if="!manageMode"
+                  class="rename-btn"
+                  @click.stop="$emit('rename', row)"
+                  title="编辑名称"
+                  aria-label="编辑名称"
+                >
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
               </div>
               <span class="fund-code-wrap" @click.stop="copyCode(row.code, $event)">
                 <span class="fund-code">{{ row.code }}</span>
@@ -173,6 +184,7 @@ const emit = defineEmits<{
   (e: 'detail-click', row: FundTableRow): void
   (e: 'toggle-select', code: string): void
   (e: 'toggle-all'): void
+  (e: 'rename', row: FundTableRow): void
 }>()
 
 const allSelected = computed(() =>
@@ -363,6 +375,36 @@ tbody tr.row-selected:hover {
   height: 16px;
   accent-color: #2563eb;
   cursor: pointer;
+}
+
+.rename-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: #9CA3AF;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.15s;
+}
+
+.fund-name-row:hover .rename-btn {
+  opacity: 1;
+}
+
+.rename-btn:hover {
+  background: #EFF6FF;
+  color: #2563EB;
+}
+
+.rename-btn svg {
+  width: 12px;
+  height: 12px;
 }
 
 tbody tr:last-child td {

@@ -252,6 +252,15 @@ export async function batchDeleteUserFunds(codes: string[]): Promise<{ success: 
   return response.data
 }
 
+// 重命名基金（用户层自定义名称）
+export async function renameUserFund(fundCode: string, name: string): Promise<{ success: boolean }> {
+  const clientId = getClientId()
+  const response = await axios.put<{ success: boolean }>(`${API_BASE}/user/funds/${fundCode}/name`, { name }, {
+    headers: { 'X-Client-Id': clientId }
+  })
+  return response.data
+}
+
 // 获取推荐基金列表
 export async function getRecommendFunds(): Promise<{ codes: string[] }> {
   const response = await axios.get<{ codes: string[] }>(`${API_BASE}/recommend-funds`)

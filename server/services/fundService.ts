@@ -9,7 +9,7 @@ import axios from 'axios'
 import { logger } from '../logger.js'
 import { fundInfoRepository } from '../db/index.js'
 import { checkTradingDay } from './holidayService.js'
-import { getLocalDate, getFundCache, saveFundCache, getGlobalEstimateCache, getFundInfo, FundInfo } from '../db/index.js'
+import { getLocalDate, getFundCache, saveFundCache, getGlobalEstimateCache, getFundInfo, saveFundInfo, FundInfo } from '../db/index.js'
 import type { FundCache } from '../../types/index.js'
 import { fetchFinalNavFromMobApi, isKnownNonFund } from '../external/eastmoney.js'
 import { fetchFundEstimatePoint } from '../external/estimateSource.js'
@@ -113,6 +113,31 @@ function isQDIIFund(code: string): boolean {
   return false
 }
 
+/**
+ * 确保拿到基金名称：fund_info 缺名时自动经 Search API 补齐并回写（自愈，一次成功永久生效）。
+ * 典型场景：导入基金时 fetchFundDetailFromApi 偶发失败导致 fund_info 无名称，前台只显示代码。
+ */
+async function ensureFundName(code: string): Promise<string> {
+  const info = getFundInfo(code)
+  if (info?.name) return info.name
+
+  try {
+    const basic = await fetchFundBasicInfoFromSearchApi(code)
+    if (basic?.name) {
+      try {
+        saveFundInfo({ code, name: basic.name, ftype: basic.ftype })
+        logger.log(`[自愈] ${code} 名称已补齐并回写 fund_info: ${basic.name}`)
+      } catch (e) {
+        logger.error(`[自愈] ${code} 回写 fund_info 失败:`, e)
+      }
+      return basic.name
+    }
+  } catch (e) {
+    logger.error(`[自愈] ${code} Search API 补名失败:`, e)
+  }
+  return info?.name || ''
+}
+
 async function fetchFundData(code: string, forceRefresh = false) {
   if (isKnownNonFund(code)) return null
   const now = Date.now()
@@ -166,14 +191,13 @@ async function fetchFundData(code: string, forceRefresh = false) {
     const estimatePoint = await fetchFundEstimatePoint(code)
 
     if (estimatePoint && estimatePoint.gsz > 0) {
-      const info = getFundInfo(code)
       const nav = estimatePoint.nav
       const gsz = estimatePoint.gsz
       const gszzl = estimatePoint.gszzl
 
       const fundData: any = {
         code,
-        name: info?.name || '',
+        name: await ensureFundName(code),
         type: '',
         nav: nav,
         accNav: nav,
@@ -251,10 +275,9 @@ async function fetchFundData(code: string, forceRefresh = false) {
     try {
       const point = await fetchFundEstimatePoint(code)
       if (point && point.nav > 0) {
-        const info = getFundInfo(code)
         const fundData: any = {
           code,
-          name: info?.name || '',
+          name: await ensureFundName(code),
           type: '',
           nav: point.nav,
           accNav: point.nav,

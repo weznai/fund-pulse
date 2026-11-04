@@ -513,8 +513,7 @@ export const useFundStore = defineStore('fund', () => {
     }
   }
 
-  async function removeFavoritesBatch(codes: string[]) {
-    if (codes.length === 0) return 0
+  async function removeFavoritesBatch(codes: string[]) {    if (codes.length === 0) return 0
     const codeSet = new Set(codes)
     favoriteCodes.value = favoriteCodes.value.filter(c => !codeSet.has(c))
     favoriteFunds.value = favoriteFunds.value.filter(f => !codeSet.has(f.code))
@@ -535,6 +534,23 @@ export const useFundStore = defineStore('fund', () => {
       console.log('🗑️ 批量删除(localStorage), remaining:', favoriteCodes.value.length)
       return codes.length
     }
+  }
+
+  async function renameFavorite(code: string, name: string) {
+    const fund = favoriteFunds.value.find(f => f.code === code)
+    if (!fund) return
+    fund.name = name
+
+    if (useDatabase.value) {
+      try {
+        await userApi.renameUserFund(code, name)
+      } catch (error) {
+        console.error('重命名基金失败:', error)
+      }
+    } else {
+      saveToStorage()
+    }
+    console.log('✏️ 重命名基金:', code, '->', name)
   }
 
   function isFavorite(code: string): boolean {
@@ -825,6 +841,7 @@ export const useFundStore = defineStore('fund', () => {
     addFavoritesBatch,
     removeFavorite,
     removeFavoritesBatch,
+    renameFavorite,
     isFavorite,
     toggleViewMode,
     setSortField,

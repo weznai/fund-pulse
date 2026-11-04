@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express'
 import axios from 'axios'
 import iconv from 'iconv-lite'
 import { logger } from '../logger.js'
-import { getLocalDate, getCacheStats, getGlobalCacheStats, clearAllCache, getFundInfo, updateFundInfoField, getGlobalEstimateCache, saveGlobalEstimateCache, getLatestGlobalEstimateCache, getRecommendFundCodes, getStockTimeTrend, getLatestStockTimeTrend, getSystemParam, getLatestNavDate, getNavHistoryRange, saveNavHistoryBatch, getTradingDay } from '../db/index.js'
+import { getLocalDate, getCacheStats, getGlobalCacheStats, clearAllCache, getFundInfo, updateFundInfoField, getGlobalEstimateCache, saveGlobalEstimateCache, getLatestGlobalEstimateCache, getRecommendFundCodes, getStockTimeTrend, getLatestStockTimeTrend, getSystemParam, getLatestNavDate, getNavHistoryRange, saveNavHistoryBatch, getTradingDay, getUserFunds } from '../db/index.js'
 import { isTradingTime, fetchEstimateDataForCodes } from '../scheduled/estimate.js'
 import { checkTradingDay } from '../services/holidayService.js'
 import { fetchFundData, fetchFundsBatch } from '../services/fundService.js'
@@ -17,6 +17,18 @@ router.post('/funds', async (req: Request, res: Response) => {
     const { codes, forceRefresh } = req.body
     if (!codes || !Array.isArray(codes)) return res.json([])
     const results = await fetchFundsBatch(codes, !!forceRefresh)
+
+    // 用户层名称优先：用户自定义过名称（user_funds.fund_name）则覆盖默认名（fund_info/接口名）
+    try {
+      const userFunds = getUserFunds()
+      for (const r of results) {
+        const uf = userFunds.get(String(r.code))
+        if (uf?.fundName) r.name = uf.fundName
+      }
+    } catch (e) {
+      logger.error('应用用户自定义名称失败:', e)
+    }
+
     res.json(results)
   } catch (error) {
     logger.error('Batch fetch funds error:', error)
