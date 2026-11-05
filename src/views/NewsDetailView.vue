@@ -63,7 +63,7 @@
           <iframe
             class="detail-frame"
             :srcdoc="article.content_html"
-            sandbox=""
+            sandbox="allow-popups allow-popups-to-escape-sandbox"
             referrerpolicy="no-referrer"
             title="资讯正文"
           ></iframe>
