@@ -42,39 +42,38 @@
       </div>
 
       <template v-else>
-        <!-- 头条大卡（置顶优先，否则第一篇） -->
+        <!-- 头条大卡（置顶优先，否则第一篇）——与普通卡片同款白卡，右上角 NEW 角标 -->
         <article
           v-if="featured"
-          class="featured-card"
+          class="news-card featured"
           :style="{ animationDelay: '0ms' }"
           @click="$router.push(`/news/${featured.id}`)"
         >
-          <div class="featured-top">
-            <span class="badge badge-hot">
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              置顶
-            </span>
-            <span class="featured-date">{{ formatDate(featured.created_at) }}</span>
+          <span class="new-flag">NEW</span>
+          <div class="date-block">
+            <span class="date-day">{{ formatDay(featured.created_at) }}</span>
+            <span class="date-month">{{ formatMonth(featured.created_at) }}</span>
           </div>
-          <h2 class="featured-title">{{ featured.title }}</h2>
-          <p v-if="featured.summary" class="featured-summary">{{ featured.summary }}</p>
-          <div class="featured-meta">
-            <span v-if="featured.source" class="meta-chip">{{ featured.source }}</span>
-            <span class="meta-views">
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
-              </svg>
-              {{ featured.views }} 次阅读
-            </span>
-            <span class="featured-cta">阅读全文
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </span>
+          <div class="card-main">
+            <h2 class="card-title featured-title">
+              {{ featured.title }}
+              <span v-if="featured.pinned" class="badge-mini">顶</span>
+            </h2>
+            <p v-if="featured.summary" class="card-summary">{{ featured.summary }}</p>
+            <div class="card-meta">
+              <span v-if="featured.source" class="meta-chip">{{ featured.source }}</span>
+              <span class="meta-views">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                  <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
+                </svg>
+                {{ featured.views }} 次阅读
+              </span>
+            </div>
           </div>
+          <svg class="card-arrow" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
         </article>
 
         <!-- 普通列表 -->
@@ -178,9 +177,6 @@ function loadMore() {
   fetchNews()
 }
 
-function formatDate(dt: string): string {
-  return (dt || '').slice(0, 10)
-}
 function formatDay(dt: string): string {
   return (dt || '').slice(8, 10) || '-'
 }
@@ -310,46 +306,16 @@ onMounted(fetchNews)
 }
 .empty-btn:hover { background: #24425c; transform: translateY(-1px); }
 
-/* ---------- 头条大卡 ---------- */
-.featured-card {
-  background: linear-gradient(135deg, #eaf2fa 0%, #f6f9fc 100%);
-  border: 1px solid #d3e3f3;
-  border-radius: 18px;
-  padding: 24px 26px 22px;
+/* ---------- 头条卡（普通白卡同款，标题更大 + NEW 角标） ---------- */
+.news-card.featured {
+  padding: 22px 24px;
   margin-bottom: 16px;
-  color: #1f2933;
-  cursor: pointer;
-  box-shadow: 0 6px 20px rgba(30, 84, 144, 0.08);
-  transition: transform 0.25s ease-out, box-shadow 0.25s ease-out;
-  animation: card-in 0.4s ease-out both;
-}
-.featured-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 10px 26px rgba(30, 84, 144, 0.14);
 }
 
-.featured-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
+.card-title.featured-title {
+  font-size: 17.5px;
 }
 
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11.5px;
-  font-weight: 600;
-  border-radius: 6px;
-  padding: 3px 9px;
-}
-.badge svg { width: 12px; height: 12px; }
-.badge-hot {
-  color: #b45309;
-  background: #fef3c7;
-  border: 1px solid #fde68a;
-}
 .badge-mini {
   color: #b45309;
   background: #fef3c7;
@@ -359,56 +325,24 @@ onMounted(fetchNews)
   flex-shrink: 0;
 }
 
-.featured-date { font-size: 12px; color: #94a3b8; }
-
-.featured-title {
-  font-size: 19px;
+.new-flag {
+  position: absolute;
+  top: -8px;
+  right: 14px;
+  z-index: 3;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+  color: #fff;
+  font-size: 11px;
   font-weight: 700;
-  line-height: 1.55;
-  margin: 0 0 8px;
-  color: #1a2a3a;
+  letter-spacing: 1px;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
 }
-
-.featured-summary {
-  font-size: 13.5px;
-  line-height: 1.7;
-  color: #5b6b7c;
-  margin: 0 0 16px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.featured-meta {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.featured-meta .meta-chip {
-  background: #ddebf9;
-  color: #1e5490;
-  border: none;
-}
-
-.featured-meta .meta-views { color: #94a3b8; }
-
-.featured-cta {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #2563eb;
-  transition: gap 0.2s;
-}
-.featured-card:hover .featured-cta { gap: 9px; }
-.featured-cta svg { width: 15px; height: 15px; }
 
 /* ---------- 普通卡片 ---------- */
 .news-card {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 18px;
@@ -542,15 +476,15 @@ onMounted(fetchNews)
 /* ---------- 移动端 & 无障碍 ---------- */
 @media (max-width: 480px) {
   .hero-title { font-size: 19px; }
-  .featured-card { padding: 20px; }
-  .featured-title { font-size: 17px; }
+  .news-card.featured { padding: 18px; }
+  .card-title.featured-title { font-size: 16px; }
   .date-block { width: 46px; border-radius: 10px; }
   .date-day { font-size: 17px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .news-card, .featured-card { animation: none; }
-  .news-card, .featured-card, .load-more-btn, .empty-btn { transition: none; }
+  .news-card { animation: none; }
+  .news-card, .load-more-btn, .empty-btn { transition: none; }
   .sk { animation: none; }
 }
 </style>
