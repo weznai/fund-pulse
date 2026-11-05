@@ -144,7 +144,7 @@ onMounted(fetchDetail)
 }
 
 .hero-inner {
-  max-width: 1000px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 0 20px;
   display: flex;
@@ -177,7 +177,7 @@ onMounted(fetchDetail)
 
 /* ---------- 容器 ---------- */
 .detail-container {
-  max-width: 1000px;
+  max-width: 1400px;
   margin: -28px auto 0;
   padding: 0 16px;
   position: relative;

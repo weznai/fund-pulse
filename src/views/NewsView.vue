@@ -209,7 +209,7 @@ onMounted(fetchNews)
 }
 
 .hero-inner {
-  max-width: 760px;
+  max-width: 960px;
   margin: 0 auto;
   padding: 0 20px;
   display: flex;
@@ -264,7 +264,7 @@ onMounted(fetchNews)
 
 /* ---------- 容器 ---------- */
 .news-container {
-  max-width: 760px;
+  max-width: 960px;
   margin: -36px auto 0;
   padding: 0 16px;
   position: relative;
