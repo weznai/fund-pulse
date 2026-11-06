@@ -66,7 +66,7 @@ export function setupDashboardRoutes(validateAdminToken: (req: Request, res: Res
         ).c
       )
       const dates: string[] = []
-      for (let i = 59; i >= 0; i--) {
+      for (let i = 179; i >= 0; i--) {
         const d = new Date()
         d.setDate(d.getDate() - i)
         dates.push(d.toLocaleDateString('sv-SE'))
@@ -77,7 +77,7 @@ export function setupDashboardRoutes(validateAdminToken: (req: Request, res: Res
         )
         .all(dates[0]) as { d: string; pv: number; uv: number }[]
       const visitMap = new Map(visitRows.map(r => [r.d, r]))
-      const trend60 = dates.map(d => ({
+      const trend180 = dates.map(d => ({
         date: d,
         pv: visitMap.get(d)?.pv || 0,
         uv: visitMap.get(d)?.uv || 0
@@ -117,7 +117,7 @@ export function setupDashboardRoutes(validateAdminToken: (req: Request, res: Res
       res.json({
         generatedAt: now,
         user: { total: userTotal, todayNew: userTodayNew, active7d: userActive7d, byType: userByType, recent: recentUsers },
-        visit: { todayPv, todayUv, trend60 },
+        visit: { todayPv, todayUv, trend180 },
         news: { articles: newsRow.articles, totalViews: newsRow.views, todayReads: newsTodayReads, top: newsTop },
         ai: { totalCalls: aiRow.calls, users: aiRow.users, todayUsers: aiTodayUsers },
         fund: { holdings: fundRow.holdings, users: fundRow.users }

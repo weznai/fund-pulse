@@ -55,7 +55,7 @@
       <!-- 图表 -->
       <div class="charts">
         <div class="chart-box wide">
-          <h3>近 60 天访问趋势</h3>
+          <h3>近 180 天访问趋势</h3>
           <div ref="trendRef" class="chart tall"></div>
         </div>
         <div class="chart-box">
@@ -138,8 +138,8 @@ function renderCharts() {
       grid: { left: 46, right: 20, top: 34, bottom: 28 },
       xAxis: {
         type: 'category',
-        data: d.value.visit.trend60.map((r: any) => r.date.slice(5)),
-        axisLabel: { color: '#64748b', interval: 4 },
+        data: d.value.visit.trend180.map((r: any) => r.date.slice(5)),
+        axisLabel: { color: '#64748b', interval: 14 },
         axisTick: { alignWithLabel: false }
       },
       yAxis: { type: 'value', minInterval: 1, axisLabel: axisStyle, splitLine: { lineStyle: { color: '#f1f5f9' } } },
@@ -149,7 +149,7 @@ function renderCharts() {
           type: 'line',
           smooth: true,
           symbolSize: 6,
-          data: d.value.visit.trend60.map((r: any) => r.pv),
+          data: d.value.visit.trend180.map((r: any) => r.pv),
           itemStyle: { color: '#3b82f6' },
           areaStyle: { color: 'rgba(59,130,246,0.08)' },
           lineStyle: { width: 2.5 }
@@ -159,7 +159,7 @@ function renderCharts() {
           type: 'line',
           smooth: true,
           symbolSize: 6,
-          data: d.value.visit.trend60.map((r: any) => r.uv),
+          data: d.value.visit.trend180.map((r: any) => r.uv),
           itemStyle: { color: '#10b981' },
           lineStyle: { width: 2.5 }
         }
