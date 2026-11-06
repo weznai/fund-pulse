@@ -159,6 +159,11 @@ async function recordVisit(path: string) {
 router.beforeEach((to, _from, next) => {
   const token = localStorage.getItem('admin_token')
 
+  // /zx/ 子站（wezin.cn/zx/ 资讯站）默认落地资讯页
+  if (to.path === '/' && import.meta.env.BASE_URL.startsWith('/zx')) {
+    return next('/news')
+  }
+
   if (to.meta.requiresAuth && !token) {
     next({
       name: 'admin-login',
