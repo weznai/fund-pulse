@@ -32,6 +32,7 @@ import wechatRoutes from './routes/wechat.js'
 import systemUpdateRoutes from './routes/systemUpdate.js'
 import { setupEstimateSourceRoutes } from './routes/estimateSource.js'
 import { setupPublicNewsRoutes, setupAdminNewsRoutes } from './routes/news.js'
+import { setupSeoRoutes, renderSeoHtml } from './routes/seo.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -105,8 +106,11 @@ app.post('/api/migrate/from-local', migrateFromLocalHandler)
 app.use(express.static(path.join(__dirname, 'dist')))
 app.use('/reports', express.static(path.join(__dirname, 'reports')))
 
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'))
+// SEO：robots / sitemap / 文章页 meta 注入（须在 SPA 兜底之前）
+setupSeoRoutes(app)
+
+app.get('*', (_req, res) => {
+  res.type('html').send(renderSeoHtml())
 })
 
 app.listen(PORT, '0.0.0.0', () => {
