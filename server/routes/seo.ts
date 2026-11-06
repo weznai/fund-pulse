@@ -24,6 +24,7 @@ import type { NewsArticle } from '../db/news.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DIST = path.join(__dirname, '..', 'dist')
+const DIST_ZX = path.join(__dirname, '..', '..', 'dist-zx')
 const SITE = (process.env.SITE_URL || 'https://fund.wezin.cn').replace(/\/$/, '')
 
 const DEFAULTS = {
@@ -97,6 +98,8 @@ function listPublished(): NewsArticle[] {
 }
 
 export function setupSeoRoutes(app: import('express').Express): void {
+  injectHomeSeoFiles()
+
   app.get('/robots.txt', (_req: Request, res: Response) => {
     res.type('text/plain').send(
       ['User-agent: *', 'Allow: /', 'Disallow: /admin', 'Disallow: /api/', `Sitemap: ${SITE}/sitemap.xml`].join('\n') + '\n'
@@ -139,4 +142,60 @@ export function setupSeoRoutes(app: import('express').Express): void {
     })
     res.type('html').send(html)
   })
+}
+
+/**
+ * 首页 SEO 正文注入
+ *
+ * SPA 首页对爬虫是空壳（<div id="app"></div>）。把站点简介 + 功能 + 最新速览内链
+ * 写入 dist/index.html 与 dist-zx/index.html 的 #app 内部：爬虫可抓到真实内容与
+ * 文章内链；浏览器端 Vue 挂载后整块被替换，用户无感知。
+ * 幂等：以 <!--HOME_SEO_START/END--> 标记包裹，重复执行先剥离旧块。
+ * 触发：服务启动时 + 资讯增删改/上下架后（见 routes/news.ts 调用）。
+ */
+function buildHomeSeoBlock(): string {
+  const feats = [
+    '基金实时估值：盘中多源估值刷新，涨跌一目了然',
+    '持仓收益分析：收益日历、分时走势、收益归因',
+    '智能诊断：AI 分析基金持仓与市场关联',
+    '每日速览：油价、美联储、A股/港股关键行情与市场逻辑'
+  ]
+  let newsItems = ''
+  try {
+    const arts = listPublished().slice(0, 6)
+    newsItems =
+      '\n    <h2>最新每日速览</h2>\n    <ul>' +
+      arts
+        .map(a => `\n      <li><a href="${SITE}/news/${a.id}">${xmlEsc(a.title)}</a>（${(a.created_at || '').slice(0, 10)}）</li>`)
+        .join('') +
+      '\n    </ul>'
+  } catch {
+    newsItems = ''
+  }
+
+  return `<!--HOME_SEO_START--><div style="max-width:960px;margin:0 auto;padding:48px 20px;font-family:system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;color:#1f2933;">
+    <h1 style="font-size:24px;margin:0 0 12px;">Fund Pulse 基金脉搏 — 基金实时估值与每日财经速览</h1>
+    <p style="margin:0 0 20px;line-height:1.8;">免费的基金追踪工具：基金实时估值、持仓收益分析、收益日历、智能诊断；每日速览覆盖油价、美联储政策、A股/港股关键行情与市场逻辑，助力基金投资决策。</p>${newsItems}
+    <h2 style="font-size:17px;margin:24px 0 8px;">主要功能</h2>
+    <ul style="line-height:1.9;">
+${feats.map(f => `      <li>${f}</li>`).join('\n')}
+    </ul>
+  </div><!--HOME_SEO_END-->`
+}
+
+export function injectHomeSeoFiles(): void {
+  const block = buildHomeSeoBlock()
+  for (const file of [path.join(DIST, 'index.html'), path.join(DIST_ZX, 'index.html')]) {
+    try {
+      if (!fs.existsSync(file)) continue
+      let html = fs.readFileSync(file, 'utf8')
+      html = html.replace(/<!--HOME_SEO_START-->[\s\S]*?<!--HOME_SEO_END-->/, '')
+      if (html.includes('<div id="app">')) {
+        html = html.replace('<div id="app">', `<div id="app">${block}`)
+        fs.writeFileSync(file, html)
+      }
+    } catch (e) {
+      // 注入失败不影响服务
+    }
+  }
 }

@@ -34,6 +34,7 @@ import {
   deleteNewsBatch,
   getNewsStats
 } from '../db/news.js'
+import { injectHomeSeoFiles } from './seo.js'
 
 function parsePage(req: Request): { page: number; pageSize: number } {
   const page = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1)
@@ -143,6 +144,7 @@ export function setupAdminNewsRoutes(validateAdminToken: (req: Request, res: Res
         status: parseStatus(req.body.status) || 'draft',
         pinned: !!req.body.pinned
       })
+      injectHomeSeoFiles()
       res.json({ success: true, id })
     } catch (error) {
       logger.error('新建资讯失败:', error)
@@ -165,6 +167,7 @@ export function setupAdminNewsRoutes(validateAdminToken: (req: Request, res: Res
         pinned: req.body.pinned !== undefined ? !!req.body.pinned : undefined
       })
       if (!updated) return res.status(404).json({ error: '资讯不存在' })
+      injectHomeSeoFiles()
       res.json({ success: true, article: updated })
     } catch (error) {
       logger.error('编辑资讯失败:', error)
@@ -180,6 +183,7 @@ export function setupAdminNewsRoutes(validateAdminToken: (req: Request, res: Res
       const article = setNewsStatus(id, status)
       if (!article) return res.status(404).json({ error: '资讯不存在' })
       logger.log(`[资讯] ${status === 'published' ? '发布' : '下架'}: ${article.title} (#${id})`)
+      injectHomeSeoFiles()
       res.json({ success: true, article })
     } catch (error) {
       logger.error('更新资讯状态失败:', error)
@@ -192,6 +196,7 @@ export function setupAdminNewsRoutes(validateAdminToken: (req: Request, res: Res
       const id = parseInt(req.params.id, 10)
       const deleted = deleteNewsById(id)
       if (!deleted) return res.status(404).json({ error: '资讯不存在' })
+      injectHomeSeoFiles()
       res.json({ success: true })
     } catch (error) {
       logger.error('删除资讯失败:', error)
@@ -207,6 +212,7 @@ export function setupAdminNewsRoutes(validateAdminToken: (req: Request, res: Res
       const validIds = ids.filter(n => Number.isInteger(n) && (n as number) > 0) as number[]
       if (validIds.length === 0) return res.status(400).json({ error: '无有效的资讯ID' })
       const { deleted, notFound } = deleteNewsBatch(validIds)
+      injectHomeSeoFiles()
       res.json({ success: true, deleted, total: validIds.length, notFound })
     } catch (error) {
       logger.error('批量删除资讯失败:', error)
