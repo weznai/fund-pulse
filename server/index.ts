@@ -32,6 +32,7 @@ import wechatRoutes from './routes/wechat.js'
 import systemUpdateRoutes from './routes/systemUpdate.js'
 import { setupEstimateSourceRoutes } from './routes/estimateSource.js'
 import { setupPublicNewsRoutes, setupAdminNewsRoutes } from './routes/news.js'
+import { setupDashboardRoutes } from './routes/dashboard.js'
 import { setupSeoRoutes, renderSeoHtml } from './routes/seo.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -78,6 +79,7 @@ app.use('/api/holidays', setupPublicHolidayRoutes())
 app.use('/api/admin/estimate-sources', setupEstimateSourceRoutes(validateAdminToken))
 app.use('/api/news', setupPublicNewsRoutes())
 app.use('/api/admin/news', setupAdminNewsRoutes(validateAdminToken))
+app.use('/api/admin/dashboard', setupDashboardRoutes(validateAdminToken))
 
 app.use('/api', fundRoutes)
 app.use('/api/auth', authRoutes)

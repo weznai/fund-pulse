@@ -168,6 +168,52 @@ function isGroupActive(item: any) {
 // 菜单项
 const menuItems = [
   {
+    path: '/admin/dashboard',
+    title: '仪表盘',
+    icon: {
+      render() {
+        return h('svg', { viewBox: '0 0 24 24', fill: 'none' }, [
+          h('rect', {
+            x: '3',
+            y: '3',
+            width: '8',
+            height: '8',
+            rx: '2',
+            stroke: 'currentColor',
+            'stroke-width': '1.8'
+          }),
+          h('rect', {
+            x: '13',
+            y: '3',
+            width: '8',
+            height: '5',
+            rx: '2',
+            stroke: 'currentColor',
+            'stroke-width': '1.8'
+          }),
+          h('rect', {
+            x: '13',
+            y: '10',
+            width: '8',
+            height: '11',
+            rx: '2',
+            stroke: 'currentColor',
+            'stroke-width': '1.8'
+          }),
+          h('rect', {
+            x: '3',
+            y: '13',
+            width: '8',
+            height: '8',
+            rx: '2',
+            stroke: 'currentColor',
+            'stroke-width': '1.8'
+          })
+        ])
+      }
+    }
+  },
+  {
     path: '/admin/fund-manage',
     title: '基金管理',
     icon: {

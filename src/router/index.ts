@@ -57,7 +57,12 @@ const router = createRouter({
       children: [
         {
           path: '',
-          redirect: '/admin/fund-manage'
+          redirect: '/admin/dashboard'
+        },
+        {
+          path: 'dashboard',
+          name: 'admin-dashboard',
+          component: () => import('@/views/admin/DashboardView.vue')
         },
         {
           path: 'fund-manage',
