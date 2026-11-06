@@ -175,6 +175,19 @@
             <div class="stat-label">活跃用户 (7天内)</div>
           </div>
         </div>
+        <div class="stat-card">
+          <div class="stat-icon today">
+            <svg viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2"/>
+              <path d="M8 3v4M16 3v4M3 11h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M12 15v3M10.5 16.5h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="stat-content">
+            <div class="stat-value">{{ stats.todayNewUsers }}</div>
+            <div class="stat-label">今日新增</div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -203,7 +216,10 @@ const stats = computed(() => {
   const totalHoldings = users.value.reduce((sum, u) => sum + (u.holdingCount || 0), 0)
   const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
   const activeUsers = users.value.filter(u => (u.lastActive || 0) > sevenDaysAgo).length
-  return { totalUsers, totalHoldings, activeUsers }
+  const now = new Date()
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const todayNewUsers = users.value.filter(u => (u.createdAt || 0) >= todayStart).length
+  return { totalUsers, totalHoldings, activeUsers, todayNewUsers }
 })
 
 const filteredUsers = computed(() => {
@@ -650,7 +666,7 @@ onMounted(() => {
 /* 统计信息 */
 .stats-section {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
 }
 
@@ -720,6 +736,15 @@ onMounted(() => {
 
 .stat-card:has(.stat-icon.active)::before {
   background: linear-gradient(90deg, #d97706, #fbbf24);
+}
+
+.stat-icon.today {
+  background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%);
+  color: #db2777;
+}
+
+.stat-card:has(.stat-icon.today)::before {
+  background: linear-gradient(90deg, #db2777, #f472b6);
 }
 
 .stat-content {
