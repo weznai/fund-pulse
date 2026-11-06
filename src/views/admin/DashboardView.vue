@@ -55,7 +55,14 @@
       <!-- 图表 -->
       <div class="charts">
         <div class="chart-box wide">
-          <h3>近 180 天访问趋势</h3>
+          <div class="chart-head">
+            <h3>访问趋势</h3>
+            <div class="range-switch">
+              <button :class="{ active: range === 180 }" @click="setRange(180)">180天</button>
+              <button :class="{ active: range === 90 }" @click="setRange(90)">90天</button>
+              <button :class="{ active: range === 60 }" @click="setRange(60)">60天</button>
+            </div>
+          </div>
           <div ref="trendRef" class="chart tall"></div>
         </div>
         <div class="chart-box">
@@ -105,7 +112,15 @@ const trendRef = ref<HTMLElement | null>(null)
 const typeRef = ref<HTMLElement | null>(null)
 const newsRef = ref<HTMLElement | null>(null)
 
+const range = ref(180)
 let charts: echarts.ECharts[] = []
+let trendChart: echarts.ECharts | null = null
+
+function setRange(r: number) {
+  if (range.value === r) return
+  range.value = r
+  renderTrendChart()
+}
 
 async function loadData() {
   loading.value = true
@@ -126,103 +141,119 @@ async function loadData() {
 function renderCharts() {
   disposeCharts()
   if (!d.value) return
+  renderTrendChart()
+  renderTypeChart()
+  renderNewsChart()
+}
 
+function renderTrendChart() {
+  if (!trendRef.value || !d.value) return
+  trendChart?.dispose()
+  trendChart = echarts.init(trendRef.value)
+
+  const rows = d.value.visit.trend180.slice(-range.value)
   const axisStyle = { color: '#64748b' }
 
-  if (trendRef.value) {
-    const c = echarts.init(trendRef.value)
-    charts.push(c)
-    c.setOption({
-      tooltip: { trigger: 'axis' },
-      legend: { data: ['PV', 'UV'], right: 10, top: 0 },
-      grid: { left: 46, right: 20, top: 34, bottom: 28 },
-      xAxis: {
-        type: 'category',
-        data: d.value.visit.trend180.map((r: any) => r.date.slice(5)),
-        axisLabel: { color: '#64748b', interval: 14 },
-        axisTick: { alignWithLabel: false }
+  trendChart.setOption({
+    tooltip: { trigger: 'axis' },
+    legend: { data: ['PV', 'UV'], right: 10, top: 0 },
+    grid: { left: 46, right: 20, top: 34, bottom: 28 },
+    xAxis: {
+      type: 'category',
+      data: rows.map((r: any) => r.date.slice(5)),
+      axisLabel: { color: '#64748b', interval: Math.max(0, Math.floor(rows.length / 13)) },
+      axisTick: { alignWithLabel: false }
+    },
+    yAxis: { type: 'value', minInterval: 1, axisLabel: axisStyle, splitLine: { lineStyle: { color: '#f1f5f9' } } },
+    series: [
+      {
+        name: 'PV',
+        type: 'line',
+        smooth: true,
+        symbolSize: 6,
+        data: rows.map((r: any) => r.pv),
+        itemStyle: { color: '#3b82f6' },
+        areaStyle: { color: 'rgba(59,130,246,0.08)' },
+        lineStyle: { width: 2.5 }
       },
-      yAxis: { type: 'value', minInterval: 1, axisLabel: axisStyle, splitLine: { lineStyle: { color: '#f1f5f9' } } },
-      series: [
-        {
-          name: 'PV',
-          type: 'line',
-          smooth: true,
-          symbolSize: 6,
-          data: d.value.visit.trend180.map((r: any) => r.pv),
-          itemStyle: { color: '#3b82f6' },
-          areaStyle: { color: 'rgba(59,130,246,0.08)' },
-          lineStyle: { width: 2.5 }
-        },
-        {
-          name: 'UV',
-          type: 'line',
-          smooth: true,
-          symbolSize: 6,
-          data: d.value.visit.trend180.map((r: any) => r.uv),
-          itemStyle: { color: '#10b981' },
-          lineStyle: { width: 2.5 }
-        }
-      ]
-    })
-  }
+      {
+        name: 'UV',
+        type: 'line',
+        smooth: true,
+        symbolSize: 6,
+        data: rows.map((r: any) => r.uv),
+        itemStyle: { color: '#10b981' },
+        lineStyle: { width: 2.5 }
+      }
+    ]
+  })
+}
 
-  if (typeRef.value) {
-    const typeNames: Record<string, string> = { machine: '机器', phone: '手机', email: '邮箱', custom: '自定义' }
-    const c = echarts.init(typeRef.value)
-    charts.push(c)
-    c.setOption({
-      tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-      legend: { bottom: 0, icon: 'circle', textStyle: { color: '#64748b' } },
-      series: [
-        {
-          type: 'pie',
-          radius: ['42%', '68%'],
-          center: ['50%', '44%'],
-          label: { show: false },
-          data: d.value.user.byType.map((t: any) => ({
-            name: typeNames[t.type] || t.type,
-            value: t.c
-          }))
-        }
-      ],
-      color: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899']
-    })
-  }
+function renderTypeChart() {
+  if (!typeRef.value) return
+  const typeNames: Record<string, string> = { machine: '机器', phone: '手机', email: '邮箱', custom: '自定义' }
+  const c = echarts.init(typeRef.value)
+  charts.push(c)
+  c.setOption({
+    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+    legend: { bottom: 0, icon: 'circle', textStyle: { color: '#64748b' } },
+    series: [
+      {
+        type: 'pie',
+        radius: ['42%', '68%'],
+        center: ['50%', '44%'],
+        label: { show: false },
+        data: d.value.user.byType.map((t: any) => ({
+          name: typeNames[t.type] || t.type,
+          value: t.c
+        }))
+      }
+    ],
+    color: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899']
+  })
+}
 
-  if (newsRef.value) {
-    const top = [...d.value.news.top].reverse()
-    const c = echarts.init(newsRef.value)
-    charts.push(c)
-    c.setOption({
-      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      grid: { left: 8, right: 40, top: 10, bottom: 10, containLabel: true },
-      xAxis: { type: 'value', minInterval: 1, axisLabel: axisStyle, splitLine: { lineStyle: { color: '#f1f5f9' } } },
-      yAxis: {
-        type: 'category',
-        data: top.map((a: any) => (a.title.length > 12 ? a.title.slice(0, 12) + '…' : a.title)),
-        axisLabel: { color: '#475569', width: 96, overflow: 'truncate' }
-      },
-      series: [
-        {
-          type: 'bar',
-          barWidth: 14,
-          itemStyle: { color: '#8b5cf6', borderRadius: [0, 7, 7, 0] },
-          label: { show: true, position: 'right', color: '#64748b' },
-          data: top.map((a: any) => a.views)
-        }
-      ]
-    })
-  }
+function renderNewsChart() {
+  if (!newsRef.value) return
+  const top = [...d.value.news.top].reverse()
+  const c = echarts.init(newsRef.value)
+  charts.push(c)
+  c.setOption({
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    grid: { left: 8, right: 40, top: 10, bottom: 10, containLabel: true },
+    xAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLabel: { color: '#64748b' },
+      splitLine: { lineStyle: { color: '#f1f5f9' } }
+    },
+    yAxis: {
+      type: 'category',
+      data: top.map((a: any) => (a.title.length > 12 ? a.title.slice(0, 12) + '…' : a.title)),
+      axisLabel: { color: '#475569', width: 96, overflow: 'truncate' }
+    },
+    series: [
+      {
+        type: 'bar',
+        barWidth: 14,
+        itemStyle: { color: '#8b5cf6', borderRadius: [0, 7, 7, 0] },
+        label: { show: true, position: 'right', color: '#64748b' },
+        data: top.map((a: any) => a.views)
+      }
+    ]
+  })
 }
 
 function disposeCharts() {
   charts.forEach(c => c.dispose())
   charts = []
+  trendChart?.dispose()
+  trendChart = null
 }
 
 function onResize() {
   charts.forEach(c => c.resize())
+  trendChart?.resize()
 }
 
 function typeLabel(type: string) {
@@ -341,6 +372,47 @@ onBeforeUnmount(() => {
 
 .chart-box.wide {
   grid-column: 1 / -1;
+}
+
+.chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.chart-head h3 {
+  margin-bottom: 0;
+}
+
+.range-switch {
+  display: flex;
+  gap: 4px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.range-switch button {
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 12.5px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.range-switch button:hover {
+  color: #2563eb;
+}
+
+.range-switch button.active {
+  background: #fff;
+  color: #2563eb;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
 }
 
 .chart-box {
