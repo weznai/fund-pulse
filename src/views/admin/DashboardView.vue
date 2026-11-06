@@ -19,27 +19,35 @@
       <!-- 指标卡 -->
       <div class="cards">
         <div class="card c-blue">
-          <div class="card-top"><span class="card-title">总用户</span><span class="card-sub">今日新增 {{ d.user.todayNew }}</span></div>
+          <div class="card-title">总用户数</div>
           <div class="card-value">{{ d.user.total }}</div>
         </div>
         <div class="card c-green">
-          <div class="card-top"><span class="card-title">今日访问 PV</span><span class="card-sub">UV {{ d.visit.todayUv }}</span></div>
+          <div class="card-title">今日新增用户</div>
+          <div class="card-value">{{ d.user.todayNew }}</div>
+        </div>
+        <div class="card c-cyan">
+          <div class="card-title">今日访问量（PV）</div>
           <div class="card-value">{{ d.visit.todayPv }}</div>
         </div>
+        <div class="card c-teal">
+          <div class="card-title">今日访客数（UV）</div>
+          <div class="card-value">{{ d.visit.todayUv }}</div>
+        </div>
         <div class="card c-amber">
-          <div class="card-top"><span class="card-title">活跃用户</span><span class="card-sub">近 7 天</span></div>
+          <div class="card-title">近7日活跃用户</div>
           <div class="card-value">{{ d.user.active7d }}</div>
         </div>
         <div class="card c-purple">
-          <div class="card-top"><span class="card-title">文章总阅读</span><span class="card-sub">今日 {{ d.news.todayReads }} · {{ d.news.articles }} 篇</span></div>
+          <div class="card-title">文章总阅读量</div>
           <div class="card-value">{{ d.news.totalViews }}</div>
         </div>
-        <div class="card c-cyan">
-          <div class="card-top"><span class="card-title">AI 分析调用</span><span class="card-sub">今日活跃 {{ d.ai.todayUsers }} 人</span></div>
+        <div class="card c-indigo">
+          <div class="card-title">智能分析使用次数</div>
           <div class="card-value">{{ d.ai.totalCalls }}</div>
         </div>
         <div class="card c-rose">
-          <div class="card-top"><span class="card-title">用户持仓基金</span><span class="card-sub">{{ d.fund.users }} 人持仓</span></div>
+          <div class="card-title">用户持仓基金数</div>
           <div class="card-value">{{ d.fund.holdings }}</div>
         </div>
       </div>
@@ -105,6 +113,7 @@ async function loadData() {
   try {
     const { data } = await axios.get('/api/admin/dashboard')
     d.value = data
+    loading.value = false
     await nextTick()
     renderCharts()
   } catch (error: any) {
@@ -270,7 +279,7 @@ onBeforeUnmount(() => {
 /* 指标卡 */
 .cards {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 14px;
   margin-bottom: 20px;
 }
@@ -304,24 +313,15 @@ onBeforeUnmount(() => {
 .card.c-amber::before { background: linear-gradient(90deg, #d97706, #fbbf24); }
 .card.c-purple::before { background: linear-gradient(90deg, #7c3aed, #a78bfa); }
 .card.c-cyan::before { background: linear-gradient(90deg, #0891b2, #22d3ee); }
+.card.c-teal::before { background: linear-gradient(90deg, #0d9488, #2dd4bf); }
+.card.c-indigo::before { background: linear-gradient(90deg, #4f46e5, #818cf8); }
 .card.c-rose::before { background: linear-gradient(90deg, #db2777, #f472b6); }
-
-.card-top {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin-bottom: 10px;
-}
 
 .card-title {
   font-size: 13px;
   color: #475569;
   font-weight: 600;
-}
-
-.card-sub {
-  font-size: 11.5px;
-  color: #94a3b8;
+  margin-bottom: 10px;
 }
 
 .card-value {
@@ -505,7 +505,7 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1200px) {
-  .cards { grid-template-columns: repeat(3, 1fr); }
+  .cards { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (max-width: 768px) {
