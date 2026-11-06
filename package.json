@@ -8,6 +8,7 @@
     "server": "tsx server/index.ts",
     "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
     "build": "vue-tsc && vite build",
+    "build:zx": "vue-tsc && vite build --base=/zx/ --outDir dist-zx",
     "preview": "vite preview",
     "test": "jest --passWithNoCoverage",
     "miniapp:dev": "cd miniapp && npm run dev:mp-weixin",
