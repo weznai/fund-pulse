@@ -2,7 +2,15 @@
   <div class="dashboard-page">
     <div class="page-header">
       <h2 class="page-title">仪表盘</h2>
-      <p class="page-desc">运营总览：用户、访问、资讯、智能分析与持仓核心指标</p>
+      <div class="header-right">
+        <span v-if="d" class="upd-time">更新于 {{ fmtTime(d.generatedAt) }}</span>
+        <button class="btn-refresh" @click="loadData">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          刷新
+        </button>
+      </div>
     </div>
 
     <div class="loading-state" v-if="loading">
@@ -18,37 +26,12 @@
     <template v-else>
       <!-- 指标卡 -->
       <div class="cards">
-        <div class="card c-blue">
-          <div class="card-title">总用户数</div>
-          <div class="card-value">{{ d.user.total }}</div>
-        </div>
-        <div class="card c-green">
-          <div class="card-title">今日新增用户</div>
-          <div class="card-value">{{ d.user.todayNew }}</div>
-        </div>
-        <div class="card c-cyan">
-          <div class="card-title">今日访问量（PV）</div>
-          <div class="card-value">{{ d.visit.todayPv }}</div>
-        </div>
-        <div class="card c-teal">
-          <div class="card-title">今日访客数（UV）</div>
-          <div class="card-value">{{ d.visit.todayUv }}</div>
-        </div>
-        <div class="card c-amber">
-          <div class="card-title">近7日活跃用户</div>
-          <div class="card-value">{{ d.user.active7d }}</div>
-        </div>
-        <div class="card c-purple">
-          <div class="card-title">文章总阅读量</div>
-          <div class="card-value">{{ d.news.totalViews }}</div>
-        </div>
-        <div class="card c-indigo">
-          <div class="card-title">智能分析使用次数</div>
-          <div class="card-value">{{ d.ai.totalCalls }}</div>
-        </div>
-        <div class="card c-rose">
-          <div class="card-title">用户持仓基金数</div>
-          <div class="card-value">{{ d.fund.holdings }}</div>
+        <div v-for="c in cardList" :key="c.label" class="card" :class="c.cls">
+          <div class="card-icon" v-html="c.icon"></div>
+          <div class="card-body">
+            <div class="card-value">{{ c.value }}</div>
+            <div class="card-title">{{ c.label }}</div>
+          </div>
         </div>
       </div>
 
@@ -100,7 +83,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import axios from 'axios'
 import * as echarts from 'echarts'
 
@@ -121,6 +104,34 @@ function setRange(r: number) {
   range.value = r
   renderTrendChart()
 }
+
+const svgWrap = (paths: string) => `<svg viewBox="0 0 24 24" fill="none">${paths}</svg>`
+
+const ICONS = {
+  users: svgWrap('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="7" r="4" stroke="currentColor" stroke-width="2"/>'),
+  userPlus: svgWrap('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="7" r="4" stroke="currentColor" stroke-width="2"/><path d="M19 8v6M22 11h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'),
+  eye: svgWrap('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/>'),
+  visitor: svgWrap('<circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'),
+  activity: svgWrap('<path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'),
+  doc: svgWrap('<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>'),
+  spark: svgWrap('<path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>'),
+  fund: svgWrap('<rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="2"/><path d="M7 15l3.5-4 3 3L17 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>')
+}
+
+const cardList = computed(() => {
+  if (!d.value) return []
+  const n = (v: number) => (v ?? 0).toLocaleString()
+  return [
+    { label: '总用户数', value: n(d.value.user.total), cls: 'c-blue', icon: ICONS.users },
+    { label: '今日新增用户', value: n(d.value.user.todayNew), cls: 'c-green', icon: ICONS.userPlus },
+    { label: '今日访问量（PV）', value: n(d.value.visit.todayPv), cls: 'c-cyan', icon: ICONS.eye },
+    { label: '今日访客数（UV）', value: n(d.value.visit.todayUv), cls: 'c-teal', icon: ICONS.visitor },
+    { label: '近7日活跃用户', value: n(d.value.user.active7d), cls: 'c-amber', icon: ICONS.activity },
+    { label: '文章总阅读量', value: n(d.value.news.totalViews), cls: 'c-purple', icon: ICONS.doc },
+    { label: '智能分析使用次数', value: n(d.value.ai.totalCalls), cls: 'c-indigo', icon: ICONS.spark },
+    { label: '用户持仓基金数', value: n(d.value.fund.holdings), cls: 'c-rose', icon: ICONS.fund }
+  ]
+})
 
 async function loadData() {
   loading.value = true
@@ -292,19 +303,51 @@ onBeforeUnmount(() => {
   margin-bottom: 20px;
   padding-bottom: 16px;
   border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .page-title {
   font-size: 18px;
   font-weight: 600;
   color: #2563eb;
-  margin: 0 0 8px 0;
+  margin: 0;
 }
 
-.page-desc {
-  font-size: 14px;
-  color: #64748b;
-  margin: 0;
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.upd-time {
+  font-size: 12.5px;
+  color: #94a3b8;
+}
+
+.btn-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #475569;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-refresh:hover {
+  border-color: #3b82f6;
+  color: #2563eb;
+}
+
+.btn-refresh svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* 指标卡 */
@@ -319,7 +362,10 @@ onBeforeUnmount(() => {
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 14px;
-  padding: 18px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
   position: relative;
   overflow: hidden;
   transition: transform 0.2s, box-shadow 0.2s;
@@ -339,28 +385,57 @@ onBeforeUnmount(() => {
   height: 4px;
 }
 
-.card.c-blue::before { background: linear-gradient(90deg, #2563eb, #60a5fa); }
-.card.c-green::before { background: linear-gradient(90deg, #059669, #34d399); }
-.card.c-amber::before { background: linear-gradient(90deg, #d97706, #fbbf24); }
-.card.c-purple::before { background: linear-gradient(90deg, #7c3aed, #a78bfa); }
-.card.c-cyan::before { background: linear-gradient(90deg, #0891b2, #22d3ee); }
-.card.c-teal::before { background: linear-gradient(90deg, #0d9488, #2dd4bf); }
-.card.c-indigo::before { background: linear-gradient(90deg, #4f46e5, #818cf8); }
-.card.c-rose::before { background: linear-gradient(90deg, #db2777, #f472b6); }
+.card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.card-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.card-body {
+  min-width: 0;
+}
 
 .card-title {
   font-size: 13px;
-  color: #475569;
-  font-weight: 600;
-  margin-bottom: 10px;
+  color: #64748b;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .card-value {
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
   color: #1e293b;
-  line-height: 1;
+  line-height: 1.15;
+  margin-bottom: 4px;
+  font-variant-numeric: tabular-nums;
 }
+
+.card.c-blue::before { background: linear-gradient(90deg, #2563eb, #60a5fa); }
+.card.c-blue .card-icon { background: #dbeafe; color: #2563eb; }
+.card.c-green::before { background: linear-gradient(90deg, #059669, #34d399); }
+.card.c-green .card-icon { background: #dcfce7; color: #059669; }
+.card.c-amber::before { background: linear-gradient(90deg, #d97706, #fbbf24); }
+.card.c-amber .card-icon { background: #fef3c7; color: #d97706; }
+.card.c-purple::before { background: linear-gradient(90deg, #7c3aed, #a78bfa); }
+.card.c-purple .card-icon { background: #ede9fe; color: #7c3aed; }
+.card.c-cyan::before { background: linear-gradient(90deg, #0891b2, #22d3ee); }
+.card.c-cyan .card-icon { background: #cffafe; color: #0891b2; }
+.card.c-teal::before { background: linear-gradient(90deg, #0d9488, #2dd4bf); }
+.card.c-teal .card-icon { background: #ccfbf1; color: #0d9488; }
+.card.c-indigo::before { background: linear-gradient(90deg, #4f46e5, #818cf8); }
+.card.c-indigo .card-icon { background: #e0e7ff; color: #4f46e5; }
+.card.c-rose::before { background: linear-gradient(90deg, #db2777, #f472b6); }
+.card.c-rose .card-icon { background: #fce7f3; color: #db2777; }
 
 /* 图表 */
 .charts {
