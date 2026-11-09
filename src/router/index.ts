@@ -126,6 +126,11 @@ const router = createRouter({
           component: () => import('@/views/admin/NewsManageView.vue')
         },
         {
+          path: 'admin-accounts',
+          name: 'admin-admin-accounts',
+          component: () => import('@/views/admin/AdminAccountManageView.vue')
+        },
+        {
           path: 'system-update',
           name: 'admin-system-update',
           component: () => import('@/views/admin/SystemUpdateView.vue')
@@ -161,6 +166,19 @@ async function recordVisit(path: string) {
   }
 }
 
+// 各后台角色的访问首页（未配置的角色拥有全部权限）
+const ADMIN_ROLE_HOME: Record<string, string> = {
+  news: '/admin/news-manage'
+}
+
+function getAdminRole(): string {
+  try {
+    return JSON.parse(localStorage.getItem('admin_user') || '{}')?.role || 'super'
+  } catch {
+    return 'super'
+  }
+}
+
 router.beforeEach((to, _from, next) => {
   const token = localStorage.getItem('admin_token')
 
@@ -170,12 +188,21 @@ router.beforeEach((to, _from, next) => {
   }
 
   if (to.meta.requiresAuth && !token) {
-    next({
+    return next({
       name: 'admin-login',
       query: { redirect: to.fullPath }
     })
-  } else if (to.meta.guest && token) {
-    next({ name: 'admin-fund-manage' })
+  }
+
+  // 受限角色（如 news）只能访问自己的首页，其余一律重定向回去
+  const roleHome = ADMIN_ROLE_HOME[getAdminRole()]
+  if (roleHome && to.path.startsWith('/admin') && to.path !== '/admin/login'
+    && to.path !== roleHome && !to.path.startsWith(roleHome + '/')) {
+    return next(roleHome)
+  }
+
+  if (to.meta.guest && token) {
+    next(ADMIN_ROLE_HOME[getAdminRole()] || '/admin/fund-manage')
   } else {
     next()
   }

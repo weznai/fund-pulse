@@ -35,7 +35,7 @@
       <aside class="admin-sidebar">
         <!-- 侧边栏标题区域 -->
         <div class="sidebar-header">
-          <span class="sidebar-title" v-show="!sidebarCollapsed">管理员</span>
+          <span class="sidebar-title" v-show="!sidebarCollapsed">{{ adminName }}</span>
           <button class="sidebar-collapse-btn" @click="toggleSidebar" :title="sidebarCollapsed ? '展开菜单' : '收起菜单'">
             <svg viewBox="0 0 24 24" fill="none">
               <path v-if="!sidebarCollapsed" d="M11 19l-7-7 7-7M18 19l-7-7 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -166,7 +166,7 @@ function isGroupActive(item: any) {
 }
 
 // 菜单项
-const menuItems = [
+const allMenuItems = [
   {
     path: '/admin/dashboard',
     title: '仪表盘',
@@ -292,6 +292,30 @@ const menuItems = [
             stroke: 'currentColor',
             'stroke-width': '1.5',
             'stroke-linecap': 'round'
+          })
+        ])
+      }
+    }
+  },
+  {
+    path: '/admin/admin-accounts',
+    title: '管理员账号',
+    icon: {
+      render() {
+        return h('svg', { viewBox: '0 0 24 24', fill: 'none' }, [
+          h('path', {
+            d: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+            stroke: 'currentColor',
+            'stroke-width': '1.8',
+            'stroke-linecap': 'round',
+            'stroke-linejoin': 'round'
+          }),
+          h('path', {
+            d: 'M9 12l2 2 4-4',
+            stroke: 'currentColor',
+            'stroke-width': '1.8',
+            'stroke-linecap': 'round',
+            'stroke-linejoin': 'round'
           })
         ])
       }
@@ -549,8 +573,33 @@ const isActive = (path: string) => {
   return route.path === path || route.path.startsWith(path + '/')
 }
 
+// 当前登录身份（旧 token 无信息时按超管处理）
+const adminInfo = computed(() => {
+  try {
+    return JSON.parse(localStorage.getItem('admin_user') || '{}')
+  } catch {
+    return {}
+  }
+})
+const adminName = computed(() => adminInfo.value.label || adminInfo.value.username || '管理员')
+
+// 受限角色的可见菜单（未配置的角色可见全部）
+const ROLE_ALLOWED_PATHS: Record<string, Set<string>> = {
+  news: new Set(['/admin/news-manage'])
+}
+
+const menuItems = computed(() => {
+  const allowed = ROLE_ALLOWED_PATHS[adminInfo.value.role]
+  if (!allowed) return allMenuItems
+  return allMenuItems
+    .map(item => item.children
+      ? { ...item, children: item.children.filter((c: any) => allowed.has(c.path)) }
+      : item)
+    .filter(item => item.children ? item.children.length > 0 : allowed.has(item.path))
+})
+
 const currentPageTitle = computed(() => {
-  for (const item of menuItems) {
+  for (const item of allMenuItems) {
     if (item.children) {
       const child = item.children.find((c: any) => c.path === route.path)
       if (child) return child.title
@@ -564,6 +613,7 @@ const currentPageTitle = computed(() => {
 // 退出登录
 function handleLogout() {
   localStorage.removeItem('admin_token')
+  localStorage.removeItem('admin_user')
   router.push('/admin/login')
 }
 </script>

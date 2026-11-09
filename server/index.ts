@@ -9,7 +9,7 @@ import { startScheduledSettlement } from './scheduled/settlement.js'
 import { startScheduledEstimateWithUserFunds, startIndexEstimate } from './scheduled/estimate.js'
 import { initHolidaysTable } from './db/holiday.js'
 import { setupHolidayRoutes, setupPublicHolidayRoutes } from './services/holidayService.js'
-import { validateAdminToken } from './middleware/auth.js'
+import { validateAdminToken, requireSuperAdmin } from './middleware/auth.js'
 import { trackVisit } from './middleware/visitTracker.js'
 import { getClientUserId, setSessionCookie } from './middleware/userSession.js'
 import { userContext } from './db.js'
@@ -18,6 +18,7 @@ import { ensureModelConfigTable } from './db/modelConfig.js'
 import { seedDefaultData } from './model_config.js'
 import { ensureReportsTable } from './db/report.js'
 import { ensureNewsTable } from './db/news.js'
+import { ensureAdminUsersTable } from './db/adminUser.js'
 
 import fundRoutes from './routes/fund.js'
 import authRoutes from './routes/auth.js'
@@ -34,6 +35,7 @@ import { setupEstimateSourceRoutes } from './routes/estimateSource.js'
 import { setupPublicNewsRoutes, setupAdminNewsRoutes } from './routes/news.js'
 import { setupDashboardRoutes } from './routes/dashboard.js'
 import { setupSeoRoutes, renderSeoHtml } from './routes/seo.js'
+import adminUserRoutes from './routes/adminUser.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -51,6 +53,7 @@ ensureOperationLogTable()
 ensureModelConfigTable()
 ensureReportsTable()
 ensureNewsTable()
+ensureAdminUsersTable()
 seedDefaultData()
 
 app.get('/api/health', (_req, res) => {
@@ -74,12 +77,13 @@ initHolidaysTable()
 const stopSettlementTask = startScheduledSettlement()
 logger.log('⏰ 已启动定时任务（8:00初始化结算状态，18:00后获取净值时自动结算）')
 
-app.use('/api/admin/holidays', setupHolidayRoutes(validateAdminToken))
+app.use('/api/admin/holidays', setupHolidayRoutes(requireSuperAdmin))
 app.use('/api/holidays', setupPublicHolidayRoutes())
-app.use('/api/admin/estimate-sources', setupEstimateSourceRoutes(validateAdminToken))
+app.use('/api/admin/estimate-sources', setupEstimateSourceRoutes(requireSuperAdmin))
 app.use('/api/news', setupPublicNewsRoutes())
 app.use('/api/admin/news', setupAdminNewsRoutes(validateAdminToken))
-app.use('/api/admin/dashboard', setupDashboardRoutes(validateAdminToken))
+app.use('/api/admin/dashboard', setupDashboardRoutes(requireSuperAdmin))
+app.use('/api/admin/admin-users', adminUserRoutes)
 
 app.use('/api', fundRoutes)
 app.use('/api/auth', authRoutes)

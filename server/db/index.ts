@@ -77,6 +77,14 @@ export { ensureOperationLogTable, addOperationLog, getOperationLogList } from '.
 export type { OperationLog, OperationLogListResult, OperationLogQuery } from './operationLog.js'
 
 export {
+  ensureAdminUsersTable, ADMIN_ROLES,
+  getAdminUserList, getAdminUserByUsername, getAdminUserById, isAdminUsernameExists,
+  createAdminUser, updateAdminUser, setAdminUserDisabled, deleteAdminUser,
+  touchAdminUserLogin, countEnabledAdminUsersByRole
+} from './adminUser.js'
+export type { AdminUser, AdminUserSummary, AdminRole } from './adminUser.js'
+
+export {
   ensureModelConfigTable,
   getProviders, getProviderById, getProviderByName, addProvider, updateProvider, deleteProvider,
   getModelsByProvider, getAllModels, addModel, updateModel, deleteModel,

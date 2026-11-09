@@ -27,7 +27,7 @@ import {
 import { setRegisteredUser } from '../db/index.js'
 import db from '../db/index.js'
 import { fetchFundDetailFromApi, fetchFundBasicInfoFromSearchApi } from '../services/fundService.js'
-import { validateAdminToken, handleAdminLogin } from '../middleware/auth.js'
+import { requireSuperAdmin as validateAdminToken, handleAdminLogin } from '../middleware/auth.js'
 import { getAnalysisUsageList, updateUserCredits } from '../db/analysisUsage.js'
 import { manualSettlement } from '../scheduled/settlement.js'
 import { refreshFundToday } from '../scheduled/estimate.js'

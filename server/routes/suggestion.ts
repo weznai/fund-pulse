@@ -10,7 +10,7 @@ import {
   deleteSuggestion
 } from '../db/suggestion.js'
 import { generateSuggestionSummary } from '../services/suggestionService.js'
-import { validateAdminToken } from '../middleware/auth.js'
+import { requireSuperAdmin as validateAdminToken } from '../middleware/auth.js'
 
 const router = Router()
 

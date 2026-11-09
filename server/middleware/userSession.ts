@@ -19,6 +19,9 @@ function verifyToken(token: string): string | null {
   const signature = token.substring(dotIndex + 1)
   const expected = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('hex')
 
+  // 非用户会话 token（如管理后台 token）长度不同，直接跳过，避免 timingSafeEqual 抛异常
+  if (signature.length !== expected.length) return null
+
   if (crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
     return payload
   }

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express'
 import { logger } from '../logger.js'
-import { validateAdminToken } from '../middleware/auth.js'
+import { requireSuperAdmin as validateAdminToken } from '../middleware/auth.js'
 import {
   getState,
   getDefaultShellInfo,

@@ -17,10 +17,28 @@
           </svg>
         </div>
         <h1 class="login-title">管理后台</h1>
-        <p class="login-subtitle">请输入管理员密码以继续</p>
+        <p class="login-subtitle">请输入管理员账号和密码以继续</p>
       </div>
 
       <form class="login-form" @submit.prevent="handleLogin">
+        <div class="form-group">
+          <label for="username">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="2"/>
+              <circle cx="12" cy="7" r="4" stroke="currentColor" stroke-width="2"/>
+            </svg>
+            管理员账号
+          </label>
+          <div class="input-wrapper">
+            <input
+              id="username"
+              v-model="username"
+              type="text"
+              placeholder="超级管理员可留空"
+              autocomplete="username"
+            />
+          </div>
+        </div>
         <div class="form-group">
           <label for="password">
             <svg viewBox="0 0 24 24" fill="none">
@@ -99,10 +117,13 @@ import axios from 'axios'
 const router = useRouter()
 const route = useRoute()
 
+const username = ref('')
 const password = ref('')
 const showPassword = ref(false)
 const loading = ref(false)
 const errorMsg = ref('')
+
+const ROLE_HOME: Record<string, string> = { news: '/admin/news-manage' }
 
 async function handleLogin() {
   if (!password.value.trim()) {
@@ -115,19 +136,30 @@ async function handleLogin() {
 
   try {
     const { data } = await axios.post('/api/admin/login', {
+      username: username.value.trim(),
       password: password.value
     })
 
     if (data.success) {
       localStorage.setItem('admin_token', data.token)
-      const redirect = route.query.redirect as string || '/admin'
-      router.push(redirect)
+      localStorage.setItem('admin_user', JSON.stringify({
+        username: data.username || 'admin',
+        role: data.role || 'super',
+        label: data.label || ''
+      }))
+      const roleHome = ROLE_HOME[data.role]
+      const redirect = route.query.redirect as string
+      // 受限角色只能落到自己的首页，避免重定向到无权限页面
+      const target = roleHome && (!redirect || !redirect.startsWith(roleHome)) ? roleHome : (redirect || '/admin')
+      router.push(target)
     } else {
-      errorMsg.value = data.message || '密码错误'
+      errorMsg.value = data.message || '账号或密码错误'
     }
   } catch (error: any) {
     if (error.response?.status === 401) {
-      errorMsg.value = '密码错误，请重试'
+      errorMsg.value = error.response?.data?.message || '账号或密码错误，请重试'
+    } else if (error.response?.status === 403) {
+      errorMsg.value = error.response?.data?.message || '该账号已被禁用'
     } else {
       errorMsg.value = '登录失败，请稍后重试'
     }
