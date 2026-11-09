@@ -62,7 +62,7 @@ export function setupDashboardRoutes(validateAdminToken: (req: Request, res: Res
         .prepare('SELECT id, type, email, label, created_at, disabled FROM users ORDER BY created_at DESC LIMIT 8')
         .all()
 
-      // 用户增长趋势：每日新增 + 累计（本地时区按天分桶）
+      // 用户增长趋势：每日新增 + 累计（本地时区按天分桶，累计含窗口前存量）
       const createdRows = db.prepare('SELECT created_at FROM users WHERE created_at IS NOT NULL').all() as {
         created_at: number
       }[]
@@ -71,7 +71,9 @@ export function setupDashboardRoutes(validateAdminToken: (req: Request, res: Res
         const day = new Date(r.created_at).toLocaleDateString('sv-SE')
         createdMap.set(day, (createdMap.get(day) || 0) + 1)
       }
-      let cumulative = 0
+      const windowStartMs = new Date(dates[0] + 'T00:00:00').getTime()
+      const beforeWindow = createdRows.filter(r => r.created_at < windowStartMs).length
+      let cumulative = beforeWindow
       const userTrendBase = dates.map(dt => {
         const added = createdMap.get(dt) || 0
         cumulative += added
