@@ -48,6 +48,14 @@
           </div>
           <div ref="trendRef" class="chart tall"></div>
         </div>
+        <div class="chart-box wide">
+          <div class="chart-head">
+            <h3>用户新增趋势</h3>
+            <span class="chart-hint">跟随上方时间范围切换</span>
+          </div>
+          <div ref="userTrendRef" class="chart tall"></div>
+        </div>
+
         <div class="chart-box">
           <h3>用户类型分布</h3>
           <div ref="typeRef" class="chart"></div>
@@ -92,17 +100,20 @@ const loadError = ref('')
 const d = ref<any>(null)
 
 const trendRef = ref<HTMLElement | null>(null)
+const userTrendRef = ref<HTMLElement | null>(null)
 const typeRef = ref<HTMLElement | null>(null)
 const newsRef = ref<HTMLElement | null>(null)
 
 const range = ref(180)
 let charts: echarts.ECharts[] = []
 let trendChart: echarts.ECharts | null = null
+let userTrendChart: echarts.ECharts | null = null
 
 function setRange(r: number) {
   if (range.value === r) return
   range.value = r
   renderTrendChart()
+  renderUserTrendChart()
 }
 
 const svgWrap = (paths: string) => `<svg viewBox="0 0 24 24" fill="none">${paths}</svg>`
@@ -153,8 +164,53 @@ function renderCharts() {
   disposeCharts()
   if (!d.value) return
   renderTrendChart()
+  renderUserTrendChart()
   renderTypeChart()
   renderNewsChart()
+}
+
+function renderUserTrendChart() {
+  if (!userTrendRef.value || !d.value) return
+  userTrendChart?.dispose()
+  userTrendChart = echarts.init(userTrendRef.value)
+
+  const rows = d.value.user.trend180.slice(-range.value)
+
+  userTrendChart.setOption({
+    tooltip: { trigger: 'axis' },
+    legend: { data: ['每日新增', '累计用户'], right: 10, top: 0 },
+    grid: { left: 46, right: 52, top: 34, bottom: 28 },
+    xAxis: {
+      type: 'category',
+      data: rows.map((r: any) => r.date.slice(5)),
+      axisLabel: { color: '#64748b', interval: Math.max(0, Math.floor(rows.length / 13)) },
+      axisTick: { alignWithLabel: false }
+    },
+    yAxis: [
+      { type: 'value', minInterval: 1, name: '新增', nameTextStyle: { color: '#94a3b8' }, axisLabel: { color: '#64748b' }, splitLine: { lineStyle: { color: '#f1f5f9' } } },
+      { type: 'value', name: '累计', nameTextStyle: { color: '#94a3b8' }, axisLabel: { color: '#64748b' }, splitLine: { show: false } }
+    ],
+    series: [
+      {
+        name: '每日新增',
+        type: 'bar',
+        barMaxWidth: 14,
+        itemStyle: { color: '#60a5fa', borderRadius: [4, 4, 0, 0] },
+        data: rows.map((r: any) => r.newUsers)
+      },
+      {
+        name: '累计用户',
+        type: 'line',
+        smooth: true,
+        symbol: 'none',
+        yAxisIndex: 1,
+        itemStyle: { color: '#f59e0b' },
+        lineStyle: { width: 2.5 }
+        ,
+        data: rows.map((r: any) => r.total)
+      }
+    ]
+  })
 }
 
 function renderTrendChart() {
@@ -260,11 +316,14 @@ function disposeCharts() {
   charts = []
   trendChart?.dispose()
   trendChart = null
+  userTrendChart?.dispose()
+  userTrendChart = null
 }
 
 function onResize() {
   charts.forEach(c => c.resize())
   trendChart?.resize()
+  userTrendChart?.resize()
 }
 
 function typeLabel(type: string) {
@@ -488,6 +547,11 @@ onBeforeUnmount(() => {
   color: #2563eb;
   font-weight: 600;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+}
+
+.chart-hint {
+  font-size: 12px;
+  color: #94a3b8;
 }
 
 .chart-box {

@@ -45,6 +45,14 @@ export function setupDashboardRoutes(validateAdminToken: (req: Request, res: Res
       const todayStart = dayStartMs()
       const now = Date.now()
 
+      // 近 180 天日期序列（用户增长与访问趋势共用）
+      const dates: string[] = []
+      for (let i = 179; i >= 0; i--) {
+        const d = new Date()
+        d.setDate(d.getDate() - i)
+        dates.push(d.toLocaleDateString('sv-SE'))
+      }
+
       // ---- 用户 ----
       const userTotal = num((db.prepare('SELECT COUNT(*) c FROM users').get() as { c: number }).c)
       const userTodayNew = num((db.prepare('SELECT COUNT(*) c FROM users WHERE created_at >= ?').get(todayStart) as { c: number }).c)
@@ -53,6 +61,22 @@ export function setupDashboardRoutes(validateAdminToken: (req: Request, res: Res
       const recentUsers = db
         .prepare('SELECT id, type, email, label, created_at, disabled FROM users ORDER BY created_at DESC LIMIT 8')
         .all()
+
+      // 用户增长趋势：每日新增 + 累计（本地时区按天分桶）
+      const createdRows = db.prepare('SELECT created_at FROM users WHERE created_at IS NOT NULL').all() as {
+        created_at: number
+      }[]
+      const createdMap = new Map<string, number>()
+      for (const r of createdRows) {
+        const day = new Date(r.created_at).toLocaleDateString('sv-SE')
+        createdMap.set(day, (createdMap.get(day) || 0) + 1)
+      }
+      let cumulative = 0
+      const userTrendBase = dates.map(dt => {
+        const added = createdMap.get(dt) || 0
+        cumulative += added
+        return { date: dt, newUsers: added, total: cumulative }
+      })
 
       // ---- 访问（剔爬虫）----
       const todayPv = num(
@@ -65,12 +89,6 @@ export function setupDashboardRoutes(validateAdminToken: (req: Request, res: Res
           }
         ).c
       )
-      const dates: string[] = []
-      for (let i = 179; i >= 0; i--) {
-        const d = new Date()
-        d.setDate(d.getDate() - i)
-        dates.push(d.toLocaleDateString('sv-SE'))
-      }
       const visitRows = db
         .prepare(
           `SELECT visit_date d, COUNT(*) pv, COUNT(DISTINCT user_id) uv FROM visit_logs WHERE visit_date >= ? AND ${BOT_FILTER} GROUP BY visit_date`
@@ -116,7 +134,7 @@ export function setupDashboardRoutes(validateAdminToken: (req: Request, res: Res
 
       res.json({
         generatedAt: now,
-        user: { total: userTotal, todayNew: userTodayNew, active7d: userActive7d, byType: userByType, recent: recentUsers },
+        user: { total: userTotal, todayNew: userTodayNew, active7d: userActive7d, byType: userByType, recent: recentUsers, trend180: userTrendBase },
         visit: { todayPv, todayUv, trend180 },
         news: { articles: newsRow.articles, totalViews: newsRow.views, todayReads: newsTodayReads, top: newsTop },
         ai: { totalCalls: aiRow.calls, users: aiRow.users, todayUsers: aiTodayUsers },
