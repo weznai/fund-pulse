@@ -104,7 +104,7 @@ const userTrendRef = ref<HTMLElement | null>(null)
 const typeRef = ref<HTMLElement | null>(null)
 const newsRef = ref<HTMLElement | null>(null)
 
-const range = ref(180)
+const range = ref(90)
 let charts: echarts.ECharts[] = []
 let trendChart: echarts.ECharts | null = null
 let userTrendChart: echarts.ECharts | null = null
